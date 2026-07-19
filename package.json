@@ -1,0 +1,58 @@
+{
+  "name": "flutter-intelligence-mcp",
+  "version": "0.1.0",
+  "description": "AI observability layer for Flutter — live runtime context over the Dart VM Service, exposed through MCP.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Chandrabhushan Prakash",
+  "homepage": "https://github.com/itsonu/flutter-intelligence-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/itsonu/flutter-intelligence-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/itsonu/flutter-intelligence-mcp/issues"
+  },
+  "keywords": [
+    "flutter",
+    "dart",
+    "mcp",
+    "model-context-protocol",
+    "vm-service",
+    "observability",
+    "debugging",
+    "devtools",
+    "claude",
+    "ai"
+  ],
+  "bin": {
+    "flutter-intelligence-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "dashboard",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "test": "node --test --test-force-exit \"dist/**/*.test.js\"",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12",
+    "typescript": "^5.6.0"
+  }
+}

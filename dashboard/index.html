@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flutter Intelligence — Runtime Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2128; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #42a5f5; --accent2: #13b9fd;
+    --green: #3fb950; --yellow: #d29922; --orange: #db6d28; --red: #f85149;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; display: flex; flex-direction: column; height: 100vh; }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .brand { font-weight: 600; letter-spacing: .3px; }
+  .brand b { color: var(--accent); }
+  .status { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 0 3px rgba(255,255,255,.03); }
+  .dot.on { background: var(--green); } .dot.off { background: var(--red); } .dot.wait { background: var(--yellow); }
+  .spacer { flex: 1; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  button, select, input { font-family: var(--sans); font-size: 13px; color: var(--text); background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
+  button { cursor: pointer; } button:hover { border-color: var(--accent); }
+  button.active { border-color: var(--accent); color: var(--accent); }
+  input[type=text] { min-width: 160px; }
+  nav { display: flex; gap: 4px; padding: 8px 12px 0; background: var(--panel); border-bottom: 1px solid var(--border); overflow-x: auto; }
+  nav button { border: none; border-bottom: 2px solid transparent; background: none; border-radius: 0; padding: 8px 12px; color: var(--muted); white-space: nowrap; }
+  nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+  nav .badge { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-left: 6px; }
+  main { flex: 1; overflow: auto; padding: 16px; }
+  .tab { display: none; } .tab.active { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .card .v { font-family: var(--mono); font-size: 26px; margin-top: 6px; }
+  .card .sub { color: var(--muted); font-family: var(--mono); font-size: 12px; margin-top: 4px; }
+  .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .row { display: grid; align-items: start; gap: 10px; padding: 6px 8px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12.5px; }
+  .row:hover { background: var(--panel); }
+  .log-row { grid-template-columns: 90px 70px 90px 1fr; }
+  .net-row { grid-template-columns: 60px 1fr 60px 80px; cursor: pointer; }
+  .exc-row { grid-template-columns: 1fr; cursor: pointer; }
+  .tl-row { grid-template-columns: 96px 90px 1fr; }
+  .t { color: var(--muted); }
+  .sev-debug { color: var(--muted); } .sev-info { color: var(--accent); } .sev-warning { color: var(--yellow); }
+  .sev-error { color: var(--red); } .sev-critical { color: #ff7b72; font-weight: 600; }
+  .badge-cat { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; }
+  .cat-log { background: rgba(66,165,245,.15); color: var(--accent); }
+  .cat-exception { background: rgba(248,81,73,.15); color: var(--red); }
+  .cat-frame { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .cat-network { background: rgba(63,185,80,.15); color: var(--green); }
+  .cat-system { background: rgba(139,148,158,.15); color: var(--muted); }
+  .detail { grid-column: 1 / -1; background: var(--panel2); border-radius: 8px; padding: 10px; margin-top: 6px; white-space: pre-wrap; word-break: break-word; color: var(--muted); }
+  .detail b { color: var(--text); }
+  pre.stack { margin: 0; white-space: pre-wrap; word-break: break-word; color: #ffa198; font-size: 12px; }
+  .msg { white-space: pre-wrap; word-break: break-word; }
+  .status-2xx { color: var(--green); } .status-4xx { color: var(--yellow); } .status-5xx { color: var(--red); }
+  canvas { width: 100%; height: 200px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+  .chart-label { color: var(--muted); font-family: var(--mono); font-size: 12px; margin: 14px 0 6px; }
+  .empty { color: var(--muted); padding: 30px; text-align: center; font-family: var(--mono); }
+  .placeholder { border: 1px dashed var(--border); border-radius: 10px; padding: 40px; text-align: center; color: var(--muted); }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
+  @media (max-width: 640px) { .log-row { grid-template-columns: 70px 60px 1fr; } .log-row .src { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Flutter <b>Intelligence</b> · Runtime</div>
+  <div class="status"><span id="dot" class="dot off"></span><span id="statusText">disconnected</span></div>
+  <div class="spacer"></div>
+  <div class="controls">
+    <button id="pauseBtn">⏸ Pause</button>
+    <button id="clearBtn">🗑 Clear view</button>
+    <button id="exportBtn">⬇ Export JSON</button>
+  </div>
+</header>
+<nav id="tabs"></nav>
+<main id="main"></main>
+
+<script>
+(() => {
+  const TABS = ["Overview","Logs","Network","Exceptions","Timeline","Performance","Inspector"];
+  const CAP = 5000;
+  const state = { events: [], status: { connected: false, isolateId: null, wsUri: null }, paused: false, active: "Overview", expanded: new Set() };
+  let dirty = true, socket = null, backoff = 1000;
+
+  // ---- DOM scaffolding ----
+  const nav = document.getElementById("tabs");
+  const main = document.getElementById("main");
+  const panels = {};
+  TABS.forEach(name => {
+    const b = document.createElement("button");
+    b.textContent = name; b.dataset.tab = name;
+    b.innerHTML = name + ' <span class="badge" id="badge-'+name+'"></span>';
+    b.onclick = () => setTab(name);
+    nav.appendChild(b);
+    const p = document.createElement("section");
+    p.className = "tab"; p.id = "tab-" + name;
+    main.appendChild(p); panels[name] = p;
+  });
+  function setTab(name){ state.active = name; dirty = true;
+    [...nav.children].forEach(c => c.classList.toggle("active", c.dataset.tab===name));
+    Object.entries(panels).forEach(([n,p]) => p.classList.toggle("active", n===name));
+    render(true);
+  }
+
+  // ---- controls ----
+  const pauseBtn = document.getElementById("pauseBtn");
+  pauseBtn.onclick = () => { state.paused = !state.paused; pauseBtn.textContent = state.paused ? "▶ Resume" : "⏸ Pause"; pauseBtn.classList.toggle("active", state.paused); if(!state.paused){dirty=true;render(true);} };
+  document.getElementById("clearBtn").onclick = () => { state.events = []; state.expanded.clear(); dirty = true; render(true); };
+  document.getElementById("exportBtn").onclick = () => {
+    const blob = new Blob([JSON.stringify(state.events, null, 2)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "flutter-runtime-" + Date.now() + ".json"; a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  // ---- websocket + auto reconnect ----
+  function connect(){
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    socket = new WebSocket(proto + "://" + location.host + "/ws");
+    socket.onopen = () => { backoff = 1000; setConn("wait", "connected to dashboard"); };
+    socket.onmessage = (m) => {
+      const msg = JSON.parse(m.data);
+      if (msg.type === "snapshot") { state.events = msg.events || []; state.status = msg.status; }
+      else if (msg.type === "event") { state.events.push(msg.event); if (state.events.length > CAP) state.events.splice(0, state.events.length - CAP); }
+      else if (msg.type === "status") { state.status = msg.status; }
+      else if (msg.type === "cleared") { state.events = []; }
+      updateConn(); dirty = true;
+    };
+    socket.onclose = () => { setConn("off", "reconnecting…"); setTimeout(connect, backoff); backoff = Math.min(backoff*1.7, 10000); };
+    socket.onerror = () => socket.close();
+  }
+  function setConn(cls, text){ const d=document.getElementById("dot"); d.className="dot "+cls; document.getElementById("statusText").textContent = text; }
+  function updateConn(){ const s = state.status; if (s.connected) setConn("on", "VM " + (s.isolateId||"") + " · " + (s.wsUri||"")); else setConn("off", "app not connected"); }
+
+  // ---- helpers ----
+  const byCat = (c) => state.events.filter(e => e.category === c);
+  const fmtTime = (ts) => { const d = new Date(ts); return d.toLocaleTimeString([], {hour12:false}) + "." + String(d.getMilliseconds()).padStart(3,"0"); };
+  const esc = (s) => String(s==null?"":s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const el = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; };
+
+  // ---- render loop (throttled, paused-aware) ----
+  // setInterval, NOT requestAnimationFrame: rAF is paused when the tab isn't
+  // painting (backgrounded / headless), which would freeze the live view.
+  function loop(){ if (dirty && !state.paused){ render(false); dirty = false; } }
+  setInterval(loop, 200);
+  function render(force){
+    TABS.forEach(n => { const b = document.getElementById("badge-"+n); if(!b) return;
+      const counts = { Logs: byCat("log").length, Network: byCat("network").length, Exceptions: byCat("exception").length, Timeline: state.events.length };
+      b.textContent = counts[n] != null ? counts[n] : ""; });
+    const r = { Overview: renderOverview, Logs: renderLogs, Network: renderNetwork, Exceptions: renderExceptions, Timeline: renderTimeline, Performance: renderPerformance, Inspector: renderInspector }[state.active];
+    if (r) r(panels[state.active]);
+  }
+
+  // ---- Overview ----
+  function computeFps(){ const f = byCat("frame").slice(-30); if(!f.length) return null;
+    const avg = f.reduce((s,e)=>s+(e.data.elapsedMs||0),0)/f.length; return avg>0 ? Math.min(1000/avg, 120) : null; }
+  function latestMem(){ const m = byCat("system").filter(e=>e.data && e.data.heapUsageMB!=null); return m.length ? m[m.length-1].data : null; }
+  function renderOverview(p){
+    const s = state.status, fps = computeFps(), mem = latestMem();
+    const c = {}; state.events.forEach(e => c[e.category]=(c[e.category]||0)+1);
+    p.innerHTML = "";
+    const grid = el('<div class="grid"></div>');
+    const card = (k,v,sub) => el('<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="sub">'+(sub||"")+'</div></div>');
+    grid.append(
+      card("Connection", s.connected?'<span style="color:var(--green)">online</span>':'<span style="color:var(--red)">offline</span>', s.wsUri||"—"),
+      card("VM Isolate", s.isolateId?esc(s.isolateId):"—", s.connected?"1 isolate":"—"),
+      card("FPS", fps!=null?fps.toFixed(0):"—", fps!=null?"~"+(1000/fps).toFixed(1)+"ms/frame":"no frames yet"),
+      card("Memory", mem?mem.heapUsageMB+" MB":"—", mem?("cap "+mem.heapCapacityMB+" · ext "+mem.externalUsageMB+" MB"):"call get_memory / auto-sampled"),
+      card("CPU", "—", "not sampled by VM Service"),
+      card("Events", state.events.length, Object.entries(c).map(([k,v])=>k+":"+v).join(" · ")||"none yet")
+    );
+    p.appendChild(grid);
+  }
+
+  // ---- Logs ----
+  function ensureFilters(p, id, html){ let f = p.querySelector("#"+id); if(!f){ p.innerHTML=""; f = el('<div class="filters" id="'+id+'"></div>'); f.innerHTML = html; p.appendChild(f); p.appendChild(el('<div id="'+id+'-list"></div>')); } return f; }
+  function renderLogs(p){
+    ensureFilters(p, "logf",
+      '<input type="text" id="logSearch" placeholder="search logs…" />' +
+      '<select id="logSev"><option value="">all severities</option><option>debug</option><option>info</option><option>warning</option><option>error</option><option>critical</option></select>' +
+      '<select id="logSrc"><option value="">all sources</option><option>Stdout</option><option>Stderr</option><option>Logging</option></select>' +
+      '<label class="chk"><input type="checkbox" id="logAuto" checked/> auto-scroll</label>');
+    const q = (p.querySelector("#logSearch").value||"").toLowerCase();
+    const sev = p.querySelector("#logSev").value, src = p.querySelector("#logSrc").value;
+    const auto = p.querySelector("#logAuto").checked;
+    if(!p.querySelector("#logSearch").oninput){ ["logSearch","logSev","logSrc"].forEach(i=>{ const e=p.querySelector("#"+i); e.oninput=e.onchange=()=>{dirty=true;render(true);}; }); }
+    const list = p.querySelector("#logf-list");
+    let rows = byCat("log");
+    if(sev) rows = rows.filter(e=>e.severity===sev);
+    if(src) rows = rows.filter(e=>e.source===src);
+    if(q) rows = rows.filter(e=>e.message.toLowerCase().includes(q));
+    rows = rows.slice(-500);
+    list.innerHTML = rows.length ? rows.map(e =>
+      '<div class="row log-row"><span class="t">'+fmtTime(e.timestamp)+'</span>'+
+      '<span class="sev-'+e.severity+'">'+e.severity+'</span>'+
+      '<span class="src t">'+esc(e.source)+'</span>'+
+      '<span class="msg">'+esc(e.message)+'</span></div>').join("") : '<div class="empty">no logs</div>';
+    if(auto) list.parentElement.scrollTop = 999999, main.scrollTop = main.scrollHeight;
+  }
+
+  // ---- Network ----
+  function renderNetwork(p){
+    ensureFilters(p, "netf", '<input type="text" id="netSearch" placeholder="filter by url / method…" />');
+    if(!p.querySelector("#netSearch").oninput) p.querySelector("#netSearch").oninput=()=>{dirty=true;render(true);};
+    const q = (p.querySelector("#netSearch").value||"").toLowerCase();
+    const list = p.querySelector("#netf-list");
+    let rows = byCat("network");
+    if(q) rows = rows.filter(e=>(e.data.uri+" "+e.data.method).toLowerCase().includes(q));
+    rows = rows.slice(-300).reverse();
+    list.innerHTML = rows.length ? rows.map(e => {
+      const d = e.data, st = d.statusCode, cls = st>=500?"status-5xx":st>=400?"status-4xx":st?"status-2xx":"", id = "net-"+e.id;
+      const open = state.expanded.has(id);
+      let html = '<div class="row net-row" data-x="'+id+'">'+
+        '<span>'+esc(d.method)+'</span><span class="msg">'+esc(d.uri)+'</span>'+
+        '<span class="'+cls+'">'+(d.error?"ERR":(st||"—"))+'</span>'+
+        '<span class="t">'+(d.durationMs!=null?d.durationMs+"ms":"—")+'</span></div>';
+      if(open){ html += '<div class="detail">'+
+        (d.error?'<b>Error:</b> '+esc(d.error)+"\n":"")+
+        '<b>Status:</b> '+(st||"—")+" "+esc(d.responseReason||"")+"\n"+
+        '<b>Duration:</b> '+(d.durationMs!=null?d.durationMs+"ms":"—")+"\n"+
+        '<b>Request headers:</b>\n'+esc(fmtHeaders(d.requestHeaders))+"\n"+
+        '<b>Response headers:</b>\n'+esc(fmtHeaders(d.responseHeaders))+'</div>'; }
+      return html;
+    }).join("") : '<div class="empty">no network requests — call get_network or trigger app traffic</div>';
+    list.querySelectorAll(".net-row").forEach(r => r.onclick = () => toggle(r.dataset.x));
+  }
+  function fmtHeaders(h){ if(!h) return "  (fetched only for failed/slow requests)"; return Object.entries(h).map(([k,v])=>"  "+k+": "+v).join("\n")||"  (none)"; }
+
+  // ---- Exceptions ----
+  function renderExceptions(p){
+    ensureFilters(p, "excf", '<input type="text" id="excSearch" placeholder="filter exceptions…" />');
+    if(!p.querySelector("#excSearch").oninput) p.querySelector("#excSearch").oninput=()=>{dirty=true;render(true);};
+    const q = (p.querySelector("#excSearch").value||"").toLowerCase();
+    const list = p.querySelector("#excf-list");
+    let rows = byCat("exception");
+    if(q) rows = rows.filter(e=>e.message.toLowerCase().includes(q));
+    rows = rows.slice(-200).reverse();
+    list.innerHTML = rows.length ? rows.map(e => {
+      const d = e.data, id = "exc-"+e.id, open = state.expanded.has(id);
+      let html = '<div class="row exc-row" data-x="'+id+'"><span><span class="t">'+fmtTime(e.timestamp)+'</span>  <span class="sev-'+e.severity+'">'+esc(e.message)+'</span>'+
+        (d.library?'  <span class="t">['+esc(d.library)+']</span>':"")+'</span></div>';
+      if(open){ html += '<div class="detail">'+
+        (d.widget?'<b>Widget:</b> '+esc(d.widget)+"\n":"")+
+        (d.type?'<b>Type:</b> '+esc(d.type)+"\n":"")+
+        '<b>Stack trace:</b>\n'+(d.stackTrace?'<pre class="stack">'+esc(d.stackTrace)+'</pre>':"  (no stack captured)")+'</div>'; }
+      return html;
+    }).join("") : '<div class="empty">no exceptions 🎉</div>';
+    list.querySelectorAll(".exc-row").forEach(r => r.onclick = () => toggle(r.dataset.x));
+  }
+
+  // ---- Timeline ----
+  function renderTimeline(p){
+    ensureFilters(p, "tlf", '<input type="text" id="tlSearch" placeholder="search all events…" />');
+    if(!p.querySelector("#tlSearch").oninput) p.querySelector("#tlSearch").oninput=()=>{dirty=true;render(true);};
+    const q = (p.querySelector("#tlSearch").value||"").toLowerCase();
+    const list = p.querySelector("#tlf-list");
+    let rows = state.events.slice();
+    if(q) rows = rows.filter(e=>e.message.toLowerCase().includes(q));
+    rows = rows.slice(-500).reverse();
+    list.innerHTML = rows.length ? rows.map(e =>
+      '<div class="row tl-row"><span class="t">'+fmtTime(e.timestamp)+'</span>'+
+      '<span><span class="badge-cat cat-'+e.category+'">'+e.category+'</span></span>'+
+      '<span class="msg sev-'+e.severity+'">'+esc(e.message)+'</span></div>').join("") : '<div class="empty">no events</div>';
+  }
+
+  // ---- Performance (canvas charts) ----
+  function renderPerformance(p){
+    if(!p.querySelector("#frameChart")){ p.innerHTML =
+      '<div class="chart-label">Frame time (ms) — red line = 16.7ms 60fps budget</div><canvas id="frameChart"></canvas>'+
+      '<div class="chart-label">Heap memory (MB)</div><canvas id="memChart"></canvas>'; }
+    drawChart(p.querySelector("#frameChart"), byCat("frame").slice(-120).map(e=>e.data.elapsedMs||0), { budget: 16.7, color: "#42a5f5" });
+    drawChart(p.querySelector("#memChart"), byCat("system").filter(e=>e.data&&e.data.heapUsageMB!=null).slice(-120).map(e=>e.data.heapUsageMB), { color: "#3fb950" });
+  }
+  function drawChart(cv, data, opts){
+    const dpr = window.devicePixelRatio||1, w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = w*dpr; cv.height = h*dpr; const ctx = cv.getContext("2d"); ctx.scale(dpr,dpr);
+    ctx.clearRect(0,0,w,h);
+    if(!data.length){ ctx.fillStyle="#8b949e"; ctx.font="12px monospace"; ctx.fillText("no data yet", 12, 24); return; }
+    const max = Math.max(opts.budget||0, ...data)*1.15 || 1, pad = 8;
+    const x = i => pad + (i/(Math.max(data.length-1,1)))*(w-2*pad);
+    const y = v => h-pad - (v/max)*(h-2*pad);
+    if(opts.budget){ ctx.strokeStyle="rgba(248,81,73,.6)"; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(pad,y(opts.budget)); ctx.lineTo(w-pad,y(opts.budget)); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.strokeStyle = opts.color; ctx.lineWidth = 1.5; ctx.beginPath();
+    data.forEach((v,i)=>{ i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)); }); ctx.stroke();
+    ctx.fillStyle = opts.color; ctx.font = "11px monospace";
+    ctx.fillText("max " + max.toFixed(1) + " · last " + (data[data.length-1]||0).toFixed(1), pad, 14);
+  }
+
+  // ---- Inspector placeholder ----
+  function renderInspector(p){
+    p.innerHTML = '<div class="placeholder"><h3 style="color:var(--text);margin:0 0 8px">Widget / State Inspector</h3>'+
+      'Live widget-tree &amp; state streaming is not wired to the dashboard yet.<br/>'+
+      'Use the MCP tools <span style="font-family:var(--mono);color:var(--accent)">get_widget_tree</span>, '+
+      '<span style="font-family:var(--mono);color:var(--accent)">get_selected_widget</span> from your AI client.<br/><br/>'+
+      (state.status.connected ? "Runtime source: <span style='color:var(--green)'>connected</span>" : "Runtime source: <span style='color:var(--red)'>unavailable — connect a Flutter app</span>")+'</div>';
+  }
+
+  function toggle(id){ if(state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id); dirty=true; render(true); }
+
+  // ---- boot ----
+  setTab("Overview"); updateConn(); connect();
+})();
+</script>
+</body>
+</html>
