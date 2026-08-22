@@ -67,7 +67,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 
 ## Install
 
-**Requires Node ≥ 18.**
+**Requires Node ≥ 20.**
 
 ```bash
 git clone https://github.com/itsonu/flutter-lamp.git
@@ -195,6 +195,9 @@ npm run build     # compile TypeScript → dist/
 npm run watch     # incremental compile
 npm test          # node:test suite (engine + collectors + dashboard)
 ```
+
+`npm test` runs the compiled output, so build first. It relies on glob support in
+`node --test`, which needs **Node ≥ 21** — the server itself runs on Node ≥ 20.
 
 Docs in [`docs/`](docs/) are the source of truth (PRD, Architecture, Rules,
 Phases, Design, Memory).
