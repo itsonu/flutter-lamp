@@ -62,7 +62,8 @@ that is usually the request you want.
 | --- | --- |
 | What is the stack trace? | `get_exceptions` |
 | Which request failed? | `get_network` |
-| Is the jank build or raster? | `get_frames` with `onlyJanky: true` |
+| Why is it janky? | `diagnose_performance` |
+| What were the raw frame timings? | `get_frames` with `onlyJanky: true` |
 | What did the app print? | `get_logs` with `minSeverity: "warning"` |
 | Which screen is broken? | `get_navigation` |
 | What is on screen? | `get_widget_tree`, `get_selected_widget` |
@@ -88,6 +89,16 @@ to a real event.
 | `alternativeCauses[]` | Other explanations that fit — mention them |
 | `confidenceBreakdown` | Evidence strength, data completeness, alternative strength |
 | `limitations[]` | What the diagnosis could not see |
+
+**`diagnose_performance`** is the jank equivalent of `diagnose_runtime`. Prefer
+it over reading raw frames: it returns percentiles, the build-vs-raster split,
+and findings correlating jank against in-flight requests, route transitions and
+heap growth — each with evidence ids, a strength and a specific fix. It reports
+`healthy` when jank is within normal range and `unknown` below 20 frames rather
+than reading noise as a pattern. Its `limitations` are load-bearing: there is no
+CPU sampling, no GC event stream and no rebuild count, so a slow build cannot be
+traced to a function or a widget from here. Send the user to the DevTools CPU
+profiler for that instead of speculating.
 
 **`explain_diagnosis`** resolves every cited id back to its full record and adds
 `missingEvidence`. Use it when the user asks why, or when the confidence

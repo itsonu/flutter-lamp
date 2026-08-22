@@ -7,6 +7,7 @@ import { redactionEnabled } from "./core/redaction.js";
 import type { Severity } from "./core/events.js";
 import { runtimeHealth, whatChanged } from "./diagnosis/health.js";
 import { routeHistory } from "./diagnosis/navigation.js";
+import { diagnosePerformance } from "./diagnosis/performance.js";
 import { VERSION } from "./version.js";
 import { withInspectorGroup, type IsolateCall } from "./vm/inspectorGroup.js";
 
@@ -32,6 +33,7 @@ export const TOOL_SAFETY = {
   get_frames: "read-only",
   get_network: "read-only",
   diagnose_runtime: "read-only",
+  diagnose_performance: "read-only",
   explain_diagnosis: "read-only",
   get_widget_tree: "read-only",
   get_selected_widget: "read-only",
@@ -236,6 +238,22 @@ export function registerTools(server: McpServer): void {
       connection.requireConnectedOrThrow();
       await connection.refreshPullCollectors(); // ensure latest network is in evidence
       return json(diagnose(connection.store));
+    },
+  );
+
+  server.registerTool(
+    "diagnose_performance",
+    {
+      annotations: ann("diagnose_performance"),
+      title: "Diagnose performance",
+      description:
+        "Why the app is janky, not just how much. Returns frame percentiles, the build-vs-raster split, and findings correlating jank against in-flight requests, route transitions and heap growth — each with its own evidence ids, strength and fix. Reports 'healthy' when jank is within normal range and 'unknown' when there are too few frames to tell a pattern from noise. States what it cannot see: no CPU sampling, no GC events, no widget rebuild counts.",
+      inputSchema: {},
+    },
+    async () => {
+      connection.requireConnectedOrThrow();
+      await connection.refreshPullCollectors(); // network correlation needs the latest profile
+      return json(diagnosePerformance(connection.store));
     },
   );
 
@@ -456,7 +474,7 @@ export function registerTools(server: McpServer): void {
         canObserve: [
           "Dart VM Service streams: Stdout, Stderr, Logging, Extension, Debug",
           "Flutter framework errors with reconstructed stack traces",
-          "Frame build/raster timings and jank",
+          "Frame build/raster timings, jank, and percentile statistics",
           "dart:io HTTP requests (covers Dio and package:http)",
           "Widget tree and selected widget (debug builds only)",
           "Route changes via Flutter.Navigation (debug and profile builds)",
@@ -469,6 +487,8 @@ export function registerTools(server: McpServer): void {
           "Anything before connect_vm was called",
           "Evidence older than the retention window",
           "Redacted credential values (headers, sensitive query parameters, tokens in text)",
+          "CPU samples, GC events and widget rebuild counts — so a slow build cannot be traced to a function or a widget",
+          "Riverpod/Bloc state and provider changes — not implemented",
         ],
         configuration: {
           redaction: redactionEnabled() ? "on" : "off (FLUTTER_LAMP_REDACT=off)",

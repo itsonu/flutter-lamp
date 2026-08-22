@@ -58,6 +58,7 @@ const EXPECTED = [
   "get_frames",
   "get_network",
   "diagnose_runtime",
+  "diagnose_performance",
   "get_widget_tree",
   "get_selected_widget",
   "get_memory",

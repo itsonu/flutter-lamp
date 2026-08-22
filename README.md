@@ -42,7 +42,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 - 💥 **Realtime exceptions with reconstructed stack traces** (framework + unhandled)
 - 📝 **Console & structured logs** (Stdout / Stderr / `dart:developer`)
 - 🌐 **Network capture** via `dart:io` profiling — covers Dio & `package:http`, no interceptor needed
-- 🎞️ **Frame timings** with jank detection against the 60fps budget
+- 🎞️ **Frame timings** with jank detection, percentiles, and a build-vs-raster verdict
 - 🧭 **Route awareness** — current screen, transitions, and failures attributed to the screen they happened on
 - 🧬 **Widget tree & selected-widget** snapshots from the Inspector
 - 🧮 **Memory** (Dart heap / external) and **VM timeline** events
@@ -70,6 +70,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 | `get_memory` | Dart heap + external memory (MB). | read-only |
 | `get_timeline` | Recent VM timeline events (build/paint/layout/GC). | **mutates** |
 | `diagnose_runtime` | Root cause with evidence ids, timeline, alternatives, limitations. | read-only |
+| `diagnose_performance` | Why the app is janky — percentiles, phase split, correlated findings. | read-only |
 | `get_dashboard_url` | URL of the live browser dashboard. | read-only |
 
 **mutates** means the tool changes app or VM state, not your project — nothing

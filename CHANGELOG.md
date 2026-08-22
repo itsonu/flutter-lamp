@@ -4,6 +4,41 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-08-22
+
+Performance diagnosis. Why the app is janky, not just how much.
+
+### Added
+
+- **`diagnose_performance`** — frame percentiles (p50/p90/p99, worst), the
+  build-versus-raster split across janky frames, and findings that correlate
+  jank against what can actually be observed:
+  - **Phase** — whether janky frames are dominated by build or by raster, with
+    the matching advice. An even split is reported as `mixed` rather than forced
+    into one bucket.
+  - **In-flight requests** — jank landing inside an HTTP request's span, which
+    on mobile usually means a response being decoded on the main isolate.
+  - **Route transitions** — jank clustered within a second of a route change,
+    which is the new screen's first build rather than steady-state rendering.
+  - **Heap growth** — deliberately the weakest finding, scored below the others
+    and stating outright that GC events are not observable from here, so the
+    link cannot be confirmed.
+- Each finding carries its own evidence ids, strength and fix, and findings are
+  ranked by strength.
+
+### Notes
+
+The tool reports `healthy` when jank is within normal range and `unknown` below
+20 frames, rather than reading noise as a pattern. `limitations` are stated on
+every run: no CPU sampling, no GC event stream, no widget rebuild counts, and
+frames rolling out of the retention window. A slow build cannot be traced to a
+function or a widget from here — that needs the DevTools CPU profiler, and the
+output says so instead of guessing.
+
+### Compatibility
+
+Purely additive.
+
 ## [0.9.0] — 2026-08-22
 
 Route awareness. Failures can now be attributed to the screen they happened on.
@@ -354,6 +389,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.10.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.10.0
 [0.9.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.9.0
 [0.8.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.7.0

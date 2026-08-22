@@ -6,7 +6,9 @@ prioritized backlog that comes out of it.
 **Progress:** P0 is complete — P0-1/P0-2 in 0.2.0, P0-3/P0-4 in 0.3.0,
 P0-5/P0-6 in 0.4.0, P0-7/P0-8/P0-9 in 0.5.0. P1-1 and P1-2 in 0.6.0.
 P1-3, P1-4, P1-7 and P1-8 in 0.7.0, with P1-5 partly done there. P1-6 in
-0.8.0. P1 is complete apart from the timeline half of P1-5; P2-P4 remain open.
+0.8.0. Navigation in 0.9.0 and `diagnose_performance` in 0.10.0 cover two of
+the three P2 items. Open: the timeline half of P1-5, state-management adapters,
+and all of P3-P4.
 
 Findings are marked **Verified** where the code was read and the behaviour
 follows directly from it, or **Needs check** where confirming it requires a live
@@ -532,6 +534,40 @@ network). Optional Riverpod and Bloc adapters — optional collectors, never har
 dependencies, and rebuild conclusions only where evidence supports them.
 `diagnose_performance` correlating jank with widget activity, GC, memory and
 network.
+
+### Navigation — DONE (0.9.0)
+
+`NavigationCollector` reads `Flutter.Navigation` from the `Extension` stream.
+Flutter's own `Navigator` posts it on push, pop, replace and remove
+(`packages/flutter/lib/src/widgets/navigator.dart`, `_afterNavigation`), guarded
+by `!kReleaseMode` — payload shape and guard both read from the Flutter source
+rather than assumed, so no observer is installed in the app. `get_navigation`
+attributes exceptions, failed requests and janky frames to the route that was on
+screen; a request spanning a transition counts for both screens, because
+assigning it to one hides it from the screen the user saw fail.
+`diagnose_runtime` names the route in its summary and cites the transition.
+
+### diagnose_performance — DONE (0.10.0)
+
+Percentiles, the build-versus-raster split, and findings correlating jank
+against in-flight requests, route transitions and heap growth, each with its own
+evidence, strength and fix.
+
+The plan called for correlating against "widget activity" and "GC". Neither is
+observable: widget rebuild counts are not exposed on any stream this project
+reads, and GC events live in the VM timeline, which is fetched on demand and not
+stored. Rather than approximate them, `limitations` states on every run that
+there is no CPU sampling, no GC stream and no rebuild count, and points at the
+DevTools CPU profiler for what this cannot answer. Heap growth is included as
+the weakest finding, scored below the others and explicitly labelled as
+co-occurrence that cannot be confirmed from here.
+
+### State management — NOT STARTED, and blocked
+
+Riverpod and Bloc integration depends on service extensions those packages
+register at runtime. Writing adapters against an assumed API rather than a
+running app is how a confident wrong integration ships. This needs a live
+Flutter app using each package before any code is written.
 
 ## P3 — Session intelligence
 
