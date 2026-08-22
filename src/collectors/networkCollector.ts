@@ -21,6 +21,15 @@ export class NetworkCollector implements Collector {
   /** Request ids already stored as completed, so refresh() stays idempotent. */
   private stored = new Set<string>();
 
+  /**
+   * Request ids restart from low numbers in a new app run, so a dedup set kept
+   * across a reconnect makes the new session's requests look like duplicates
+   * and silently drops them.
+   */
+  reset(): void {
+    this.stored.clear();
+  }
+
   async start(vm: VmService, _store: RuntimeStore, isolateId: string): Promise<void> {
     try {
       await vm.call("ext.dart.io.httpEnableTimelineLogging", {

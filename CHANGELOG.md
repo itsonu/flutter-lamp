@@ -4,6 +4,47 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-08-22
+
+Session lifecycle release. Fixes evidence corruption across app runs and adds
+recovery from dropped connections.
+
+### Fixed
+
+- **Collector state no longer survives a reconnect.** Collector instances
+  outlive connections, and two of them held per-session state that was never
+  reset. `NetworkCollector`'s dedup set meant that after a hot restart — where
+  request ids start again from low numbers — the new run's requests looked like
+  duplicates and were silently discarded, so `get_network` returned nothing.
+  `LogCollector`'s partial-line buffer prepended a fragment from the previous
+  run onto the next one's first log line. The `Collector` interface gains an
+  optional `reset()`, called before every connect.
+- **Evidence from two app runs is no longer mixed.** Every event now carries a
+  `sessionId`, and a new session opens on each connect. Queries return the
+  current session by default, so the diagnosis engine cannot correlate an
+  exception from this run with a network call from the last one.
+
+### Added
+
+- **Bounded reconnection.** An unexpected socket close now retries the last
+  known URI with exponential backoff (default 1s doubling to 30s, 8 attempts,
+  configurable through `connection.reconnectPolicy`). Every attempt, failure and
+  recovery is recorded as a system event, so the outage appears in the evidence
+  timeline instead of reading as the app going quiet. An explicit disconnect
+  never retries. This covers transient drops — a sleeping device, a flaky cable
+  — but not a full app relaunch, which allocates a new VM Service URI.
+- `runtime_status` reports `sessionId`, `reconnecting` and `reconnectAttempt`.
+- `RuntimeStore.query()` accepts `sessions: "all"` to read across sessions. The
+  dashboard uses it, so a human still sees the previous run's error after a hot
+  restart.
+
+### Compatibility
+
+No tool renamed, removed, or reshaped. `sessionId` on events and the three new
+`runtime_status` fields are additive. Tools now return only the current
+session's evidence; previously they returned every retained event regardless of
+which app run produced it.
+
 ## [0.3.0] — 2026-08-22
 
 Storage release. Fixes a bug that silently destroyed the evidence the project
@@ -118,6 +159,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.4.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.2.0
 [0.1.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.1.0

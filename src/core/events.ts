@@ -4,6 +4,9 @@
  * Per docs/Rules.md every runtime event MUST carry: timestamp, source,
  * severity, category. Everything the collectors produce funnels through this
  * shape so tools and the diagnosis engine reason over one uniform stream.
+ *
+ * `id` and `sessionId` are stamped by the store, so collectors construct events
+ * without them.
  */
 
 export type Severity = "debug" | "info" | "warning" | "error" | "critical";
@@ -19,6 +22,13 @@ export type Category = (typeof CATEGORIES)[number];
 export interface RuntimeEvent {
   /** Monotonic id assigned by the store (insertion order). */
   id: number;
+  /**
+   * Which debugging session produced this event. A hot restart or a reconnect
+   * starts a new session; without this marker, evidence from two different app
+   * runs sits in one timeline and correlation invents causes across the gap.
+   * Null for events added outside a session (tests, direct store use).
+   */
+  sessionId: string | null;
   /** Epoch milliseconds. */
   timestamp: number;
   /** Origin stream/extension, e.g. "Stdout", "Flutter.Error", "Flutter.Frame". */

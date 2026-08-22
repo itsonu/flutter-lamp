@@ -38,19 +38,27 @@ export function registerTools(server: McpServer): void {
     {
       title: "Runtime health check",
       description:
-        "Report connection health, how many runtime events have been captured by category, and the retention window (per-category capacity, how many events were evicted, and the oldest event still held). Use to confirm the MCP is receiving live data and to know how far back the evidence goes.",
+        "Report connection health, the current debugging session, reconnection state, how many runtime events have been captured by category, and the retention window (per-category capacity, how many events were evicted, and the oldest event still held). Use to confirm the MCP is receiving live data and to know how far back the evidence goes.",
       inputSchema: {},
     },
-    async () =>
-      json({
-        connected: connection.connected,
+    async () => {
+      const status = connection.status();
+      return json({
+        connected: status.connected,
+        // A hot restart or a dropped socket starts a new session. Other tools
+        // return only the current session's evidence, so cross-run correlation
+        // cannot happen by accident.
+        sessionId: status.sessionId,
+        reconnecting: status.reconnecting,
+        reconnectAttempt: status.reconnectAttempt,
         eventsCaptured: connection.store.size(),
         byCategory: connection.store.counts(),
         // Retention is bounded; say so rather than letting an agent reason over
         // truncated history without knowing it is truncated.
         retention: connection.store.retention(),
         dashboard_url: getDashboardInfo().url,
-      }),
+      });
+    },
   );
 
   server.registerTool(

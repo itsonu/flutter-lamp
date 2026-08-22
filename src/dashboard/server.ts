@@ -145,7 +145,10 @@ export async function startDashboard(): Promise<DashboardHandle> {
     send(ws, {
       type: "snapshot",
       status: connection.status(),
-      events: store.query({ limit: 1000 }).reverse(),
+      // "all": a human watching wants the previous run's error to stay visible
+      // across a hot restart. Agents get the current session only (see
+      // RuntimeStore.query), because correlating across runs invents causes.
+      events: store.query({ limit: 1000, sessions: "all" }).reverse(),
     });
     ws.on("close", () => clients.delete(ws));
     ws.on("error", () => clients.delete(ws));

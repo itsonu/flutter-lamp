@@ -13,6 +13,12 @@ export interface Collector {
   start(vm: VmService, store: RuntimeStore, isolateId: string): Promise<void>;
   /** Pull-on-demand refresh for sources without a push stream (e.g. HTTP profile). Optional. */
   refresh?(vm: VmService, store: RuntimeStore, isolateId: string): Promise<void>;
+  /**
+   * Drop per-session state. Called before every connect, because collector
+   * instances outlive connections: a dedup set or a partial-line buffer carried
+   * into a new app run silently corrupts the next session's evidence.
+   */
+  reset?(): void;
 }
 
 /** Decode a base64 WriteEvent payload to text. */

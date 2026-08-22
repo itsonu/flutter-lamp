@@ -12,6 +12,12 @@ export interface QueryOptions {
   contains?: string;
   /** Max events returned (most recent first). */
   limit?: number;
+  /**
+   * Which session to read. Defaults to "current": evidence from a previous app
+   * run must not be correlated with this one. "all" reads the whole retained
+   * history, which is what a human watching the dashboard wants.
+   */
+  sessions?: "current" | "all";
 }
 
 /**
@@ -110,6 +116,8 @@ export interface RetentionReport {
 export class RuntimeStore extends EventEmitter {
   private readonly rings: Record<Category, Ring<RuntimeEvent>>;
   private nextId = 1;
+  private sessionId: string | null = null;
+  private sessionSeq = 0;
 
   constructor(capacities: Partial<Record<Category, number>> = {}) {
     super();
@@ -120,8 +128,23 @@ export class RuntimeStore extends EventEmitter {
     }
   }
 
-  add(event: Omit<RuntimeEvent, "id">): RuntimeEvent {
-    const stored: RuntimeEvent = { ...event, id: this.nextId++ };
+  /**
+   * Start a new debugging session and return its id. Called on every connect,
+   * so a hot restart or a reconnect is a visible boundary in the evidence
+   * rather than an invisible seam two app runs get correlated across.
+   */
+  beginSession(): string {
+    this.sessionId = `s${++this.sessionSeq}`;
+    return this.sessionId;
+  }
+
+  /** The session events are currently being stamped with, if any. */
+  currentSession(): string | null {
+    return this.sessionId;
+  }
+
+  add(event: Omit<RuntimeEvent, "id" | "sessionId">): RuntimeEvent {
+    const stored: RuntimeEvent = { ...event, id: this.nextId++, sessionId: this.sessionId };
     this.rings[stored.category].push(stored);
     this.emit("event", stored);
     return stored;
@@ -131,8 +154,11 @@ export class RuntimeStore extends EventEmitter {
   query(opts: QueryOptions = {}): RuntimeEvent[] {
     const minRank = opts.minSeverity ? SEVERITY_RANK[opts.minSeverity] : -1;
     const needle = opts.contains?.toLowerCase();
+    // No session started (direct store use, tests) means no session filtering.
+    const scope = opts.sessions === "all" ? null : this.sessionId;
     const out: RuntimeEvent[] = [];
     for (const e of this.newestFirst(opts.category)) {
+      if (scope !== null && e.sessionId !== scope) continue;
       if (minRank >= 0 && SEVERITY_RANK[e.severity] < minRank) continue;
       if (opts.since !== undefined && e.timestamp < opts.since) continue;
       if (needle && !e.message.toLowerCase().includes(needle)) continue;

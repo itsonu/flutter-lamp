@@ -24,6 +24,11 @@ export class LogCollector implements Collector {
   readonly name = "logs";
   private carry: Record<string, string> = { Stdout: "", Stderr: "" };
 
+  /** Drop the incomplete tail, so it is not prepended to the next run's first line. */
+  reset(): void {
+    this.carry = { Stdout: "", Stderr: "" };
+  }
+
   async start(vm: VmService, store: RuntimeStore): Promise<void> {
     await vm.streamListen("Stdout");
     await vm.streamListen("Stderr");

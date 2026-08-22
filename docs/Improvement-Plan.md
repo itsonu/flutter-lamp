@@ -3,8 +3,8 @@
 Audit of Flutter Lamp at v0.1.0 (1,684 lines of TypeScript, 9 tests), and the
 prioritized backlog that comes out of it.
 
-**Progress:** P0-1 and P0-2 shipped in 0.2.0. P0-3 and P0-4 shipped in 0.3.0.
-Everything else is open.
+**Progress:** P0-1 and P0-2 shipped in 0.2.0. P0-3 and P0-4 in 0.3.0. P0-5 and
+P0-6 in 0.4.0. P0-7 to P0-9 and all of P1-P4 remain open.
 
 Findings are marked **Verified** where the code was read and the behaviour
 follows directly from it, or **Needs check** where confirming it requires a live
@@ -205,7 +205,7 @@ Benchmarked against the 0.2.0 implementation: 200,000 events in 81ms versus
 9,943ms, a 122x improvement. A loose throughput assertion guards against a
 regression to O(n) without being flaky on a slow runner.
 
-### P0-5 Collector state survives reconnection
+### P0-5 Collector state survives reconnection — DONE (0.4.0)
 
 **Current state.** `ConnectionManager` builds its collectors once as a field
 initializer (`src/core/connection.ts:18`) and reuses the same instances for every
@@ -236,7 +236,13 @@ fragment carries across; assert events from two sessions are distinguishable.
 
 **Risk.** Low.
 
-### P0-6 No reconnection handling
+**As shipped.** Optional `reset()` on the `Collector` interface, called before
+`start()` on every connect. The store is segmented rather than cleared: events
+carry `sessionId` and `query()` defaults to the current session, so history
+survives a hot restart for the human watching the dashboard
+(`sessions: "all"`) while agents never see two runs as one.
+
+### P0-6 No reconnection handling — DONE (0.4.0)
 
 **Current state.** On socket close the manager records a system event and drops
 its references (`src/core/connection.ts:32`).
@@ -257,6 +263,18 @@ evidence timeline rather than being invisible dead air.
 behaviour, and that collectors are restarted and reset on success.
 
 **Risk.** Medium — retry loops are easy to get wrong. Strict attempt caps.
+
+**As shipped.** `reconnectPolicy` (1s doubling to 30s, 8 attempts) with every
+attempt, failure and recovery recorded as a system event. Staleness is handled
+by identity rather than a flag: the close handler ignores the event when
+`this.vm` is no longer that socket, so a superseded connection cannot tear down
+its replacement. Timers are `unref`'d. Tested against a mock VM for successful
+recovery, exhausting the attempt cap, and an explicit disconnect staying
+closed.
+
+Scope limit worth stating: this recovers transient drops, not a full app
+relaunch, which allocates a new VM Service URI that Flutter Lamp has no way to
+discover.
 
 ### P0-7 Inspector object groups are never disposed
 

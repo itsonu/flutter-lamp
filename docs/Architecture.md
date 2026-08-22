@@ -41,7 +41,7 @@ browser can watch one app at the same time.
 | Component | File | Responsibility |
 | --- | --- | --- |
 | `VmService` | `src/vm/vmService.ts` | JSON-RPC transport. URI normalization (`http://…` → `ws://…/ws`), request correlation, stream fan-out, `streamListen` idempotency (tolerates error 103). |
-| `ConnectionManager` | `src/core/connection.ts` | Singleton lifecycle. Connect/disconnect, isolate resolution, collector startup, pull-collector refresh, shared `sampleMemory()`. |
+| `ConnectionManager` | `src/core/connection.ts` | Singleton lifecycle. Connect/disconnect, isolate resolution, collector reset and startup, session boundaries, bounded reconnection, pull-collector refresh, shared `sampleMemory()`. |
 | `Collector` | `src/collectors/collector.ts` | Interface: `start()` to subscribe, optional `refresh()` for sources with no push stream. |
 | `RuntimeStore` | `src/core/runtimeStore.ts` | Per-category ring buffers, merged newest-first query, counts, retention reporting, live event emission. |
 | Diagnosis engine | `src/diagnosis/engine.ts` | Correlates stored events into a root cause anchored to a real event. Never invents a cause. |
@@ -78,6 +78,7 @@ Every collector produces the same shape (`src/core/events.ts`):
 ```ts
 interface RuntimeEvent {
   id: number;               // monotonic, assigned by the store
+  sessionId: string | null; // which debugging session produced it
   timestamp: number;        // epoch ms
   source: string;           // "Stdout" | "Flutter.Error" | "HttpProfile" | …
   severity: Severity;       // debug | info | warning | error | critical
@@ -108,6 +109,31 @@ tree, not a flat object. The stack trace is a run of child nodes whose
 `description` matches `#N  …`. `src/collectors/flutterError.ts` walks the tree
 and reconstructs the stack, summary and offending widget. This is the only
 reliable way to get a stack out of a realtime framework error.
+
+## Sessions and reconnection
+
+Collector instances outlive connections, so every connect calls `reset()` on
+each collector before starting it. Without that, `NetworkCollector`'s dedup set
+makes the next app run's requests look like duplicates and silently drops them,
+and `LogCollector`'s partial-line buffer prepends a fragment from the previous
+run onto the next one's first line.
+
+Each connect also opens a new store session. Every event is stamped with its
+`sessionId`, and `query()` returns the current session by default — evidence
+from a previous app run must never be correlated with this one, or the
+diagnosis engine will happily construct a cause across the gap. Pass
+`sessions: "all"` to read the whole retained history; the dashboard does, so a
+human still sees the previous run's error after a hot restart.
+
+When the socket drops unexpectedly the manager reconnects to the last known URI
+with exponential backoff, bounded by `reconnectPolicy` (default: 1s doubling to
+30s, 8 attempts). Every attempt, failure and recovery is recorded as a system
+event, so the gap appears in the evidence timeline instead of looking like the
+app went quiet. An explicit `disconnect()` never retries.
+
+This recovers from transient drops — a sleeping device, a flaky cable, a
+paused emulator. It does not recover from a full app relaunch, which allocates
+a new VM Service URI; that needs a fresh `connect_vm`.
 
 ## Adding a runtime source
 
