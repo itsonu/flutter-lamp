@@ -5,8 +5,9 @@
 ### Give your AI **live** eyes on a running Flutter app — no more pasting logs.
 
 [![CI](https://github.com/itsonu/flutter-lamp/actions/workflows/ci.yml/badge.svg)](https://github.com/itsonu/flutter-lamp/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/flutter-lamp.svg)](https://www.npmjs.com/package/flutter-lamp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D18-43853d.svg)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-43853d.svg)](https://nodejs.org)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-000.svg)](https://modelcontextprotocol.io)
 
 An **MCP server** that connects Claude Code, Claude Desktop, Cursor, Codex & Gemini
@@ -67,40 +68,59 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 
 ## Install
 
-**Requires Node ≥ 20.**
+**Requires Node ≥ 20.** Nothing to clone — `npx` fetches it on first run:
+
+```bash
+npx -y flutter-lamp
+```
+
+Or install it globally:
+
+```bash
+npm install -g flutter-lamp
+```
+
+<details>
+<summary>From source</summary>
 
 ```bash
 git clone https://github.com/itsonu/flutter-lamp.git
 cd flutter-lamp
 npm install
 npm run build
-```
-
-Run it standalone (stdio):
-
-```bash
 node dist/index.js
 ```
+
+</details>
 
 ## Connect your AI client
 
 Add the server to your MCP client config, then restart the client.
 
-**Claude Code** — `.mcp.json` in your project (or `claude mcp add`):
+**Claude Code** — `.mcp.json` in your project:
 
 ```json
 {
   "mcpServers": {
     "flutter-lamp": {
-      "command": "node",
-      "args": ["/absolute/path/to/flutter-lamp/dist/index.js"]
+      "command": "npx",
+      "args": ["-y", "flutter-lamp"]
     }
   }
 }
 ```
 
+Or from the CLI:
+
+```bash
+claude mcp add flutter-lamp -- npx -y flutter-lamp
+```
+
 **Cursor** (`~/.cursor/mcp.json`) and **Claude Desktop**
 (`claude_desktop_config.json`) use the same `mcpServers` shape.
+
+Running from a clone instead? Point `command` at `node` and `args` at
+`/absolute/path/to/flutter-lamp/dist/index.js`.
 
 Optional environment variables:
 
