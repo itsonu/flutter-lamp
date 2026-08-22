@@ -198,7 +198,7 @@ export function registerTools(server: McpServer): void {
       annotations: READ_ONLY,
       title: "Diagnose runtime",
       description:
-        "Correlate captured runtime evidence into a root-cause diagnosis: summary, root cause, evidence, confidence (0-1), and recommended fixes. States 'Unknown' when confidence is below 70%.",
+        "Correlate captured runtime evidence into a root-cause diagnosis. Returns status (diagnosed|unknown), summary, rootCause, evidence (each with a citable eventId), a chronological timeline around the root cause, alternativeCauses that also fit, limitations describing what could not be seen, confidence (0-1) with a breakdown of evidence strength / data completeness / alternative strength, and recommended fixes. Status is 'unknown' below 70% rather than a guess.",
       inputSchema: {},
     },
     async () => {

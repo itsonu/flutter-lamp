@@ -4,6 +4,59 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-08-22
+
+Correlation engine. Diagnoses now show their working.
+
+### Fixed
+
+- **Correlation matched on when a request started, not when it failed.** A
+  network request that began 30 seconds before an exception and returned 500
+  immediately before it fell outside the 3-second window and was never offered
+  as evidence — and a slow or hanging request is exactly the kind that causes
+  the failure being diagnosed. Events are now treated as intervals rather than
+  instants, so a request is adjacent to a failure if any part of its span is.
+
+### Added
+
+- **`src/diagnosis/correlation.ts`** — a reusable temporal module: interval
+  extraction, signed gaps, before/overlap/after relations, nearest-first
+  correlation, and a chronological timeline around an anchor. Deterministic
+  analysis narrows the search space before the model reasons, rather than asking
+  it to reconstruct chronology from a flat event list.
+- **`diagnose_runtime` returns structured evidence.** New fields: `status`
+  (`diagnosed` | `unknown`), `timeline` (chronological entries with `deltaMs`
+  and relation to the root cause), `alternativeCauses` (competing explanations
+  with their own strength and cited event ids), `limitations` (what the
+  diagnosis could not see), and `confidenceBreakdown`.
+- **Confidence is decomposed and documented.** `confidenceBreakdown` separates
+  evidence strength, data completeness and the strength of the best competing
+  explanation, and states plainly that the number is a conservative heuristic
+  rather than a calibrated probability. A strong hypothesis over thin data and a
+  weak one over complete data used to produce the same figure.
+- **Memory is part of diagnosis.** Sustained heap growth across a session's
+  samples is offered as a hypothesis — deliberately lowest priority and never
+  outranking an exception, with the caveat that growth is not a leak attached to
+  its own recommendation.
+- Diagnoses now state their blind spots explicitly: evidence dropped by
+  retention, missing network or memory evidence, VM timeline events taking no
+  part in correlation, and platform-code and WebView causes being invisible.
+
+### Notes
+
+VM timeline events are still excluded from correlation. They are fetched on
+demand and never stored, so folding them in means either storing them behind a
+new collector or having every diagnosis issue a slow VM call. Neither belongs in
+this release; the limitation is now reported in the output instead of being
+silently absent.
+
+### Compatibility
+
+No tool renamed or removed. `diagnose_runtime` keeps every existing field —
+`summary`, `rootCause`, `evidence`, `confidence`, `recommendedFixes` — with the
+same meaning; everything above is additive. Evidence items gained `eventId` in
+0.6.0.
+
 ## [0.6.0] — 2026-08-22
 
 Evidence identity. Diagnoses can now cite the exact event a claim rests on.
@@ -229,6 +282,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.7.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.7.0
 [0.6.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.6.0
 [0.5.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.5.0
 [0.4.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.4.0

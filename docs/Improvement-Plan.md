@@ -5,7 +5,8 @@ prioritized backlog that comes out of it.
 
 **Progress:** P0 is complete — P0-1/P0-2 in 0.2.0, P0-3/P0-4 in 0.3.0,
 P0-5/P0-6 in 0.4.0, P0-7/P0-8/P0-9 in 0.5.0. P1-1 and P1-2 in 0.6.0.
-P1-3 onward is open.
+P1-3, P1-4, P1-7 and P1-8 in 0.7.0, with P1-5 partly done there.
+P1-6 and P2-P4 remain open.
 
 Findings are marked **Verified** where the code was read and the behaviour
 follows directly from it, or **Needs check** where confirming it requires a live
@@ -420,7 +421,7 @@ blinding the diagnosis engine.
 
 Verifying it did surface a real defect in the same area — see P1-8.
 
-### P1-8 Correlation matches on when a request *started*, not when it failed
+### P1-8 Correlation matches on when a request *started*, not when it failed — DONE (0.7.0)
 
 Network events are stamped with `startTime` (`src/collectors/networkCollector.ts:90`),
 and `diagnose()` correlates on `Math.abs(event.timestamp - anchor.timestamp) <= 3s`
@@ -434,7 +435,14 @@ The window should test the request's *interval* against the anchor, or at
 minimum use `endTime`. Found while verifying P1-2. **Verified by inspection**;
 fix belongs with the correlation work in P1-4.
 
-### P1-3 Confidence is an undocumented heuristic
+**As shipped.** Fixed by the interval model in `correlation.ts`: a request is
+adjacent to a failure when any part of its span is within the window, and the
+reported `deltaMs` is measured from the nearer edge. A request still in flight
+when the exception fires now reports `overlapped` with a delta of 0. Covered by
+tests for the slow-failure case, the long-finished case, the in-flight case,
+and end to end through `diagnose_runtime`.
+
+### P1-3 Confidence is an undocumented heuristic — DONE (0.7.0)
 
 `diagnose()` starts at 0.7 and adds 0.1 for a stack trace, 0.1 for a correlated
 network error, 0.05 for correlated logs (`src/diagnosis/engine.ts:52`), and
@@ -444,7 +452,16 @@ evidence strength, data completeness and alternative-hypothesis strength, and
 state plainly that the 70% threshold is a conservative choice rather than a
 measured one.
 
-### P1-4 Correlation is private, fixed-window and partial
+**As shipped.** The arithmetic is unchanged — altering the scoring and the
+reporting in one step would leave neither reviewable. What changed is honesty:
+`confidenceBreakdown` reports evidence strength, data completeness and the
+strength of the best competing explanation as separate numbers, with a `basis`
+string stating the figure is a conservative heuristic and not calibrated.
+Completeness is the fraction of categories with evidence, penalised when
+retention dropped anything. Recalibrating the weights against real sessions is
+future work and needs data this project does not have yet.
+
+### P1-4 Correlation is private, fixed-window and partial — DONE (0.7.0)
 
 `correlate()` is a private ±3s filter (`src/diagnosis/engine.ts:124`). Extract a
 reusable temporal correlation module answering before, after, within-N and
@@ -453,12 +470,30 @@ reusable temporal correlation module answering before, after, within-N and
 indexed by event id. No graph database — typed relationships plus indexes cover
 the queries an agent asks, and there is no scale problem to justify a store.
 
-### P1-5 Memory and timeline are collected but never diagnosed
+**As shipped.** `src/diagnosis/correlation.ts`: `intervalOf`, `gapMs`,
+`correlate` (nearest-first), `precededBy`, and `timelineAround`. Relations are
+`preceded` / `overlapped` / `followed` / `anchor`, carried on each correlated
+event alongside a signed `deltaMs`, rather than materialised as a separate
+relationship graph — the relation is derivable from the interval arithmetic, so
+storing it twice would be two things to keep in sync. A persisted graph remains
+unjustified. This also fixed P1-8.
+
+### P1-5 Memory and timeline are collected but never diagnosed — PARTLY DONE (0.7.0)
 
 `sampleMemory()` writes snapshots into the store and `get_timeline` reads trace
 events, yet `diagnose()` examines only exceptions, network and frames
 (`src/diagnosis/engine.ts:39`). Fold both in — this is the original Phase 7 and
 the cheapest available accuracy gain.
+
+**Memory: done (0.7.0).** Sustained heap growth across a session's samples is a
+hypothesis now — lowest priority, never outranking an exception, and its own
+recommendation leads with the fact that growth is not proof of a leak.
+
+**Timeline: not done, and not cheap.** Timeline events are fetched on demand and
+never stored, so folding them in means either a new collector that stores them
+or a slow VM call inside every diagnosis. The honest interim is what shipped:
+`limitations` now states that timeline events take no part in correlation, so an
+agent knows the blind spot exists rather than assuming coverage.
 
 ### P1-6 Missing agent-facing tools
 
@@ -468,10 +503,17 @@ alternatives, missing evidence), and `get_capabilities` (which collectors are
 active, which tools exist and their safety class, what this target cannot
 observe). All additive.
 
-### P1-7 Diagnosis output lacks structure for citation
+### P1-7 Diagnosis output lacks structure for citation — DONE (0.7.0)
 
 Add `status`, `timeline`, `alternativeCauses`, `limitations`, and evidence ids on
 every claim. Keep every existing field so current consumers keep working.
+
+**As shipped.** All of it, with every prior field unchanged. Hypotheses are now
+explicit and ranked by (priority, strength), so the runner-up becomes an
+`alternativeCause` with its own cited evidence instead of being discarded by an
+if/else chain. Priority preserves the original ordering — an actionable
+exception still beats a performance pattern — so the primary result for any
+given evidence is the same as before.
 
 ---
 
