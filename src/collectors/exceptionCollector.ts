@@ -2,6 +2,7 @@ import type { Collector } from "./collector.js";
 import { extractFlutterError, firstLine } from "./flutterError.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { VmService } from "../vm/vmService.js";
+import { redactText } from "../core/redaction.js";
 
 /**
  * Runtime exceptions from two official sources:
@@ -20,18 +21,19 @@ export class ExceptionCollector implements Collector {
     vm.on("stream:Extension", (event: any) => {
       if (event?.extensionKind !== "Flutter.Error") return;
       const info = extractFlutterError(event.extensionData ?? {});
+      const summary = redactText(info.summary);
       store.add({
         timestamp: Date.now(),
         source: "Flutter.Error",
         severity: "error",
         category: "exception",
-        message: info.summary,
+        message: summary,
         data: {
           type: info.type,
           library: info.library,
-          summary: info.summary,
+          summary,
           widget: info.widget,
-          stackTrace: info.stack || undefined,
+          stackTrace: info.stack ? redactText(info.stack) : undefined,
           hasStack: info.stack.length > 0,
         },
       });
@@ -40,8 +42,9 @@ export class ExceptionCollector implements Collector {
     vm.on("stream:Debug", (event: any) => {
       if (event?.kind !== "PauseException") return;
       const exc = event.exception ?? {};
-      const summary: string =
-        exc.valueAsString ?? exc.class?.name ?? "Unhandled exception";
+      const summary: string = redactText(
+        exc.valueAsString ?? exc.class?.name ?? "Unhandled exception",
+      );
       store.add({
         timestamp: Date.now(),
         source: "Debug.PauseException",

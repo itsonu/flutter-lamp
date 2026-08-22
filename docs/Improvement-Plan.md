@@ -3,6 +3,8 @@
 Audit of Flutter Lamp at v0.1.0 (1,684 lines of TypeScript, 9 tests), and the
 prioritized backlog that comes out of it.
 
+**Progress:** P0-1 and P0-2 shipped in 0.2.0. Everything else is open.
+
 Findings are marked **Verified** where the code was read and the behaviour
 follows directly from it, or **Needs check** where confirming it requires a live
 Flutter app.
@@ -44,7 +46,7 @@ and their current output fields.
 
 ## P0 — Reliability and security
 
-### P0-1 Network headers are captured and exposed unredacted
+### P0-1 Network headers are captured and exposed unredacted — DONE (0.2.0)
 
 **Current state.** `NetworkCollector.refresh()` enriches every failing or slow
 request with full request and response headers via `getHttpProfileRequest`, and
@@ -79,7 +81,16 @@ the dashboard broadcast.
 **Risk.** Low. Over-redaction is the failure mode, mitigated by the marker and
 the local reveal.
 
-### P0-2 The dashboard WebSocket accepts any origin
+**As shipped.** Redaction happens at *capture* rather than on the way out, so
+secrets never enter the store at all. That drops the raw-value-plus-filter
+design above along with its dashboard reveal, and is both simpler and strictly
+safer: a future consumer — session export, a new tool — cannot leak what was
+never written. The env opt-out covers the case the reveal was for. Implemented
+in `src/core/redaction.ts`, wired into the network, log and exception
+collectors, with unit tests plus an integration test asserting no credential
+from a realistic HTTP profile reaches the store.
+
+### P0-2 The dashboard WebSocket accepts any origin — DONE (0.2.0)
 
 **Current state.** `new WebSocketServer({ server: httpServer, path: "/ws" })`
 with no origin verification (`src/dashboard/server.ts:60`). Binding defaults to
@@ -111,6 +122,14 @@ origin; accepted with no origin (native clients); rejected with a bad token;
 warning emitted on non-loopback bind.
 
 **Risk.** Low, contained to the dashboard.
+
+**As shipped.** Token delivery is by inlining it into the served HTML rather
+than putting it in the URL: cross-origin script cannot read a response body, so
+the token stays out of reach while `http://127.0.0.1:7373` remains
+bookmarkable. `X-Frame-Options: DENY` stops the token-bearing page being framed,
+and `/health` no longer returns `wsUri` (it embeds the VM's auth token).
+Verified live against a running server: a foreign origin is refused 403 with a
+valid token, a tokenless connect is refused, the real page connects.
 
 ### P0-3 Frame events evict all other evidence within about 90 seconds
 

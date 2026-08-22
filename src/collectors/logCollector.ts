@@ -3,6 +3,7 @@ import { decodeBytes } from "./collector.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { Severity } from "../core/events.js";
 import type { VmService } from "../vm/vmService.js";
+import { redactText } from "../core/redaction.js";
 
 /** Map dart:developer log levels (0..2000) to our severity scale. */
 function levelToSeverity(level: number): Severity {
@@ -15,6 +16,9 @@ function levelToSeverity(level: number): Severity {
 /**
  * Console + structured logging: Stdout, Stderr and the `Logging` stream.
  * Multi-line writes are buffered until a newline so each log line is one event.
+ *
+ * Log text is redacted at capture — developers print tokens (see
+ * core/redaction.ts).
  */
 export class LogCollector implements Collector {
   readonly name = "logs";
@@ -32,8 +36,9 @@ export class LogCollector implements Collector {
         const lines = text.split("\n");
         this.carry[streamId] = lines.pop() ?? ""; // keep incomplete tail
         const severity: Severity = streamId === "Stderr" ? "error" : "info";
-        for (const line of lines) {
-          if (line.trim() === "") continue;
+        for (const raw of lines) {
+          if (raw.trim() === "") continue;
+          const line = redactText(raw);
           store.add({
             timestamp: Date.now(),
             source: streamId,
@@ -50,7 +55,7 @@ export class LogCollector implements Collector {
       const rec = event?.logRecord;
       if (!rec) return;
       const level: number = rec.level ?? 0;
-      const message = rec.message?.valueAsString ?? "";
+      const message = redactText(rec.message?.valueAsString ?? "");
       const loggerName = rec.loggerName?.valueAsString ?? "";
       store.add({
         timestamp: rec.time ?? Date.now(),
@@ -61,8 +66,8 @@ export class LogCollector implements Collector {
         data: {
           level,
           loggerName,
-          error: rec.error?.valueAsString,
-          stackTrace: rec.stackTrace?.valueAsString,
+          error: redactText(rec.error?.valueAsString ?? "") || undefined,
+          stackTrace: redactText(rec.stackTrace?.valueAsString ?? "") || undefined,
         },
       });
     });

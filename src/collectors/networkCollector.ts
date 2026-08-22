@@ -2,6 +2,7 @@ import type { Collector } from "./collector.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { Severity } from "../core/events.js";
 import type { VmService } from "../vm/vmService.js";
+import { redactHeaders, redactText, redactUri } from "../core/redaction.js";
 
 /**
  * HTTP traffic via the official dart:io profiling extensions.
@@ -11,6 +12,9 @@ import type { VmService } from "../vm/vmService.js";
  * we only fetch when the AI asks. `httpEnableTimelineLogging` is turned on at
  * start so the profile is populated. Because dart:io's HttpClient backs Dio and
  * package:http on mobile, Dio/HTTP traffic is captured without any interceptor.
+ *
+ * Headers and query strings are redacted here, at capture, so credentials never
+ * enter the store (see core/redaction.ts).
  */
 export class NetworkCollector implements Collector {
   readonly name = "network";
@@ -44,14 +48,15 @@ export class NetworkCollector implements Collector {
       if (!complete) continue; // still in-flight; catch it on a later refresh
 
       this.stored.add(id);
-      const errorMsg: string | undefined = r.request?.error ?? r.response?.error;
+      const rawError: string | undefined = r.request?.error ?? r.response?.error;
+      const errorMsg = rawError === undefined ? undefined : redactText(rawError);
       let severity: Severity = "info";
       if (errorMsg) severity = "error";
       else if (status !== undefined && status >= 500) severity = "error";
       else if (status !== undefined && status >= 400) severity = "warning";
 
       const method: string = r.method ?? "?";
-      const uri: string = r.uri ?? "";
+      const uri: string = redactUri(r.uri ?? "");
       const data: Record<string, unknown> = {
         requestId: id,
         method,
@@ -77,10 +82,15 @@ export class NetworkCollector implements Collector {
           });
           const req = full?.request ?? {};
           const res = full?.response ?? {};
-          data.requestHeaders = flattenHeaders(req.headers);
-          data.responseHeaders = flattenHeaders(res.headers);
+          const reqHeaders = redactHeaders(flattenHeaders(req.headers));
+          const resHeaders = redactHeaders(flattenHeaders(res.headers));
+          data.requestHeaders = reqHeaders.headers;
+          data.responseHeaders = resHeaders.headers;
+          const withheld = [...reqHeaders.redacted, ...resHeaders.redacted];
+          if (withheld.length > 0) data.redactedHeaders = withheld;
           data.responseReason = res.reasonPhrase;
-          data.detailError = req.error ?? res.error;
+          const detail = req.error ?? res.error;
+          data.detailError = typeof detail === "string" ? redactText(detail) : detail;
         } catch {
           // detail unavailable — keep the summary record
         }

@@ -129,6 +129,8 @@ Optional environment variables:
 | `DASHBOARD_PORT` | `7373` | Dashboard HTTP/WS port. |
 | `DASHBOARD_HOST` | `127.0.0.1` | Bind address (localhost only by default). |
 | `DASHBOARD_DISABLE` | — | Set to `1` to disable the dashboard. |
+| `FLUTTER_LAMP_REDACT` | on | Set to `off` to keep raw credential values. |
+| `FLUTTER_LAMP_REDACT_EXTRA` | — | Comma-separated extra header-name patterns to redact. |
 
 ## Usage
 
@@ -198,6 +200,38 @@ never scrape DevTools, and never claim a cause the evidence doesn't support.
   WebView don't appear in `get_network`.
 - The dashboard binds to `127.0.0.1` by default. Change `DASHBOARD_HOST` only on a
   network you trust — runtime data is served unauthenticated.
+
+## Security
+
+Runtime data is sensitive. HTTP headers carry bearer tokens and cookies, URIs
+carry API keys, and developers print credentials into logs — and everything
+captured is handed to an AI model *and* streamed to any browser watching the
+dashboard.
+
+**Secrets are redacted at capture**, so they never enter the event store and no
+consumer can leak what was never stored. Redacted by default: `Authorization`,
+`Proxy-Authorization`, `Cookie`, `Set-Cookie`, `WWW-Authenticate`, any header
+whose name contains `token`, `secret`, `password`, `credential`, `api-key` or
+`session`, sensitive query-string parameters, and JWT- or `Bearer`-shaped
+strings in log lines and error text. Header names that were hit are listed in
+`data.redactedHeaders` so you can see that something was withheld rather than
+getting a silently partial picture. Add patterns with
+`FLUTTER_LAMP_REDACT_EXTRA`, or disable entirely with `FLUTTER_LAMP_REDACT=off`
+for a local-only session.
+
+**The dashboard is not exposed to other pages.** Binding to loopback does not
+protect a WebSocket — browsers exempt WebSocket from the same-origin policy, so
+without a check any page you have open could connect to
+`ws://127.0.0.1:7373/ws` and read your whole runtime stream. The handshake
+requires a per-process token that is inlined into the served page, which
+cross-origin script cannot read, and a present `Origin` header must be loopback.
+The page is served `X-Frame-Options: DENY`, and `/health` returns liveness only
+— never the VM Service URI, which embeds the VM's own auth token.
+
+Setting `DASHBOARD_HOST` to a non-loopback address logs a warning and puts
+runtime evidence on your network. Only do that on a network you trust.
+
+Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 ## Roadmap
 
