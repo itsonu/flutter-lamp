@@ -1,6 +1,6 @@
 ---
 name: flutter-runtime-diagnosis
-description: Diagnose a running Flutter app from LIVE runtime data via the Flutter Intelligence MCP instead of pasted logs. Use whenever a Flutter app is running and the user asks why something is failing, slow, throwing, rebuilding, or dropping frames — "why is this widget failing", "why are frames dropping", "which API caused this", "what's the root cause". Connects to the Dart VM Service, gathers exceptions/frames/logs/network, and runs diagnose_runtime().
+description: Diagnose a running Flutter app from LIVE runtime data via Flutter Lamp instead of pasted logs. Use whenever a Flutter app is running and the user asks why something is failing, slow, throwing, rebuilding, or dropping frames — "why is this widget failing", "why are frames dropping", "which API caused this", "what's the root cause". Connects to the Dart VM Service, gathers exceptions/frames/logs/network, and runs diagnose_runtime().
 ---
 
 # Flutter Runtime Diagnosis
@@ -15,7 +15,7 @@ always wins. Only fall back to manual logs if no VM Service is reachable.
 
 ## Prerequisite
 
-The `flutter-intelligence` MCP server must be configured in the client (see the
+The `flutter-lamp` MCP server must be configured in the client (see the
 repo README). Its tools appear as `connect_vm`, `runtime_status`, `get_logs`,
 `get_exceptions`, `get_frames`, `get_network`, `diagnose_runtime`.
 

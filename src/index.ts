@@ -5,7 +5,7 @@ import { registerTools } from "./tools.js";
 import { startDashboard } from "./dashboard/server.js";
 
 /**
- * Flutter Intelligence MCP — entry point.
+ * Flutter Lamp — entry point.
  *
  * Exposes the runtime-awareness tools over stdio so any MCP-compatible AI
  * (Claude Code, Cursor, Codex, Gemini …) can connect to a running Flutter app
@@ -13,7 +13,7 @@ import { startDashboard } from "./dashboard/server.js";
  */
 async function main(): Promise<void> {
   const server = new McpServer({
-    name: "flutter-intelligence-mcp",
+    name: "flutter-lamp",
     version: "0.1.0",
   });
 
@@ -25,19 +25,19 @@ async function main(): Promise<void> {
   if (process.env.DASHBOARD_DISABLE !== "1") {
     try {
       const { url } = await startDashboard();
-      console.error(`[flutter-intelligence-mcp] dashboard at ${url}`);
+      console.error(`[flutter-lamp] dashboard at ${url}`);
     } catch (err) {
-      console.error("[flutter-intelligence-mcp] dashboard failed to start:", (err as Error).message);
+      console.error("[flutter-lamp] dashboard failed to start:", (err as Error).message);
     }
   }
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // stdout is the MCP channel; diagnostics go to stderr only.
-  console.error("[flutter-intelligence-mcp] ready on stdio");
+  console.error("[flutter-lamp] ready on stdio");
 }
 
 main().catch((err) => {
-  console.error("[flutter-intelligence-mcp] fatal:", err);
+  console.error("[flutter-lamp] fatal:", err);
   process.exit(1);
 });

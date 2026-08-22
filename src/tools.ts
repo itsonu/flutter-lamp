@@ -256,7 +256,7 @@ export function registerTools(server: McpServer): void {
   );
 }
 
-const INSPECTOR_GROUP = "flutter-intelligence";
+const INSPECTOR_GROUP = "flutter-lamp";
 
 /** Collapse a verbose DiagnosticsNode tree to {type, description, children} with a depth cap. */
 function simplifyNode(node: any, depth: number): unknown {

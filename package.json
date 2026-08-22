@@ -1,17 +1,17 @@
 {
-  "name": "flutter-intelligence-mcp",
+  "name": "flutter-lamp",
   "version": "0.1.0",
-  "description": "AI observability layer for Flutter — live runtime context over the Dart VM Service, exposed through MCP.",
+  "description": "Flutter Lamp — an MCP server giving AI live eyes on a running Flutter app over the Dart VM Service: exceptions, logs, network, frames, memory + root-cause diagnosis.",
   "type": "module",
   "license": "MIT",
   "author": "Chandrabhushan Prakash",
-  "homepage": "https://github.com/itsonu/flutter-intelligence-mcp#readme",
+  "homepage": "https://github.com/itsonu/flutter-lamp#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/itsonu/flutter-intelligence-mcp.git"
+    "url": "git+https://github.com/itsonu/flutter-lamp.git"
   },
   "bugs": {
-    "url": "https://github.com/itsonu/flutter-intelligence-mcp/issues"
+    "url": "https://github.com/itsonu/flutter-lamp/issues"
   },
   "keywords": [
     "flutter",
@@ -26,7 +26,7 @@
     "ai"
   ],
   "bin": {
-    "flutter-intelligence-mcp": "dist/index.js"
+    "flutter-lamp": "dist/index.js"
   },
   "files": [
     "dist",

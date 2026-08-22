@@ -1,10 +1,10 @@
 <div align="center">
 
-# 🧠 Flutter Intelligence MCP
+# 💡 Flutter Lamp
 
 ### Give your AI **live** eyes on a running Flutter app — no more pasting logs.
 
-[![CI](https://github.com/itsonu/flutter-intelligence-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/itsonu/flutter-intelligence-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/itsonu/flutter-lamp/actions/workflows/ci.yml/badge.svg)](https://github.com/itsonu/flutter-lamp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-43853d.svg)](https://nodejs.org)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-000.svg)](https://modelcontextprotocol.io)
@@ -24,7 +24,7 @@ data, plus an evidence-first root-cause **diagnosis** engine and a live browser
 Today you debug Flutter with your AI by copy-pasting stack traces, `flutter run`
 output and DevTools screenshots. The AI is blind between messages.
 
-Flutter Intelligence MCP makes the AI **runtime-aware**. It reads the app's live
+Flutter Lamp makes the AI **runtime-aware**. It reads the app's live
 state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 *"paste the error"* the AI can ask the app *"what just happened, and why?"*
 
@@ -70,8 +70,8 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 **Requires Node ≥ 18.**
 
 ```bash
-git clone https://github.com/itsonu/flutter-intelligence-mcp.git
-cd flutter-intelligence-mcp
+git clone https://github.com/itsonu/flutter-lamp.git
+cd flutter-lamp
 npm install
 npm run build
 ```
@@ -91,9 +91,9 @@ Add the server to your MCP client config, then restart the client.
 ```json
 {
   "mcpServers": {
-    "flutter-intelligence": {
+    "flutter-lamp": {
       "command": "node",
-      "args": ["/absolute/path/to/flutter-intelligence-mcp/dist/index.js"]
+      "args": ["/absolute/path/to/flutter-lamp/dist/index.js"]
     }
   }
 }
@@ -164,6 +164,20 @@ Everything flows through **one** event store. Adding a new runtime source =
 implement the `Collector` interface and register it — no other layer changes.
 Design principles: official Flutter/Dart APIs only, structured JSON over text,
 never scrape DevTools, and never claim a cause the evidence doesn't support.
+
+## Limitations
+
+- **Debug/profile builds only.** The VM Service, Inspector and `dart:io` HTTP
+  profiling are not available in release builds.
+- **Network is pull-on-demand.** Dart exposes no push stream for `dart:io` HTTP,
+  so requests are fetched when `get_network` or `diagnose_runtime` runs — not
+  streamed continuously.
+- **`Debug.PauseException` needs pause-on-exception** enabled in the app to fire.
+  Framework errors (`Flutter.Error`) are always captured regardless.
+- **Dart-side HTTP only.** Calls made from platform (Kotlin/Swift) code or from a
+  WebView don't appear in `get_network`.
+- The dashboard binds to `127.0.0.1` by default. Change `DASHBOARD_HOST` only on a
+  network you trust — runtime data is served unauthenticated.
 
 ## Roadmap
 

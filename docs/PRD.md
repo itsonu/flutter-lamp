@@ -1,4 +1,4 @@
-# Flutter Intelligence MCP
+# Flutter Lamp
 
 ## Goal
 
