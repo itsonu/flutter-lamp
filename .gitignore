@@ -7,3 +7,4 @@ dist/
 
 # Windows reserved device name — accidentally created by shell redirects
 NUL
+*.tgz

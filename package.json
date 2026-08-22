@@ -30,9 +30,13 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.map",
     "dashboard",
     "docs",
+    ".claude/skills",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
