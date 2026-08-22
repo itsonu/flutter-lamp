@@ -3,7 +3,10 @@ import { z } from "zod";
 import { connection } from "./core/connection.js";
 import { diagnose } from "./diagnosis/engine.js";
 import { getDashboardInfo } from "./dashboard/server.js";
+import { redactionEnabled } from "./core/redaction.js";
 import type { Severity } from "./core/events.js";
+import { runtimeHealth, whatChanged } from "./diagnosis/health.js";
+import { VERSION } from "./version.js";
 import { withInspectorGroup, type IsolateCall } from "./vm/inspectorGroup.js";
 
 const SEVERITIES = ["debug", "info", "warning", "error", "critical"] as const;
@@ -15,6 +18,32 @@ const SEVERITIES = ["debug", "info", "warning", "error", "critical"] as const;
  * `get_timeline` with `recordFrom: true` changes VM recording flags. Everything
  * else only reads. An agent cannot tell the difference unless we say so.
  */
+export const TOOL_SAFETY = {
+  connect_vm: "mutating",
+  runtime_status: "read-only",
+  runtime_health: "read-only",
+  what_changed: "read-only",
+  get_capabilities: "read-only",
+  get_dashboard_url: "read-only",
+  get_logs: "read-only",
+  get_exceptions: "read-only",
+  get_frames: "read-only",
+  get_network: "read-only",
+  diagnose_runtime: "read-only",
+  explain_diagnosis: "read-only",
+  get_widget_tree: "read-only",
+  get_selected_widget: "read-only",
+  get_memory: "read-only",
+  get_timeline: "mutating",
+} as const satisfies Record<string, "read-only" | "mutating">;
+
+export type ToolName = keyof typeof TOOL_SAFETY;
+
+/** Annotations derived from the safety map, so registration cannot drift from it. */
+function ann(name: ToolName) {
+  return TOOL_SAFETY[name] === "mutating" ? MUTATING : READ_ONLY;
+}
+
 const READ_ONLY = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -42,7 +71,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "connect_vm",
     {
-      annotations: MUTATING,
+      annotations: ann("connect_vm"),
       title: "Connect to Flutter VM Service",
       description:
         "Connect to a running Flutter app's Dart VM Service and start collecting runtime data (logs, exceptions, frames, network). Pass the ws:// or http:// URI printed by `flutter run` (line: 'A Dart VM Service ... is available at:'). NOT purely read-only: enables dart:io HTTP timeline logging on the app so network capture works.",
@@ -63,7 +92,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "runtime_status",
     {
-      annotations: READ_ONLY,
+      annotations: ann("runtime_status"),
       title: "Runtime health check",
       description:
         "Report connection health, the current debugging session, reconnection state, how many runtime events have been captured by category, and the retention window (per-category capacity, how many events were evicted, and the oldest event still held). Use to confirm the MCP is receiving live data and to know how far back the evidence goes.",
@@ -92,7 +121,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "get_dashboard_url",
     {
-      annotations: READ_ONLY,
+      annotations: ann("get_dashboard_url"),
       title: "Get dashboard URL",
       description:
         "Return the URL of the live Realtime Runtime Dashboard (a browser UI streaming logs, network, exceptions, frames & memory). Open it in a browser to watch the app alongside the AI.",
@@ -112,7 +141,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "get_logs",
     {
-      annotations: READ_ONLY,
+      annotations: ann("get_logs"),
       title: "Get console & structured logs",
       description: "Console output (Stdout/Stderr) and dart:developer logging, most recent first.",
       inputSchema: {
@@ -142,7 +171,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "get_exceptions",
     {
-      annotations: READ_ONLY,
+      annotations: ann("get_exceptions"),
       title: "Get runtime exceptions",
       description:
         "Flutter framework errors and unhandled VM exceptions, most recent first. Each includes the error summary, offending widget, library, and a reconstructed stack trace (data.stackTrace) when available.",
@@ -157,7 +186,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "get_frames",
     {
-      annotations: READ_ONLY,
+      annotations: ann("get_frames"),
       title: "Get frame timings",
       description: "Frame build/raster timings. Set onlyJanky to focus on frames over the 16.7ms budget.",
       inputSchema: {
@@ -179,7 +208,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "get_network",
     {
-      annotations: READ_ONLY,
+      annotations: ann("get_network"),
       title: "Get network requests",
       description:
         "HTTP requests/responses captured via dart:io profiling (covers Dio & package:http). Fetches the latest profile on demand, then returns completed requests most recent first.",
@@ -195,7 +224,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "diagnose_runtime",
     {
-      annotations: READ_ONLY,
+      annotations: ann("diagnose_runtime"),
       title: "Diagnose runtime",
       description:
         "Correlate captured runtime evidence into a root-cause diagnosis. Returns status (diagnosed|unknown), summary, rootCause, evidence (each with a citable eventId), a chronological timeline around the root cause, alternativeCauses that also fit, limitations describing what could not be seen, confidence (0-1) with a breakdown of evidence strength / data completeness / alternative strength, and recommended fixes. Status is 'unknown' below 70% rather than a guess.",
@@ -212,7 +241,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "get_widget_tree",
     {
-      annotations: READ_ONLY,
+      annotations: ann("get_widget_tree"),
       title: "Get widget tree",
       description:
         "Snapshot of the running app's widget tree (summary tree from the Flutter Inspector). Use to understand structure, find a widget, or see what is mounted.",
@@ -239,7 +268,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "get_selected_widget",
     {
-      annotations: READ_ONLY,
+      annotations: ann("get_selected_widget"),
       title: "Get selected widget",
       description:
         "The widget currently selected in the Flutter Inspector (via 'select widget mode' in the app/DevTools). Returns null if nothing is selected.",
@@ -265,7 +294,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "get_memory",
     {
-      annotations: READ_ONLY,
+      annotations: ann("get_memory"),
       title: "Get memory usage",
       description:
         "Current Dart heap usage for the main isolate (Dart heap in use, capacity, and external/native memory), in MB. Also records a snapshot into runtime history.",
@@ -281,7 +310,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "get_timeline",
     {
-      annotations: MUTATING,
+      annotations: ann("get_timeline"),
       title: "Get VM timeline events",
       description:
         "Recent VM timeline trace events (build/paint/layout/GC/etc.), most recent first. Requires timeline recording — enable with recordFrom=true (sets Dart, GC, Compiler & Embedder streams) then reproduce the activity. recordFrom=true is NOT read-only: it changes the VM's recording configuration.",
@@ -307,6 +336,148 @@ export function registerTools(server: McpServer): void {
       return json({ count: events.length, events });
     },
   );
+
+  // ── Agent-facing summaries ────────────────────────────────────────────────
+  server.registerTool(
+    "runtime_health",
+    {
+      annotations: ann("runtime_health"),
+      title: "Runtime health snapshot",
+      description:
+        "One compact answer to 'is this app healthy right now'. Returns a verdict (healthy/degraded/failing/no-data) plus exception, network, frame, log and memory summaries with citable event ids, the retention window, and notes about anything that qualifies the numbers. Call this FIRST instead of calling six get_* tools.",
+      inputSchema: {},
+    },
+    async () => {
+      const status = connection.status();
+      return json(runtimeHealth(connection.store, status.connected, status.reconnecting));
+    },
+  );
+
+  server.registerTool(
+    "what_changed",
+    {
+      annotations: ann("what_changed"),
+      title: "What changed before an incident",
+      description:
+        "Evidence from the window leading up to a failure: exceptions, network activity, warning/error logs, connection events, frame and memory deltas, plus a chronological timeline. Anchors on the given eventId, or the most recent exception, or the current time. Network uses interval matching, so a request that started before the window but failed inside it still counts.",
+      inputSchema: {
+        eventId: z
+          .string()
+          .optional()
+          .describe("Anchor on this event (e.g. 'exc_00142'). Defaults to the most recent exception."),
+        windowMs: z
+          .number()
+          .int()
+          .positive()
+          .max(600_000)
+          .default(30_000)
+          .describe("How far back to look, in milliseconds."),
+      },
+    },
+    async ({ eventId, windowMs }) => {
+      connection.requireConnectedOrThrow();
+      await connection.refreshPullCollectors();
+      return json(whatChanged(connection.store, { eventId, windowMs }));
+    },
+  );
+
+  server.registerTool(
+    "explain_diagnosis",
+    {
+      annotations: ann("explain_diagnosis"),
+      title: "Explain a diagnosis",
+      description:
+        "Why diagnose_runtime reached its conclusion: the claim, every cited event resolved back to its full record, the timeline around the root cause, competing explanations, what evidence is missing, and the confidence breakdown. Use to answer 'why do you think that' without inventing reasoning.",
+      inputSchema: {},
+    },
+    async () => {
+      connection.requireConnectedOrThrow();
+      await connection.refreshPullCollectors();
+      const diagnosis = diagnose(connection.store);
+      return json({
+        claim: diagnosis.rootCause,
+        status: diagnosis.status,
+        confidence: diagnosis.confidence,
+        confidenceBreakdown: diagnosis.confidenceBreakdown,
+        // Resolved, not summarized: the full stored record behind every id the
+        // diagnosis cited, so nothing has to be taken on trust.
+        evidence: diagnosis.evidence.map((item) => ({
+          ...item,
+          event: connection.store.byEventId(item.eventId) ?? null,
+        })),
+        timeline: diagnosis.timeline,
+        alternativeCauses: diagnosis.alternativeCauses,
+        missingEvidence: missingEvidenceFor(diagnosis),
+        limitations: diagnosis.limitations,
+      });
+    },
+  );
+
+  server.registerTool(
+    "get_capabilities",
+    {
+      annotations: ann("get_capabilities"),
+      title: "What this server can observe",
+      description:
+        "Machine-readable capability report: active collectors, every tool with its safety class, what can and cannot be observed on this target, and the current redaction, dashboard and retention configuration. Read this before attempting an operation that may not be supported.",
+      inputSchema: {},
+    },
+    async () => {
+      const status = connection.status();
+      const dashboard = getDashboardInfo();
+      return json({
+        server: { name: "flutter-lamp", version: VERSION },
+        connection: {
+          connected: status.connected,
+          sessionId: status.sessionId,
+          reconnecting: status.reconnecting,
+        },
+        collectors: connection.collectorNames(),
+        tools: Object.entries(TOOL_SAFETY).map(([name, safety]) => ({ name, safety })),
+        canObserve: [
+          "Dart VM Service streams: Stdout, Stderr, Logging, Extension, Debug",
+          "Flutter framework errors with reconstructed stack traces",
+          "Frame build/raster timings and jank",
+          "dart:io HTTP requests (covers Dio and package:http)",
+          "Widget tree and selected widget (debug builds only)",
+          "Dart heap and external memory",
+          "VM timeline events (on demand)",
+        ],
+        cannotObserve: [
+          "Release builds — the VM Service, Inspector and HTTP profiling do not exist there",
+          "HTTP from platform (Kotlin/Swift) code or a WebView — only dart:io traffic is visible",
+          "Anything before connect_vm was called",
+          "Evidence older than the retention window",
+          "Redacted credential values (headers, sensitive query parameters, tokens in text)",
+        ],
+        configuration: {
+          redaction: redactionEnabled() ? "on" : "off (FLUTTER_LAMP_REDACT=off)",
+          dashboard: dashboard.running ? dashboard.url : "disabled",
+          retention: connection.store.capacities(),
+        },
+      });
+    },
+  );
+}
+
+/** What extra evidence would raise confidence, stated concretely. */
+function missingEvidenceFor(diagnosis: ReturnType<typeof diagnose>): string[] {
+  const out: string[] = [];
+  if (diagnosis.status === "unknown") {
+    out.push("Reproduce the problem while connected — the strongest evidence is the failure itself.");
+  }
+  if (diagnosis.confidenceBreakdown.dataCompleteness < 0.8) {
+    out.push("Some evidence categories are empty. Call get_network and get_memory, then diagnose again.");
+  }
+  if (diagnosis.alternativeCauses.length > 0) {
+    out.push(
+      `A competing explanation fits: "${diagnosis.alternativeCauses[0].rootCause}". Evidence that rules it in or out would sharpen this.`,
+    );
+  }
+  if (!diagnosis.evidence.some((e) => e.category === "network")) {
+    out.push("No network evidence supports this. If the failure follows a request, call get_network first.");
+  }
+  return out;
 }
 
 /** Collapse a verbose DiagnosticsNode tree to {type, description, children} with a depth cap. */

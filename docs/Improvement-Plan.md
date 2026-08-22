@@ -5,8 +5,8 @@ prioritized backlog that comes out of it.
 
 **Progress:** P0 is complete — P0-1/P0-2 in 0.2.0, P0-3/P0-4 in 0.3.0,
 P0-5/P0-6 in 0.4.0, P0-7/P0-8/P0-9 in 0.5.0. P1-1 and P1-2 in 0.6.0.
-P1-3, P1-4, P1-7 and P1-8 in 0.7.0, with P1-5 partly done there.
-P1-6 and P2-P4 remain open.
+P1-3, P1-4, P1-7 and P1-8 in 0.7.0, with P1-5 partly done there. P1-6 in
+0.8.0. P1 is complete apart from the timeline half of P1-5; P2-P4 remain open.
 
 Findings are marked **Verified** where the code was read and the behaviour
 follows directly from it, or **Needs check** where confirming it requires a live
@@ -495,13 +495,21 @@ or a slow VM call inside every diagnosis. The honest interim is what shipped:
 `limitations` now states that timeline events take no part in correlation, so an
 agent knows the blind spot exists rather than assuming coverage.
 
-### P1-6 Missing agent-facing tools
+### P1-6 Missing agent-facing tools — DONE (0.8.0)
 
 `runtime_health` (one compact call instead of six), `what_changed` (evidence in a
 window before an incident), `explain_diagnosis` (claim, evidence ids, timeline,
 alternatives, missing evidence), and `get_capabilities` (which collectors are
 active, which tools exist and their safety class, what this target cannot
 observe). All additive.
+
+**As shipped.** All four, plus `docs/AI-Agent-Integration.md` documenting the
+protocol (`runtime_health` → `what_changed` → targeted `get_*` →
+`diagnose_runtime` → `explain_diagnosis`) with a worked example that shows which
+tools *not* to call. Summary logic lives in `src/diagnosis/health.ts` so it is
+testable without an MCP client; `tools.ts` stays registration-only. Tool
+annotations and `get_capabilities` derive from a single safety map with a test
+asserting they agree.
 
 ### P1-7 Diagnosis output lacks structure for citation — DONE (0.7.0)
 

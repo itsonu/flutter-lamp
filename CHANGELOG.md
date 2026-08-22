@@ -4,6 +4,49 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-08-22
+
+Agent-facing tools. Four new capabilities aimed at spending less context to get
+a better answer.
+
+### Added
+
+- **`runtime_health`** — one call replacing six. Returns a verdict
+  (`healthy` / `degraded` / `failing` / `no-data`) plus exception, network,
+  frame, log and memory summaries with citable event ids, the retention window,
+  and notes stating when the numbers are qualified (disconnected, mid-reconnect,
+  evidence dropped, network not refreshed). Works before `connect_vm`, returning
+  a verdict rather than an error an agent has to interpret.
+- **`what_changed`** — evidence from the window before a failure: exceptions,
+  network, warning and error logs, connection events, frame and memory deltas,
+  and a timeline. Anchors on an `eventId`, the most recent exception, or now.
+  Network matching is interval-based, so a request that started before the
+  window and failed inside it still appears. When a requested anchor is not
+  retained it says so instead of silently answering about a different event.
+- **`explain_diagnosis`** — the reasoning behind a diagnosis: every cited id
+  resolved back to its full record, the timeline, competing explanations,
+  `missingEvidence` naming what would sharpen the result, and the confidence
+  breakdown.
+- **`get_capabilities`** — active collectors, every tool with its safety class,
+  what can and *cannot* be observed on this target, and the current redaction,
+  dashboard and retention configuration. An agent should read `cannotObserve`
+  before concluding something is absent: no network evidence in a WebView app
+  means the traffic was never visible, not that no requests happened.
+- **`docs/AI-Agent-Integration.md`** — the recommended investigation protocol,
+  what each field is for, how to report uncertainty, and a worked example that
+  deliberately shows which tools *not* to call.
+
+### Changed
+
+- Tool annotations and `get_capabilities` are derived from one safety map, so
+  the two cannot disagree. A test asserts they match.
+- The server version lives in `src/version.ts` instead of being duplicated
+  between `index.ts` and the package manifest.
+
+### Compatibility
+
+Purely additive. No existing tool renamed, removed, or reshaped.
+
 ## [0.7.0] — 2026-08-22
 
 Correlation engine. Diagnoses now show their working.
@@ -282,6 +325,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.8.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.7.0
 [0.6.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.6.0
 [0.5.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.5.0

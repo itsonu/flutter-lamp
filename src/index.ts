@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerTools } from "./tools.js";
 import { startDashboard } from "./dashboard/server.js";
+import { VERSION } from "./version.js";
 
 /**
  * Flutter Lamp — entry point.
@@ -14,7 +15,7 @@ import { startDashboard } from "./dashboard/server.js";
 async function main(): Promise<void> {
   const server = new McpServer({
     name: "flutter-lamp",
-    version: "0.7.0",
+    version: VERSION,
   });
 
   registerTools(server);

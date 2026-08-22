@@ -54,6 +54,10 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 | Tool | Purpose | Safety |
 | --- | --- | --- |
 | `connect_vm` | Connect to a running app's Dart VM Service (`ws://` or `http://`). | **mutates** |
+| `runtime_health` | One-call triage — verdict plus exception/network/frame/log/memory summary. | read-only |
+| `what_changed` | Evidence from the window before a failure, with a timeline. | read-only |
+| `explain_diagnosis` | Why a diagnosis was reached: resolved evidence, alternatives, gaps. | read-only |
+| `get_capabilities` | Active collectors, tool safety classes, what cannot be observed. | read-only |
 | `runtime_status` | Connection, session, reconnect state, event counts, retention window. | read-only |
 | `get_logs` | Console + `dart:developer` logs (filter by severity / source / text). | read-only |
 | `get_exceptions` | Framework & unhandled exceptions **with stack traces**. | read-only |
@@ -63,7 +67,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 | `get_selected_widget` | Widget currently selected in the Inspector. | read-only |
 | `get_memory` | Dart heap + external memory (MB). | read-only |
 | `get_timeline` | Recent VM timeline events (build/paint/layout/GC). | **mutates** |
-| `diagnose_runtime` | Correlated root-cause diagnosis with confidence + fixes. | read-only |
+| `diagnose_runtime` | Root cause with evidence ids, timeline, alternatives, limitations. | read-only |
 | `get_dashboard_url` | URL of the live browser dashboard. | read-only |
 
 **mutates** means the tool changes app or VM state, not your project — nothing
@@ -71,6 +75,10 @@ here writes code or files. `connect_vm` enables `dart:io` HTTP timeline logging
 on the app so network capture works; `get_timeline` with `recordFrom: true`
 changes the VM's recording flags. Every tool carries an MCP `readOnlyHint`
 annotation so a client can enforce this itself.
+
+Agents should not call all sixteen. The recommended flow is
+`runtime_health` → `what_changed` → a targeted `get_*` → `diagnose_runtime`;
+see [AI Agent Integration](docs/AI-Agent-Integration.md).
 
 ## Install
 
@@ -271,6 +279,7 @@ Docs live in [`docs/`](docs/):
 | [Architecture](docs/Architecture.md) | Data flow, components, event model, how to add a collector |
 | [Rules](docs/Rules.md) | Non-negotiable constraints every change is checked against |
 | [Phases](docs/Phases.md) | Roadmap and status |
+| [AI Agent Integration](docs/AI-Agent-Integration.md) | The investigation protocol agents should follow |
 | [Improvement Plan](docs/Improvement-Plan.md) | Current audit and prioritized backlog |
 | [Design](docs/Design.md) | Dashboard visual and interaction spec |
 | [Implementation Notes](docs/Implementation-Notes.md) | Non-obvious things learned building it |

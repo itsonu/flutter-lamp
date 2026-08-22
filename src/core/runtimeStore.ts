@@ -118,6 +118,7 @@ export class RuntimeStore extends EventEmitter {
   private nextId = 1;
   private sessionId: string | null = null;
   private sessionSeq = 0;
+  private sessionStartedAt: number | null = null;
 
   constructor(capacities: Partial<Record<Category, number>> = {}) {
     super();
@@ -133,9 +134,15 @@ export class RuntimeStore extends EventEmitter {
    * so a hot restart or a reconnect is a visible boundary in the evidence
    * rather than an invisible seam two app runs get correlated across.
    */
-  beginSession(): string {
+  beginSession(startedAt = Date.now()): string {
     this.sessionId = `s${++this.sessionSeq}`;
+    this.sessionStartedAt = startedAt;
     return this.sessionId;
+  }
+
+  /** Epoch ms when the current session began, or null before the first connect. */
+  sessionStarted(): number | null {
+    return this.sessionStartedAt;
   }
 
   /** The session events are currently being stamped with, if any. */
@@ -240,5 +247,10 @@ export class RuntimeStore extends EventEmitter {
   clear(): void {
     for (const category of CATEGORIES) this.rings[category].clear();
     this.emit("clear");
+  }
+
+  /** Per-category capacities, for capability reporting. */
+  capacities(): Record<Category, number> {
+    return this.retention().capacity;
   }
 }

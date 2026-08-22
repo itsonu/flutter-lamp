@@ -62,6 +62,11 @@ class ConnectionManager {
     return this.vm?.connected ?? false;
   }
 
+  /** Names of the registered collectors, for capability reporting. */
+  collectorNames(): string[] {
+    return this.collectors.map((c) => c.name);
+  }
+
   async connect(uri: string): Promise<{ wsUri: string; isolateId: string; collectors: string[]; sessionId: string }> {
     this.cancelReconnect();
     this.wantConnection = true;
