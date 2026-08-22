@@ -22,7 +22,7 @@ Running Flutter app (debug/profile)
         │
         ▼
    RuntimeStore           src/core/runtimeStore.ts
-   · single capped ring buffer, the only source of runtime evidence
+   · one capped ring buffer per category, the only source of evidence
    · EventEmitter: emits `event` per add, `clear` on reset
         │
         ├───────────────────────────┐
@@ -43,10 +43,33 @@ browser can watch one app at the same time.
 | `VmService` | `src/vm/vmService.ts` | JSON-RPC transport. URI normalization (`http://…` → `ws://…/ws`), request correlation, stream fan-out, `streamListen` idempotency (tolerates error 103). |
 | `ConnectionManager` | `src/core/connection.ts` | Singleton lifecycle. Connect/disconnect, isolate resolution, collector startup, pull-collector refresh, shared `sampleMemory()`. |
 | `Collector` | `src/collectors/collector.ts` | Interface: `start()` to subscribe, optional `refresh()` for sources with no push stream. |
-| `RuntimeStore` | `src/core/runtimeStore.ts` | Capped ring buffer, filtered query, per-category counts, live event emission. |
+| `RuntimeStore` | `src/core/runtimeStore.ts` | Per-category ring buffers, merged newest-first query, counts, retention reporting, live event emission. |
 | Diagnosis engine | `src/diagnosis/engine.ts` | Correlates stored events into a root cause anchored to a real event. Never invents a cause. |
 | MCP tools | `src/tools.ts` | Stateless. All state lives in `ConnectionManager`; tools return JSON only. |
 | Dashboard | `src/dashboard/server.ts` | Native HTTP + WebSocket. One store subscription fanned out to all browsers. |
+
+## Retention
+
+Each category gets its own fixed-size ring buffer rather than sharing one
+budget. This is not a micro-optimization — it is a correctness requirement.
+Frames arrive 60 times a second while an exception might arrive once an hour, so
+under a shared cap the frame stream evicts every exception, network request and
+log within a couple of minutes. Per-category budgets mean a noisy stream can
+only ever evict itself.
+
+| Category | Default capacity |
+| --- | --- |
+| `log` | 3,000 |
+| `exception` | 1,000 |
+| `network` | 1,000 |
+| `frame` | 1,000 |
+| `system` | 500 |
+
+Buffers are circular, so insertion is O(1) regardless of how full they are.
+`runtime_status` reports capacity, how much is retained, how much was evicted
+and the oldest event still held — a capped buffer is fine, a silently capped one
+is not, because an agent reasoning over truncated history needs to know it is
+truncated.
 
 ## The event model
 

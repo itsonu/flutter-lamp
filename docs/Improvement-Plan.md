@@ -3,7 +3,8 @@
 Audit of Flutter Lamp at v0.1.0 (1,684 lines of TypeScript, 9 tests), and the
 prioritized backlog that comes out of it.
 
-**Progress:** P0-1 and P0-2 shipped in 0.2.0. Everything else is open.
+**Progress:** P0-1 and P0-2 shipped in 0.2.0. P0-3 and P0-4 shipped in 0.3.0.
+Everything else is open.
 
 Findings are marked **Verified** where the code was read and the behaviour
 follows directly from it, or **Needs check** where confirming it requires a live
@@ -131,7 +132,7 @@ and `/health` no longer returns `wsUri` (it embeds the VM's auth token).
 Verified live against a running server: a foreign origin is refused 403 with a
 valid token, a tokenless connect is refused, the real page connects.
 
-### P0-3 Frame events evict all other evidence within about 90 seconds
+### P0-3 Frame events evict all other evidence within about 90 seconds — DONE (0.3.0)
 
 **Current state.** One shared ring buffer, capacity 5,000
 (`src/core/runtimeStore.ts:33`), oldest-first eviction.
@@ -162,7 +163,23 @@ aggregates survive raw eviction; `counts()` stays correct across eviction.
 **Risk.** Medium — this is the storage layer everything reads. Mitigated by the
 existing store tests plus new eviction tests.
 
-### P0-4 Ring buffer trim is O(n) on every insert past capacity
+**As shipped.** One ring buffer per category (3,000 log / 1,000 exception /
+1,000 network / 1,000 frame / 500 system), overridable through the
+`RuntimeStore` constructor, with an unfiltered `query()` performing a k-way
+merge so callers still see one chronological stream and can still stop early.
+`runtime_status.retention` reports capacity, retained, evicted and the oldest
+event held.
+
+Frame *aggregates* were deferred rather than built. Their stated purpose is
+performance diagnosis after raw frames roll off, and `diagnose_performance` is
+P2 — building the aggregate store now would add a second source of runtime truth
+alongside `RuntimeStore` with no consumer for it. Revisit with P2; per-category
+retention already fixes the eviction bug on its own.
+
+Environment-variable configuration of the caps was also skipped. The constructor
+override covers embedders and tests; add env config when someone needs it.
+
+### P0-4 Ring buffer trim is O(n) on every insert past capacity — DONE (0.3.0)
 
 **Current state.** `this.events.splice(0, this.events.length - this.capacity)`
 runs on every `add()` once full (`src/core/runtimeStore.ts:42`).
@@ -182,6 +199,11 @@ high-water mark. Fold into P0-3 since both touch the same code.
 throughput benchmark as a regression guard.
 
 **Risk.** Low if the public surface is held constant.
+
+**As shipped.** A fixed-size circular buffer with an eviction counter.
+Benchmarked against the 0.2.0 implementation: 200,000 events in 81ms versus
+9,943ms, a 122x improvement. A loose throughput assertion guards against a
+regression to O(n) without being flaky on a slow runner.
 
 ### P0-5 Collector state survives reconnection
 

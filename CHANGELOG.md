@@ -4,6 +4,41 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-08-22
+
+Storage release. Fixes a bug that silently destroyed the evidence the project
+exists to preserve.
+
+### Fixed
+
+- **Frame events no longer evict every other kind of evidence.** The store was
+  one shared 5,000-event buffer. `FrameCollector` writes an event per frame, so
+  at 60fps frames filled the entire buffer in about 83 seconds and then evicted
+  everything older — the exceptions, network requests and logs you were actually
+  chasing. Two minutes into a session, the exception from minute one was gone.
+  Each category now has its own ring buffer, so a noisy stream can only evict
+  itself. Defaults: 3,000 logs, 1,000 exceptions, 1,000 network, 1,000 frames,
+  500 system, overridable through the `RuntimeStore` constructor.
+- **Insertion is O(1).** The buffer was trimmed with `splice(0, n)` on every
+  insert past capacity, copying the whole array 60 times a second inside the
+  tool meant to diagnose performance problems. Replaced with a circular buffer:
+  200,000 events went from 9,943ms to 81ms, a 122x improvement.
+
+### Added
+
+- `runtime_status` now reports `retention`: per-category capacity, how many
+  events are retained, how many were evicted, and the timestamp of the oldest
+  event still held. A capped buffer is fine; a silently capped one leaves an
+  agent reasoning over truncated history without knowing it.
+- `CATEGORIES` is exported from `core/events.ts` as a runtime value, with the
+  `Category` type derived from it so the two cannot drift.
+
+### Compatibility
+
+No tool renamed, removed, or reshaped. `RuntimeStore.query()` returns the same
+most-recent-first ordering, now merged across the per-category buffers.
+`runtime_status.retention` is additive.
+
 ## [0.2.0] — 2026-08-22
 
 Security release. Both items below were live defects in 0.1.0; upgrading is
@@ -83,5 +118,6 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.3.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.2.0
 [0.1.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.1.0

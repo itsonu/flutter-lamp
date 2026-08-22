@@ -14,7 +14,7 @@ import { startDashboard } from "./dashboard/server.js";
 async function main(): Promise<void> {
   const server = new McpServer({
     name: "flutter-lamp",
-    version: "0.2.0",
+    version: "0.3.0",
   });
 
   registerTools(server);

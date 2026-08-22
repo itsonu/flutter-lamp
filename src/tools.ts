@@ -38,7 +38,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Runtime health check",
       description:
-        "Report connection health and how many runtime events have been captured, by category. Use to confirm the MCP is receiving live data.",
+        "Report connection health, how many runtime events have been captured by category, and the retention window (per-category capacity, how many events were evicted, and the oldest event still held). Use to confirm the MCP is receiving live data and to know how far back the evidence goes.",
       inputSchema: {},
     },
     async () =>
@@ -46,6 +46,9 @@ export function registerTools(server: McpServer): void {
         connected: connection.connected,
         eventsCaptured: connection.store.size(),
         byCategory: connection.store.counts(),
+        // Retention is bounded; say so rather than letting an agent reason over
+        // truncated history without knowing it is truncated.
+        retention: connection.store.retention(),
         dashboard_url: getDashboardInfo().url,
       }),
   );

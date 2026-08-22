@@ -198,6 +198,10 @@ never scrape DevTools, and never claim a cause the evidence doesn't support.
   Framework errors (`Flutter.Error`) are always captured regardless.
 - **Dart-side HTTP only.** Calls made from platform (Kotlin/Swift) code or from a
   WebView don't appear in `get_network`.
+- **Retention is bounded.** Each category keeps its own fixed window (3,000
+  logs, 1,000 exceptions, 1,000 network, 1,000 frames, 500 system). Frames roll
+  over fastest, at roughly 17 seconds of 60fps. `runtime_status` reports what is
+  retained, what was evicted, and the oldest event still held.
 - The dashboard binds to `127.0.0.1` by default. Change `DASHBOARD_HOST` only on a
   network you trust — runtime data is served unauthenticated.
 

@@ -8,12 +8,13 @@
 
 export type Severity = "debug" | "info" | "warning" | "error" | "critical";
 
-export type Category =
-  | "log"
-  | "exception"
-  | "frame"
-  | "network"
-  | "system";
+/**
+ * Every event category. Declared as a value so the store can build one buffer
+ * per category and iterate them; the type is derived so the two cannot drift.
+ */
+export const CATEGORIES = ["log", "exception", "frame", "network", "system"] as const;
+
+export type Category = (typeof CATEGORIES)[number];
 
 export interface RuntimeEvent {
   /** Monotonic id assigned by the store (insertion order). */
