@@ -219,8 +219,17 @@ npm test          # node:test suite (engine + collectors + dashboard)
 `npm test` runs the compiled output, so build first. It relies on glob support in
 `node --test`, which needs **Node ≥ 21** — the server itself runs on Node ≥ 20.
 
-Docs in [`docs/`](docs/) are the source of truth (PRD, Architecture, Rules,
-Phases, Design, Memory).
+Docs live in [`docs/`](docs/):
+
+| Doc | Contents |
+| --- | --- |
+| [PRD](docs/PRD.md) | Problem, users, principles, non-goals, constraints |
+| [Architecture](docs/Architecture.md) | Data flow, components, event model, how to add a collector |
+| [Rules](docs/Rules.md) | Non-negotiable constraints every change is checked against |
+| [Phases](docs/Phases.md) | Roadmap and status |
+| [Improvement Plan](docs/Improvement-Plan.md) | Current audit and prioritized backlog |
+| [Design](docs/Design.md) | Dashboard visual and interaction spec |
+| [Implementation Notes](docs/Implementation-Notes.md) | Non-obvious things learned building it |
 
 ## Contributing
 
