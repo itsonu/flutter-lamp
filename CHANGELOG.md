@@ -4,6 +4,42 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-08-22
+
+Evidence identity. Diagnoses can now cite the exact event a claim rests on.
+
+### Added
+
+- **Stable event ids.** Every event carries an `eventId` like `exc_00142` or
+  `net_00143`, typed by category and unique across categories and sessions for
+  the lifetime of the store. Diagnosis evidence includes it, so a claim points
+  at a specific captured event instead of paraphrasing it.
+- `RuntimeStore.byEventId()` resolves a cited id back to its event, ignoring
+  session scoping — a citation nothing can dereference is decoration. Returns
+  nothing for an id whose event has been evicted, rather than the wrong event.
+- A regression test pinning the timestamp basis of network evidence. Every other
+  collector stamps with `Date.now()` while `NetworkCollector` uses the HTTP
+  profile's `startTime`; the test asserts those land on one timeline using
+  realistic epoch values, so a future change to the profile format fails a test
+  instead of silently blinding correlation.
+
+### Notes
+
+An earlier audit item suspected `startTime` might be monotonic-since-VM-start
+rather than epoch, which would have meant the "an HTTP 500 preceded this
+exception" correlation never fired in practice. Checked against the Dart SDK
+source — 3.12.1, `sdk/lib/_http/http_impl.dart:62` uses
+`DateTime.now().microsecondsSinceEpoch` — so the concern was unfounded and no
+change was needed. Verifying it did surface a real defect in the same area,
+tracked as P1-8: correlation matches on when a request *started*, so a slow
+request that fails immediately before an exception falls outside the window.
+That is fixed with the correlation work.
+
+### Compatibility
+
+No tool renamed, removed, or reshaped. `eventId` on events and on diagnosis
+evidence is additive.
+
 ## [0.5.0] — 2026-08-22
 
 Closes out the P0 reliability and safety work.
@@ -193,6 +229,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.6.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.6.0
 [0.5.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.5.0
 [0.4.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.3.0

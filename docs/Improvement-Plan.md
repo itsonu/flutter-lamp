@@ -4,7 +4,8 @@ Audit of Flutter Lamp at v0.1.0 (1,684 lines of TypeScript, 9 tests), and the
 prioritized backlog that comes out of it.
 
 **Progress:** P0 is complete — P0-1/P0-2 in 0.2.0, P0-3/P0-4 in 0.3.0,
-P0-5/P0-6 in 0.4.0, P0-7/P0-8/P0-9 in 0.5.0. P1 onward is open.
+P0-5/P0-6 in 0.4.0, P0-7/P0-8/P0-9 in 0.5.0. P1-1 and P1-2 in 0.6.0.
+P1-3 onward is open.
 
 Findings are marked **Verified** where the code was read and the behaviour
 follows directly from it, or **Needs check** where confirming it requires a live
@@ -375,7 +376,7 @@ classification is already exposed through `tools/list`.
 
 ## P1 — Evidence intelligence
 
-### P1-1 Evidence has no stable identity
+### P1-1 Evidence has no stable identity — DONE (0.6.0)
 
 Event ids are per-store incrementing integers with no session scope
 (`src/core/events.ts:20`). A diagnosis cannot cite `exc_00142` in a way that
@@ -383,7 +384,14 @@ survives a reconnect or an export. Introduce `sessionId`, a monotonic `sequence`
 and a typed stable id (`exc_`, `net_`, `frm_`, `log_`). Keep the numeric `id` as
 an alias so nothing breaks.
 
-### P1-2 Network timestamps need verification
+**As shipped.** `eventId` on every event — `exc_00142`, `net_00143` — built from
+the store's monotonic counter, so ids are unique across categories *and*
+sessions and never reused. `sessionId` already arrived in 0.4.0; a separate
+`sequence` field was skipped because the numeric `id` already is one. Diagnosis
+evidence carries `eventId`, and `RuntimeStore.byEventId()` resolves a cited id
+back to the event — a citation nothing can dereference is decoration.
+
+### P1-2 Network timestamps need verification — RESOLVED, NOT A BUG (0.6.0)
 
 `NetworkCollector` stamps events with `microsToMs(r.startTime)`
 (`src/collectors/networkCollector.ts:90`) while every other collector uses
@@ -396,6 +404,35 @@ while the unit test passes, because that test constructs both timestamps from th
 same base. **Needs check against a live app before anything else in P1.** If
 confirmed, normalize at the collector boundary and add a mock-VM regression test
 using realistic profile values.
+
+**Outcome: the concern was unfounded.** Checked against the Dart SDK source
+rather than guessed. Dart 3.12.1, `sdk/lib/_http/http_impl.dart:62`:
+
+```dart
+requestStartTimestamp = DateTime.now().microsecondsSinceEpoch;
+```
+
+`startTime` is epoch microseconds, so `microsToMs()` already puts network events
+on the same timeline as every other collector and correlation does fire. No code
+change was needed. A regression test now pins the assumption to realistic epoch
+values, so a future change to the profile format fails a test instead of quietly
+blinding the diagnosis engine.
+
+Verifying it did surface a real defect in the same area — see P1-8.
+
+### P1-8 Correlation matches on when a request *started*, not when it failed
+
+Network events are stamped with `startTime` (`src/collectors/networkCollector.ts:90`),
+and `diagnose()` correlates on `Math.abs(event.timestamp - anchor.timestamp) <= 3s`
+(`src/diagnosis/engine.ts:124`). For a fast request those are the same moment, so
+the common case works. For a slow one they are not: a request that begins 30
+seconds before an exception and returns 500 immediately before it falls outside
+the window and is never offered as evidence — and a slow or hanging request is
+exactly the kind that causes the exception.
+
+The window should test the request's *interval* against the anchor, or at
+minimum use `endTime`. Found while verifying P1-2. **Verified by inspection**;
+fix belongs with the correlation work in P1-4.
 
 ### P1-3 Confidence is an undocumented heuristic
 

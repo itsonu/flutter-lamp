@@ -23,6 +23,12 @@ export interface RuntimeEvent {
   /** Monotonic id assigned by the store (insertion order). */
   id: number;
   /**
+   * Human-readable stable identity, e.g. `exc_00142`. A diagnosis cites these
+   * so every claim points at a specific captured event instead of paraphrasing
+   * it. Unique for the lifetime of the store, across categories and sessions.
+   */
+  eventId: string;
+  /**
    * Which debugging session produced this event. A hot restart or a reconnect
    * starts a new session; without this marker, evidence from two different app
    * runs sits in one timeline and correlation invents causes across the gap.
@@ -40,6 +46,15 @@ export interface RuntimeEvent {
   /** Structured payload — shape depends on category. */
   data: Record<string, unknown>;
 }
+
+/** Short prefix per category, used to build readable event ids. */
+export const CATEGORY_PREFIX: Record<Category, string> = {
+  log: "log",
+  exception: "exc",
+  frame: "frm",
+  network: "net",
+  system: "sys",
+};
 
 /** Severity ordering for threshold filters. */
 export const SEVERITY_RANK: Record<Severity, number> = {

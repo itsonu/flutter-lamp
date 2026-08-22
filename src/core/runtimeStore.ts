@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { Category, RuntimeEvent, Severity } from "./events.js";
-import { CATEGORIES, SEVERITY_RANK } from "./events.js";
+import { CATEGORIES, CATEGORY_PREFIX, SEVERITY_RANK } from "./events.js";
 
 export interface QueryOptions {
   category?: Category;
@@ -143,11 +143,26 @@ export class RuntimeStore extends EventEmitter {
     return this.sessionId;
   }
 
-  add(event: Omit<RuntimeEvent, "id" | "sessionId">): RuntimeEvent {
-    const stored: RuntimeEvent = { ...event, id: this.nextId++, sessionId: this.sessionId };
+  add(event: Omit<RuntimeEvent, "id" | "eventId" | "sessionId">): RuntimeEvent {
+    const id = this.nextId++;
+    const stored: RuntimeEvent = {
+      ...event,
+      id,
+      eventId: `${CATEGORY_PREFIX[event.category]}_${String(id).padStart(5, "0")}`,
+      sessionId: this.sessionId,
+    };
     this.rings[stored.category].push(stored);
     this.emit("event", stored);
     return stored;
+  }
+
+  /**
+   * Look up a single event by its stable id. Diagnoses cite ids; something has
+   * to be able to resolve them back to the evidence.
+   */
+  byEventId(eventId: string): RuntimeEvent | undefined {
+    for (const e of this.newestFirst()) if (e.eventId === eventId) return e;
+    return undefined;
   }
 
   /** Most-recent-first query, merged across categories in arrival order. */

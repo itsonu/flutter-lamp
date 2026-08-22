@@ -2,6 +2,8 @@ import type { RuntimeEvent } from "../core/events.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 
 export interface EvidenceItem {
+  /** Stable id of the captured event this rests on, e.g. `exc_00142`. */
+  eventId: string;
   timestamp: number;
   source: string;
   category: string;
@@ -127,6 +129,7 @@ function correlate(all: RuntimeEvent[], anchorTs: number): RuntimeEvent[] {
 
 function toEvidence(e: RuntimeEvent): EvidenceItem {
   return {
+    eventId: e.eventId,
     timestamp: e.timestamp,
     source: e.source,
     category: e.category,

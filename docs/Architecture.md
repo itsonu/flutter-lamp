@@ -78,6 +78,7 @@ Every collector produces the same shape (`src/core/events.ts`):
 ```ts
 interface RuntimeEvent {
   id: number;               // monotonic, assigned by the store
+  eventId: string;          // stable, citable identity: "exc_00142"
   sessionId: string | null; // which debugging session produced it
   timestamp: number;        // epoch ms
   source: string;           // "Stdout" | "Flutter.Error" | "HttpProfile" | …
