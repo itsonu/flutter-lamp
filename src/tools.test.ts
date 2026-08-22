@@ -49,6 +49,7 @@ const EXPECTED = [
   "runtime_status",
   "runtime_health",
   "what_changed",
+  "get_navigation",
   "explain_diagnosis",
   "get_capabilities",
   "get_dashboard_url",
@@ -125,6 +126,7 @@ test("get_capabilities states what cannot be observed, not just what can", async
     "exception",
     "frame",
     "log",
+    "navigation",
     "network",
     "system",
   ]);

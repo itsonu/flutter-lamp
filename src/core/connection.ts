@@ -2,6 +2,7 @@ import type { Collector } from "../collectors/collector.js";
 import { ExceptionCollector } from "../collectors/exceptionCollector.js";
 import { FrameCollector } from "../collectors/frameCollector.js";
 import { LogCollector } from "../collectors/logCollector.js";
+import { NavigationCollector } from "../collectors/navigationCollector.js";
 import { NetworkCollector } from "../collectors/networkCollector.js";
 import { RuntimeStore } from "./runtimeStore.js";
 import { VmService } from "../vm/vmService.js";
@@ -47,6 +48,7 @@ class ConnectionManager {
     new ExceptionCollector(),
     new FrameCollector(),
     new NetworkCollector(),
+    new NavigationCollector(),
   ];
 
   /** Tunable so tests do not wait on real backoff. */

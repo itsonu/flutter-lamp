@@ -4,6 +4,35 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-08-22
+
+Route awareness. Failures can now be attributed to the screen they happened on.
+
+### Added
+
+- **`NavigationCollector`** — route changes from the `Extension` stream,
+  `Flutter.Navigation`. Flutter's own `Navigator` posts this on every push, pop,
+  replace and remove, so nothing has to be installed in the app and no observer
+  is required. Route arguments are redacted: a route name plus its arguments is
+  often the most identifying thing in a session.
+- **`get_navigation`** — the current route and recent transitions, each with how
+  long it was on screen and the exceptions, failed requests and janky frames
+  attributed to it. A network request spanning a route change is counted for
+  both screens; assigning it to one would hide it from the screen the user
+  actually saw fail.
+- **`diagnose_runtime` names the screen.** The summary reads "most recent on
+  route /checkout: …", and the route change is included in the cited evidence.
+  Bugs get reported as "the checkout screen crashes", not as "an exception at
+  14:32:01".
+- `runtime_health` reports `currentRoute` with the exception count attributed to
+  it; `what_changed` includes route changes in its window.
+- A new `navigation` event category, with its own retention budget of 500.
+
+### Compatibility
+
+Purely additive. The new category appears in `runtime_status.byCategory` and in
+the retention report; nothing existing changed shape.
+
 ## [0.8.0] — 2026-08-22
 
 Agent-facing tools. Four new capabilities aimed at spending less context to get
@@ -325,6 +354,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.9.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.9.0
 [0.8.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.7.0
 [0.6.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.6.0

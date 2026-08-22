@@ -1,6 +1,7 @@
 import type { RuntimeEvent } from "../core/events.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import { correlate, timelineAround, type TimelineEntry } from "./correlation.js";
+import { routeHistory } from "./navigation.js";
 
 /**
  * Compact runtime summaries for agents.
@@ -23,6 +24,8 @@ export interface HealthReport {
   frames: { total: number; janky: number; jankPercent: number; worstMs: number | null };
   logs: { total: number; errors: number; warnings: number };
   memory: { samples: number; latestHeapMB: number | null; capacityMB: number | null; growthPercent: number | null };
+  /** The route the user is on, and how long they have been there. */
+  currentRoute: { eventId: string; name: string | null; enteredMs: number; exceptions: number } | null;
   retention: ReturnType<RuntimeStore["retention"]>;
   /** Anything an agent should know before trusting the numbers above. */
   notes: string[];
@@ -96,8 +99,20 @@ export function runtimeHealth(
           ? Math.round(((lastHeap - firstHeap) / firstHeap) * 100)
           : null,
     },
+    currentRoute: currentRouteOf(store),
     retention: store.retention(),
     notes,
+  };
+}
+
+function currentRouteOf(store: RuntimeStore): HealthReport["currentRoute"] {
+  const { current } = routeHistory(store, 1);
+  if (!current) return null;
+  return {
+    eventId: current.eventId,
+    name: current.name,
+    enteredMs: current.enteredMs,
+    exceptions: current.exceptions.length,
   };
 }
 
@@ -123,6 +138,8 @@ export interface ChangeWindow {
   exceptions: EventSummary[];
   network: EventSummary[];
   logs: EventSummary[];
+  /** Route changes in the window — often the change that explains the rest. */
+  navigation: EventSummary[];
   system: EventSummary[];
   frames: { total: number; janky: number; worstMs: number | null };
   memory: { from: number | null; to: number | null; deltaMB: number | null };
@@ -201,6 +218,7 @@ export function whatChanged(
         (e) => e.category === "log" && ["warning", "error", "critical"].includes(e.severity),
       ),
     ),
+    navigation: summarize(inWindow.filter((e) => e.category === "navigation")),
     system: summarize(inWindow.filter((e) => e.category === "system" && e.source === "system")),
     frames: {
       total: frames.length,

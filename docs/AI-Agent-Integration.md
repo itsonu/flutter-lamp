@@ -64,8 +64,17 @@ that is usually the request you want.
 | Which request failed? | `get_network` |
 | Is the jank build or raster? | `get_frames` with `onlyJanky: true` |
 | What did the app print? | `get_logs` with `minSeverity: "warning"` |
+| Which screen is broken? | `get_navigation` |
 | What is on screen? | `get_widget_tree`, `get_selected_widget` |
 | Is memory growing? | `get_memory`, called more than once |
+
+**`get_navigation`** answers "which screen". It returns the current route and
+recent transitions, each with how long it was on screen and the exceptions,
+failed requests and janky frames attributed to it. A request spanning a route
+change counts for both screens, because assigning it to one would hide it from
+the screen the user actually saw fail. `diagnose_runtime` already names the
+active route in its summary; use this tool when the question is about screens
+rather than about one failure.
 
 **`diagnose_runtime`** correlates the evidence and returns a root cause anchored
 to a real event.

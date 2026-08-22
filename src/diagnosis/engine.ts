@@ -1,6 +1,7 @@
-import type { RuntimeEvent } from "../core/events.js";
+import { CATEGORIES, type RuntimeEvent } from "../core/events.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import { correlate, timelineAround, type Correlated, type TimelineEntry } from "./correlation.js";
+import { routeAtIn, routeEventAt } from "./navigation.js";
 
 export interface EvidenceItem {
   /** Stable id of the captured event this rests on, e.g. `exc_00142`. */
@@ -182,13 +183,19 @@ function exceptionHypothesis(all: RuntimeEvent[]): Hypothesis | null {
   }
   fixes.push("Add a null/bounds guard or try/catch at the failing call site shown in the stack trace.");
 
+  // Attribute the failure to the screen the user was actually looking at.
+  // "the checkout screen crashes" is how the bug will be reported.
+  const route = routeAtIn(all, anchor.timestamp);
+  const routeEvent = routeEventAt(all, anchor.timestamp);
+  const onRoute = route ? ` on route ${route}` : "";
+
   return {
     priority: 3,
     anchor,
-    summary: `${exceptions.length} exception(s) captured; most recent: "${anchor.message}".`,
+    summary: `${exceptions.length} exception(s) captured; most recent${onRoute}: "${anchor.message}".`,
     rootCause: anchor.message,
     strength: Math.min(strength, 0.95),
-    evidence: [anchor, ...nearNet, ...nearLogs],
+    evidence: [anchor, ...nearNet, ...nearLogs, ...(routeEvent ? [routeEvent] : [])],
     fixes,
   };
 }
@@ -285,7 +292,7 @@ function dataCompleteness(store: RuntimeStore, all: RuntimeEvent[]): number {
   const present = new Set(all.map((e) => e.category)).size;
   const retention = store.retention();
   const anyEvicted = Object.values(retention.evicted).some((n) => n > 0);
-  return Math.max(0, present / 5 - (anyEvicted ? 0.1 : 0));
+  return Math.max(0, present / CATEGORIES.length - (anyEvicted ? 0.1 : 0));
 }
 
 function describeLimitations(store: RuntimeStore, all: RuntimeEvent[]): string[] {

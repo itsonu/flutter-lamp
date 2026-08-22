@@ -6,6 +6,7 @@ import { getDashboardInfo } from "./dashboard/server.js";
 import { redactionEnabled } from "./core/redaction.js";
 import type { Severity } from "./core/events.js";
 import { runtimeHealth, whatChanged } from "./diagnosis/health.js";
+import { routeHistory } from "./diagnosis/navigation.js";
 import { VERSION } from "./version.js";
 import { withInspectorGroup, type IsolateCall } from "./vm/inspectorGroup.js";
 
@@ -23,6 +24,7 @@ export const TOOL_SAFETY = {
   runtime_status: "read-only",
   runtime_health: "read-only",
   what_changed: "read-only",
+  get_navigation: "read-only",
   get_capabilities: "read-only",
   get_dashboard_url: "read-only",
   get_logs: "read-only",
@@ -382,6 +384,23 @@ export function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "get_navigation",
+    {
+      annotations: ann("get_navigation"),
+      title: "Route history",
+      description:
+        "The current route and recent route transitions, each with how long it was on screen and the exceptions, failed requests and janky frames attributed to it. Use to answer 'which screen is broken' and to scope other evidence to a screen. Network is attributed by overlap, so a request spanning a route change counts for both.",
+      inputSchema: {
+        limit: z.number().int().positive().max(100).default(20).describe("How many recent visits to return."),
+      },
+    },
+    async ({ limit }) => {
+      connection.requireConnectedOrThrow();
+      return json(routeHistory(connection.store, limit));
+    },
+  );
+
+  server.registerTool(
     "explain_diagnosis",
     {
       annotations: ann("explain_diagnosis"),
@@ -440,6 +459,7 @@ export function registerTools(server: McpServer): void {
           "Frame build/raster timings and jank",
           "dart:io HTTP requests (covers Dio and package:http)",
           "Widget tree and selected widget (debug builds only)",
+          "Route changes via Flutter.Navigation (debug and profile builds)",
           "Dart heap and external memory",
           "VM timeline events (on demand)",
         ],

@@ -43,6 +43,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 - 📝 **Console & structured logs** (Stdout / Stderr / `dart:developer`)
 - 🌐 **Network capture** via `dart:io` profiling — covers Dio & `package:http`, no interceptor needed
 - 🎞️ **Frame timings** with jank detection against the 60fps budget
+- 🧭 **Route awareness** — current screen, transitions, and failures attributed to the screen they happened on
 - 🧬 **Widget tree & selected-widget** snapshots from the Inspector
 - 🧮 **Memory** (Dart heap / external) and **VM timeline** events
 - 🩺 **`diagnose_runtime`** — correlates evidence into *summary · root cause · evidence · confidence · fixes*; says **"Unknown"** below 70% instead of hallucinating
@@ -56,6 +57,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 | `connect_vm` | Connect to a running app's Dart VM Service (`ws://` or `http://`). | **mutates** |
 | `runtime_health` | One-call triage — verdict plus exception/network/frame/log/memory summary. | read-only |
 | `what_changed` | Evidence from the window before a failure, with a timeline. | read-only |
+| `get_navigation` | Current route and recent transitions, with per-route failures. | read-only |
 | `explain_diagnosis` | Why a diagnosis was reached: resolved evidence, alternatives, gaps. | read-only |
 | `get_capabilities` | Active collectors, tool safety classes, what cannot be observed. | read-only |
 | `runtime_status` | Connection, session, reconnect state, event counts, retention window. | read-only |
