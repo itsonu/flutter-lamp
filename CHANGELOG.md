@@ -4,6 +4,40 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-08-22
+
+Closes out the P0 reliability and safety work.
+
+### Fixed
+
+- **Inspector object groups are disposed.** `get_widget_tree` and
+  `get_selected_widget` passed one constant `groupName` and never called
+  `disposeGroup`. Inspector groups pin widget and element references inside the
+  *debugged app*, so every call grew the heap of the app whose memory these
+  tools are meant to diagnose. Each call now uses its own group and releases it
+  afterwards, including when the read fails.
+- **The dashboard test no longer binds a fixed port.** It hardcoded 7390 and
+  would fail if anything already held it. `DASHBOARD_PORT=0` now asks the OS for
+  a free port, and `startDashboard()` binds before computing anything
+  port-dependent.
+
+### Added
+
+- **Every tool declares its safety class.** All twelve carry MCP annotations
+  (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), and
+  the two that change state say so in their description as well, since
+  annotations are hints a client may ignore while the model always reads the
+  description. `connect_vm` enables `dart:io` HTTP timeline logging on the app;
+  `get_timeline` with `recordFrom: true` rewrites VM recording flags. Nothing
+  writes to your project.
+- An MCP surface test: tools are registered on a real server and read back
+  through a client over an in-memory transport, asserting the tool list and
+  every safety classification.
+
+### Compatibility
+
+No tool renamed, removed, or reshaped. Annotations are additive metadata.
+
 ## [0.4.0] — 2026-08-22
 
 Session lifecycle release. Fixes evidence corruption across app runs and adds
@@ -159,6 +193,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.5.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.5.0
 [0.4.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.2.0

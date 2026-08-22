@@ -3,8 +3,8 @@
 Audit of Flutter Lamp at v0.1.0 (1,684 lines of TypeScript, 9 tests), and the
 prioritized backlog that comes out of it.
 
-**Progress:** P0-1 and P0-2 shipped in 0.2.0. P0-3 and P0-4 in 0.3.0. P0-5 and
-P0-6 in 0.4.0. P0-7 to P0-9 and all of P1-P4 remain open.
+**Progress:** P0 is complete — P0-1/P0-2 in 0.2.0, P0-3/P0-4 in 0.3.0,
+P0-5/P0-6 in 0.4.0, P0-7/P0-8/P0-9 in 0.5.0. P1 onward is open.
 
 Findings are marked **Verified** where the code was read and the behaviour
 follows directly from it, or **Needs check** where confirming it requires a live
@@ -276,7 +276,7 @@ Scope limit worth stating: this recovers transient drops, not a full app
 relaunch, which allocates a new VM Service URI that Flutter Lamp has no way to
 discover.
 
-### P0-7 Inspector object groups are never disposed
+### P0-7 Inspector object groups are never disposed — DONE (0.5.0)
 
 **Current state.** Every `get_widget_tree` and `get_selected_widget` call passes
 a constant `groupName` (`src/tools.ts:182`, `src/tools.ts:204`) and never calls
@@ -299,13 +299,25 @@ including on the error path.
 
 **Risk.** Low.
 
-### P0-8 Tests share process-wide state and a hardcoded port
+**As shipped.** Extracted to `src/vm/inspectorGroup.ts` with the isolate caller
+injected, so the disposal contract is testable without a live VM. Covers the
+success path, the throwing path, a failing dispose not corrupting a successful
+read, and per-call group uniqueness.
+
+### P0-8 Tests share process-wide state and a hardcoded port — DONE (0.5.0, partly retracted)
 
 **Current state.** `vmIntegration.test.ts` and `dashboard.test.ts` both drive the
 global `connection` singleton, and the dashboard test hardcodes port 7390.
 
 **Problem.** Order-dependent tests, and a bind failure if the port is taken. The
 suite passes today because it happens to run in a favourable order. **Verified.**
+
+**Correction.** The "shared process-wide state" half of this finding was wrong.
+`node --test` runs each test *file* in its own child process — confirmed by
+printing `process.pid` from two files and getting 8052 and 9196 — so the global
+`connection` singleton is not shared across files. Sharing only happens between
+tests *within* one file. The hardcoded port was a real defect; the isolation
+concern was overstated.
 
 **Proposed change.** Port 0 with the assigned port read back. A factory for
 `ConnectionManager` so tests get an isolated instance while production keeps the
@@ -319,7 +331,15 @@ singleton export.
 
 **Risk.** Low.
 
-### P0-9 Tools do not declare their safety class
+**As shipped.** `DASHBOARD_PORT=0`, with `startDashboard()` binding before it
+computes the URL or the allowed-origin set, so the assigned port is real
+everywhere it is used. The `ConnectionManager` factory was **not** built: per
+the correction above it would solve a problem that does not exist across files,
+and within `session.test.ts` clearing the store between tests is a two-word fix
+against a whole extra construction path. Revisit only if tests ever need to run
+concurrently inside one file.
+
+### P0-9 Tools do not declare their safety class — DONE (0.5.0)
 
 **Current state.** All twelve tools are registered identically.
 
@@ -342,6 +362,14 @@ document the connect-time mutation explicitly.
 **Tests.** Assert every registered tool carries a classification.
 
 **Risk.** None.
+
+**As shipped.** Standard MCP annotations (`readOnlyHint`, `destructiveHint`,
+`idempotentHint`, `openWorldHint`) on all twelve tools, plus an explicit note in
+the description of the two mutating ones — annotations are hints a client may
+ignore, while the model always reads the description. Tested through a real MCP
+client over an in-memory transport, which also gives the project its first test
+of the actual tool surface. `get_capabilities` still belongs to P1-6; the
+classification is already exposed through `tools/list`.
 
 ---
 

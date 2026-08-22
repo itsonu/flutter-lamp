@@ -102,11 +102,23 @@ export async function startDashboard(): Promise<DashboardHandle> {
     }
   });
 
+  // Bind before anything that needs the port: DASHBOARD_PORT=0 asks the OS for
+  // a free one, which is how tests avoid colliding with a real dashboard.
+  await new Promise<void>((resolve, reject) => {
+    httpServer.once("error", reject);
+    httpServer.listen(port, host, () => {
+      httpServer.off("error", reject);
+      resolve();
+    });
+  });
+  const address = httpServer.address();
+  const boundPort = typeof address === "object" && address ? address.port : port;
+
   const allowedOrigins = new Set([
-    `http://127.0.0.1:${port}`,
-    `http://localhost:${port}`,
-    `http://[::1]:${port}`,
-    `http://${host}:${port}`,
+    `http://127.0.0.1:${boundPort}`,
+    `http://localhost:${boundPort}`,
+    `http://[::1]:${boundPort}`,
+    `http://${host}:${boundPort}`,
   ]);
 
   const wss = new WebSocketServer({
@@ -162,15 +174,7 @@ export async function startDashboard(): Promise<DashboardHandle> {
   }, MEMORY_SAMPLE_MS);
   sampler.unref?.(); // don't keep the process alive on the sampler alone
 
-  await new Promise<void>((resolve, reject) => {
-    httpServer.once("error", reject);
-    httpServer.listen(port, host, () => {
-      httpServer.off("error", reject);
-      resolve();
-    });
-  });
-
-  const url = `http://${host}:${port}`;
+  const url = `http://${host}:${boundPort}`;
   wsToken = token;
   current = { url, running: true };
 

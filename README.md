@@ -51,20 +51,26 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 
 ## Tools
 
-| Tool | Purpose |
-| --- | --- |
-| `connect_vm` | Connect to a running app's Dart VM Service (`ws://` or `http://`). |
-| `runtime_status` | Health check — connection + captured-event counts + dashboard URL. |
-| `get_logs` | Console + `dart:developer` logs (filter by severity / source / text). |
-| `get_exceptions` | Framework & unhandled exceptions **with stack traces**. |
-| `get_frames` | Frame build/raster timings; `onlyJanky` filter. |
-| `get_network` | HTTP requests (Dio & `package:http`); headers + timing on failures. |
-| `get_widget_tree` | Widget-tree snapshot from the Flutter Inspector. |
-| `get_selected_widget` | Widget currently selected in the Inspector. |
-| `get_memory` | Dart heap + external memory (MB). |
-| `get_timeline` | Recent VM timeline events (build/paint/layout/GC). |
-| `diagnose_runtime` | Correlated root-cause diagnosis with confidence + fixes. |
-| `get_dashboard_url` | URL of the live browser dashboard. |
+| Tool | Purpose | Safety |
+| --- | --- | --- |
+| `connect_vm` | Connect to a running app's Dart VM Service (`ws://` or `http://`). | **mutates** |
+| `runtime_status` | Connection, session, reconnect state, event counts, retention window. | read-only |
+| `get_logs` | Console + `dart:developer` logs (filter by severity / source / text). | read-only |
+| `get_exceptions` | Framework & unhandled exceptions **with stack traces**. | read-only |
+| `get_frames` | Frame build/raster timings; `onlyJanky` filter. | read-only |
+| `get_network` | HTTP requests (Dio & `package:http`); headers + timing on failures. | read-only |
+| `get_widget_tree` | Widget-tree snapshot from the Flutter Inspector. | read-only |
+| `get_selected_widget` | Widget currently selected in the Inspector. | read-only |
+| `get_memory` | Dart heap + external memory (MB). | read-only |
+| `get_timeline` | Recent VM timeline events (build/paint/layout/GC). | **mutates** |
+| `diagnose_runtime` | Correlated root-cause diagnosis with confidence + fixes. | read-only |
+| `get_dashboard_url` | URL of the live browser dashboard. | read-only |
+
+**mutates** means the tool changes app or VM state, not your project — nothing
+here writes code or files. `connect_vm` enables `dart:io` HTTP timeline logging
+on the app so network capture works; `get_timeline` with `recordFrom: true`
+changes the VM's recording flags. Every tool carries an MCP `readOnlyHint`
+annotation so a client can enforce this itself.
 
 ## Install
 
@@ -126,11 +132,11 @@ Optional environment variables:
 
 | Var | Default | Meaning |
 | --- | --- | --- |
-| `DASHBOARD_PORT` | `7373` | Dashboard HTTP/WS port. |
-| `DASHBOARD_HOST` | `127.0.0.1` | Bind address (localhost only by default). |
-| `DASHBOARD_DISABLE` | — | Set to `1` to disable the dashboard. |
-| `FLUTTER_LAMP_REDACT` | on | Set to `off` to keep raw credential values. |
-| `FLUTTER_LAMP_REDACT_EXTRA` | — | Comma-separated extra header-name patterns to redact. |
+| `DASHBOARD_PORT` | `7373` | Dashboard HTTP/WS port. | read-only |
+| `DASHBOARD_HOST` | `127.0.0.1` | Bind address (localhost only by default). | read-only |
+| `DASHBOARD_DISABLE` | — | Set to `1` to disable the dashboard. | read-only |
+| `FLUTTER_LAMP_REDACT` | on | Set to `off` to keep raw credential values. | read-only |
+| `FLUTTER_LAMP_REDACT_EXTRA` | — | Comma-separated extra header-name patterns to redact. | read-only |
 
 ## Usage
 
