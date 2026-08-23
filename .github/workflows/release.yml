@@ -147,31 +147,59 @@ jobs:
       - name: Publish to npm
         if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
         env:
+          # Fallback only. With trusted publishing configured this is unset and
+          # no npm credential exists anywhere — nothing to leak or rotate.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           version="${{ steps.pick.outputs.version }}"
-
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "::warning::NPM_TOKEN is not configured — tagged v$version but did not publish."
-            {
-              echo "### npm publish skipped"
-              echo
-              echo "\`v$version\` is tagged, but \`NPM_TOKEN\` is not set on this repository,"
-              echo "so nothing was published. Create an **automation** token at"
-              echo "npmjs.com → Access Tokens (automation tokens bypass 2FA), add it as the"
-              echo "\`NPM_TOKEN\` repository secret, then re-run this workflow."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
 
           if npm view "flutter-lamp@$version" version >/dev/null 2>&1; then
             echo "::notice::flutter-lamp@$version is already on npm — nothing to do."
             exit 0
           fi
 
-          npm publish --provenance --access public
-          echo "Published flutter-lamp@$version" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "Publishing with NPM_TOKEN."
+            npm publish --provenance --access public
+            echo "Published flutter-lamp@$version (token auth)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Trusted publishing: the npm CLI exchanges the Actions OIDC token for
+          # a short-lived credential. Needs npm >= 11.5.1, which is newer than
+          # the version bundled with Node 22 on the runner. Provenance is
+          # generated automatically, so --provenance is not passed here.
+          npm install -g npm@latest >/dev/null 2>&1             || echo "::warning::Could not upgrade npm; trusted publishing needs >= 11.5.1."
+          echo "npm $(npm --version), publishing via OIDC trusted publishing."
+
+          if npm publish --access public; then
+            echo "Published flutter-lamp@$version via trusted publishing (no token)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Tag and GitHub release still succeeded, so do not fail the run red on
+          # a public repo. Say exactly what to configure instead.
+          echo "::warning::Tagged v$version but could not publish: no NPM_TOKEN and no trusted publisher."
+          {
+            echo "### npm publish skipped"
+            echo
+            echo "\`v$version\` is tagged and released on GitHub, but npm rejected the publish."
+            echo
+            echo "**One-time fix — no token required.** On npmjs.com, open the"
+            echo "**flutter-lamp** package → **Settings** → **Trusted Publisher** →"
+            echo "**GitHub Actions**, and enter:"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Organization or user | \`itsonu\` |"
+            echo "| Repository | \`flutter-lamp\` |"
+            echo "| Workflow filename | \`release.yml\` |"
+            echo "| Allowed actions | npm publish |"
+            echo
+            echo "Then re-run this workflow. Nothing else changes, and no credential"
+            echo "is ever created or stored."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create the GitHub release
         if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'

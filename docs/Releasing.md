@@ -22,15 +22,44 @@ instead of waiting another two days.
 
 ## One-time setup
 
-Automated publishing needs an npm token that bypasses 2FA:
+Publishing uses **trusted publishing**: the npm CLI exchanges a GitHub Actions
+OIDC token for a short-lived credential. No npm token is created, stored or
+rotated, and there is no repository secret to leak. Interactive 2FA is not
+involved, because no long-lived credential is.
 
-1. npmjs.com → **Access Tokens** → **Generate New Token** → **Automation**.
-2. GitHub → repository **Settings** → **Secrets and variables** → **Actions** →
-   **New repository secret**, named `NPM_TOKEN`.
+On npmjs.com, open the **flutter-lamp** package → **Settings** →
+**Trusted Publisher** → **GitHub Actions**:
 
-Until that exists the workflow still tags and creates the GitHub release, and
-leaves a notice on the run saying the publish was skipped. It never fails the
-run over a missing secret, and it never re-publishes a version already on npm.
+| Field | Value |
+| --- | --- |
+| Organization or user | `itsonu` |
+| Repository | `flutter-lamp` |
+| Workflow filename | `release.yml` |
+| Allowed actions | npm publish |
+
+The workflow filename must match exactly — npm checks it as part of verifying
+the OIDC claim, so renaming the workflow breaks publishing until the setting is
+updated too.
+
+This has to be done by whoever owns the npm package, because it is an
+authenticated change to that account. It is the only step in the whole pipeline
+that is not automated.
+
+Requirements the workflow already satisfies: `id-token: write` permission, and
+npm ≥ 11.5.1 (it upgrades npm before publishing, since Node 22 ships an older
+one).
+
+### Fallback: NPM_TOKEN
+
+If trusted publishing is not an option, an **automation** token (npmjs.com →
+Access Tokens → Automation) stored as the `NPM_TOKEN` repository secret also
+works. The workflow prefers it when present. Trusted publishing is better:
+nothing long-lived exists to be stolen.
+
+Until either is configured the workflow still tags and creates the GitHub
+release, and leaves the setup instructions in the run summary. It never fails
+the run over the missing configuration, and never re-publishes a version
+already on npm.
 
 ## Manual control
 
