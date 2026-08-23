@@ -1,0 +1,196 @@
+name: Release
+
+# Publishes one staged version at a time, at most every other day.
+#
+# The cron is daily on purpose: GitHub's `*/2` day-of-month skips awkwardly
+# across month boundaries (the 31st is followed by the 1st). Running daily and
+# enforcing the gap in the job gives a real alternate-day cadence, and a missed
+# run catches up the next morning instead of waiting two more days.
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # 09:00 UTC daily; the job enforces the ~48h gap
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release. Defaults to the next queue entry."
+        required: false
+      ignore_gap:
+        description: "Release even if the last one was under 40 hours ago."
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # create and push the tag, create the GitHub release
+  id-token: write # npm provenance
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Never let a fork's schedule try to publish this package.
+    if: github.repository == 'itsonu/flutter-lamp'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # need tags and history to pick the next version
+
+      - name: Pick the version to release
+        id: pick
+        run: |
+          set -euo pipefail
+          requested="${{ inputs.version }}"
+
+          if [ -n "$requested" ]; then
+            version="$requested"
+            commit="$(awk -v v="$requested" '$1 == v { print $2 }' .github/release-queue.txt | head -1)"
+            [ -n "$commit" ] || { echo "::error::$requested is not in .github/release-queue.txt"; exit 1; }
+          else
+            # First queued version that is not on npm yet. Keyed on the
+            # registry rather than on tags: a version can be tagged and
+            # released on GitHub while the npm publish is still pending, and
+            # a tag-based check would skip it forever.
+            version=""
+            while read -r v c; do
+              case "$v" in ''|\#*) continue ;; esac
+              if ! npm view "flutter-lamp@$v" version >/dev/null 2>&1; then
+                version="$v"; commit="$c"; break
+              fi
+            done < .github/release-queue.txt
+          fi
+
+          if [ -z "$version" ]; then
+            echo "::notice::Release queue is empty — nothing left to publish."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Selected $version at $commit"
+          {
+            echo "skip=false"
+            echo "version=$version"
+            echo "commit=$commit"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Enforce the alternate-day gap
+        id: gap
+        if: steps.pick.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.ignore_gap }}" = "true" ] || [ -n "${{ inputs.version }}" ]; then
+            echo "Manual run — gap not enforced."
+            echo "skip=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          last="$(git for-each-ref --sort=-creatordate --format='%(creatordate:unix)' 'refs/tags/v*' | head -1)"
+          if [ -z "$last" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          hours=$(( ( $(date +%s) - last ) / 3600 ))
+          # 40 rather than 48: a daily cron drifts, and a strict 48 would push
+          # every other release out by a full extra day.
+          if [ "$hours" -lt 40 ]; then
+            echo "::notice::Last release was ${hours}h ago; waiting for the alternate-day gap."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Last release was ${hours}h ago — proceeding."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the release commit
+        if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
+        run: git checkout --detach "${{ steps.pick.outputs.commit }}"
+
+      - uses: actions/setup-node@v5
+        if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify the commit really is this version
+        if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          actual="$(node -p "require('./package.json').version")"
+          expected="${{ steps.pick.outputs.version }}"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Queue says $expected but ${{ steps.pick.outputs.commit }} has $actual"
+            exit 1
+          fi
+
+      - name: Build and test
+        if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
+        run: |
+          npm ci
+          npm run build
+          npm test
+
+      - name: Tag the release
+        if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          version="${{ steps.pick.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "Tag v$version already exists — reusing it."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$version" -m "Flutter Lamp v$version"
+          git push origin "v$version"
+
+      - name: Publish to npm
+        if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.pick.outputs.version }}"
+
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::warning::NPM_TOKEN is not configured — tagged v$version but did not publish."
+            {
+              echo "### npm publish skipped"
+              echo
+              echo "\`v$version\` is tagged, but \`NPM_TOKEN\` is not set on this repository,"
+              echo "so nothing was published. Create an **automation** token at"
+              echo "npmjs.com → Access Tokens (automation tokens bypass 2FA), add it as the"
+              echo "\`NPM_TOKEN\` repository secret, then re-run this workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if npm view "flutter-lamp@$version" version >/dev/null 2>&1; then
+            echo "::notice::flutter-lamp@$version is already on npm — nothing to do."
+            exit 0
+          fi
+
+          npm publish --provenance --access public
+          echo "Published flutter-lamp@$version" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create the GitHub release
+        if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.pick.outputs.version }}"
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "Release v$version already exists."
+            exit 0
+          fi
+          # The CHANGELOG section for this version, without its own heading.
+          # Literal matching, not regex: "## [0.4.0]" as a pattern would be
+          # read as a character class and silently match nothing.
+          awk -v tag="## [$version]" '
+            index($0, tag) == 1 { found = 1; next }
+            found && index($0, "## [") == 1 { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "See CHANGELOG.md." > notes.md
+          gh release create "v$version" --title "v$version" --notes-file notes.md

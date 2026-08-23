@@ -1,0 +1,20 @@
+# Staged release queue for .github/workflows/release.yml
+#
+# One "<version> <commit>" per line, oldest first. The scheduled job releases
+# the FIRST entry that is not on npm yet, so the queue advances itself and never
+# needs writing back to. Keyed on the registry rather than on tags, because a
+# version can be tagged and released on GitHub while its npm publish is still
+# pending — a tag-based check would skip it forever.
+#
+# To pause releases: comment out the remaining lines, or disable the workflow.
+# To reorder or skip: edit this file. Nothing else reads it.
+
+0.2.0   0a1eb4f
+0.3.0   d16398f
+0.4.0   cc92a06
+0.5.0   0442ace
+0.6.0   76f98e6
+0.7.0   3a838d3
+0.8.0   ac787ef
+0.9.0   7a4eba0
+0.10.0  8e7f9c5
