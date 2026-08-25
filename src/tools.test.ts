@@ -50,6 +50,7 @@ const EXPECTED = [
   "runtime_health",
   "what_changed",
   "get_navigation",
+  "get_rebuilds",
   "explain_diagnosis",
   "get_capabilities",
   "get_dashboard_url",
@@ -129,6 +130,7 @@ test("get_capabilities states what cannot be observed, not just what can", async
     "log",
     "navigation",
     "network",
+    "rebuild",
     "system",
   ]);
 });

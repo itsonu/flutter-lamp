@@ -8,6 +8,7 @@ import type { Severity } from "./core/events.js";
 import { runtimeHealth, whatChanged } from "./diagnosis/health.js";
 import { routeHistory } from "./diagnosis/navigation.js";
 import { diagnosePerformance } from "./diagnosis/performance.js";
+import { rebuildReport } from "./diagnosis/rebuilds.js";
 import { VERSION } from "./version.js";
 import { withInspectorGroup, type IsolateCall } from "./vm/inspectorGroup.js";
 
@@ -26,6 +27,7 @@ export const TOOL_SAFETY = {
   runtime_health: "read-only",
   what_changed: "read-only",
   get_navigation: "read-only",
+  get_rebuilds: "read-only",
   get_capabilities: "read-only",
   get_dashboard_url: "read-only",
   get_logs: "read-only",
@@ -419,6 +421,23 @@ export function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "get_rebuilds",
+    {
+      annotations: ann("get_rebuilds"),
+      title: "Widget rebuild hotspots",
+      description:
+        "Which widgets are rebuilding and how often, resolved to widget name, file and line, with your own code ranked above package code. Use for 'why is this screen slow to build' and to find needless rebuilds. Requires a debug build with widget creation tracking; reports why it is empty otherwise.",
+      inputSchema: {
+        limit: z.number().int().positive().max(50).default(15).describe("How many hotspots to return."),
+      },
+    },
+    async ({ limit }) => {
+      connection.requireConnectedOrThrow();
+      return json(rebuildReport(connection.store, limit));
+    },
+  );
+
+  server.registerTool(
     "explain_diagnosis",
     {
       annotations: ann("explain_diagnosis"),
@@ -475,6 +494,7 @@ export function registerTools(server: McpServer): void {
           "Dart VM Service streams: Stdout, Stderr, Logging, Extension, Debug",
           "Flutter framework errors with reconstructed stack traces",
           "Frame build/raster timings, jank, and percentile statistics",
+          "Per-frame widget rebuild counts with widget name, file and line (debug builds with widget creation tracking)",
           "dart:io HTTP requests (covers Dio and package:http)",
           "Widget tree and selected widget (debug builds only)",
           "Route changes via Flutter.Navigation (debug and profile builds)",
@@ -487,7 +507,7 @@ export function registerTools(server: McpServer): void {
           "Anything before connect_vm was called",
           "Evidence older than the retention window",
           "Redacted credential values (headers, sensitive query parameters, tokens in text)",
-          "CPU samples, GC events and widget rebuild counts — so a slow build cannot be traced to a function or a widget",
+          "CPU samples and GC events — a slow build can be traced to a widget, but not to a function",
           "Riverpod/Bloc state and provider changes — not implemented",
         ],
         configuration: {

@@ -38,6 +38,8 @@ export const DEFAULT_CAPACITIES: Record<Category, number> = {
   network: 1_000,
   log: 3_000,
   frame: 1_000,
+  // One event per rendered frame, like frames themselves.
+  rebuild: 1_000,
   // Route changes are infrequent and each one scopes everything after it, so a
   // small buffer covers a long session.
   navigation: 500,

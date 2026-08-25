@@ -3,6 +3,15 @@ import type { RuntimeStore } from "../core/runtimeStore.js";
 import { intervalOf } from "./correlation.js";
 import { routeAtIn } from "./navigation.js";
 
+export interface RebuildHotspot {
+  widget?: string;
+  file: string;
+  line?: number;
+  rebuilds: number;
+  frames: number;
+  appCode: boolean;
+}
+
 /**
  * Performance diagnosis over captured frames.
  *
@@ -12,10 +21,13 @@ import { routeAtIn } from "./navigation.js";
  * heap growth — and reports each as a finding with its own evidence and
  * strength.
  *
- * What it deliberately does not do is guess. There is no CPU sampling, no GC
- * event stream and no widget rebuild count in the store, so the usual suspects
- * for jank cannot all be ruled in or out from here. Every run says so in
- * `limitations` rather than presenting a partial picture as a complete one.
+ * When widget creation is tracked, it also names the widgets behind a
+ * build-heavy profile, down to file and line.
+ *
+ * What it deliberately does not do is guess. There is no CPU sampling and no GC
+ * event stream, so not every suspect can be ruled in or out from here. Every run
+ * says so in `limitations` rather than presenting a partial picture as a
+ * complete one.
  */
 
 const FRAME_BUDGET_MS = 16.67;
@@ -51,6 +63,8 @@ export interface PerformanceDiagnosis {
   /** Which phase dominates the janky frames, when one clearly does. */
   dominantPhase: "build" | "raster" | "mixed" | null;
   findings: PerformanceFinding[];
+  /** Widgets that rebuilt most, resolved to source. Empty when untracked. */
+  rebuildHotspots: RebuildHotspot[];
   recommendedFixes: string[];
   confidence: number;
   limitations: string[];
@@ -61,7 +75,8 @@ export function diagnosePerformance(store: RuntimeStore): PerformanceDiagnosis {
   const frames = all.filter((e) => e.category === "frame");
   const janky = frames.filter((e) => e.data.janky === true);
   const stats = frameStats(frames, janky);
-  const limitations = describeLimitations(store, frames.length);
+  const hotspots = rebuildHotspots(all);
+  const limitations = describeLimitations(store, frames.length, hotspots.length > 0);
 
   if (frames.length < MIN_FRAMES) {
     return {
@@ -73,6 +88,7 @@ export function diagnosePerformance(store: RuntimeStore): PerformanceDiagnosis {
       frames: stats,
       dominantPhase: null,
       findings: [],
+      rebuildHotspots: hotspots,
       recommendedFixes: ["Exercise the janky interaction while connected, then run this again."],
       confidence: 0.3,
       limitations,
@@ -86,6 +102,7 @@ export function diagnosePerformance(store: RuntimeStore): PerformanceDiagnosis {
       frames: stats,
       dominantPhase: null,
       findings: [],
+      rebuildHotspots: hotspots,
       recommendedFixes: [],
       confidence: sampleConfidence(frames.length),
       limitations,
@@ -93,6 +110,7 @@ export function diagnosePerformance(store: RuntimeStore): PerformanceDiagnosis {
   }
 
   const findings = [
+    rebuildFinding(hotspots, all, stats),
     phaseFinding(janky, stats),
     networkFinding(all, janky),
     routeFinding(all, janky),
@@ -114,6 +132,7 @@ export function diagnosePerformance(store: RuntimeStore): PerformanceDiagnosis {
     frames: stats,
     dominantPhase: dominant,
     findings: findings.sort((a, b) => b.strength - a.strength),
+    rebuildHotspots: hotspots,
     recommendedFixes: findings.sort((a, b) => b.strength - a.strength).map((f) => f.fix),
     confidence,
     limitations,
@@ -121,6 +140,92 @@ export function diagnosePerformance(store: RuntimeStore): PerformanceDiagnosis {
 }
 
 // ── Findings ────────────────────────────────────────────────────────────────
+
+/**
+ * Aggregate per-frame rebuild counts into hotspots, app code first.
+ *
+ * Each stored rebuild event keeps only its top locations, so these totals cover
+ * the hotspots of each frame rather than every rebuild that occurred. That is
+ * the right trade: the long tail of one-off rebuilds is noise, and keeping it
+ * would cost a thousand entries per frame.
+ */
+function rebuildHotspots(all: RuntimeEvent[]): RebuildHotspot[] {
+  const byLocation = new Map<string, RebuildHotspot>();
+  for (const event of all) {
+    if (event.category !== "rebuild") continue;
+    const top = Array.isArray(event.data.top) ? (event.data.top as any[]) : [];
+    for (const entry of top) {
+      const key = `${entry.widget ?? "?"}|${entry.file}|${entry.line ?? "?"}`;
+      const existing = byLocation.get(key);
+      if (existing) {
+        existing.rebuilds += Number(entry.count) || 0;
+        existing.frames += 1;
+      } else {
+        byLocation.set(key, {
+          widget: entry.widget,
+          file: entry.file,
+          line: entry.line,
+          rebuilds: Number(entry.count) || 0,
+          frames: 1,
+          appCode: entry.appCode === true,
+        });
+      }
+    }
+  }
+  return [...byLocation.values()]
+    // Rank by actual volume. Sorting app code first looks helpful and is not:
+    // it buries a package location with 40 rebuilds beneath fifty app entries
+    // that rebuilt once, so "busiest" stops meaning busiest.
+    .sort((a, b) => b.rebuilds - a.rebuilds || Number(b.appCode) - Number(a.appCode))
+    .slice(0, 12);
+}
+
+function describe(h: RebuildHotspot): string {
+  return [h.widget, h.line ? `${h.file}:${h.line}` : h.file].filter(Boolean).join(" at ");
+}
+
+/** Name the widget behind a build-heavy profile, with its source location. */
+function rebuildFinding(
+  hotspots: RebuildHotspot[],
+  all: RuntimeEvent[],
+  stats: FrameStats,
+): PerformanceFinding | null {
+  if (hotspots.length === 0) return null;
+  // An unresolved location is still counted, but naming it as the busiest tells
+  // the developer nothing they can act on.
+  const headline = hotspots.find((h) => h.file !== "unknown") ?? hotspots[0];
+  // The busiest location is often framework code rebuilt by something you own,
+  // so name the nearest thing the developer can actually edit as well.
+  const mine = hotspots.find((h) => h.appCode);
+  const rebuildEvents = all.filter((e) => e.category === "rebuild");
+  const totalRebuilds = rebuildEvents.reduce(
+    (sum, e) => sum + (Number(e.data.totalRebuilds) || 0),
+    0,
+  );
+  const buildBound = dominantPhase(stats) === "build";
+
+  const where = describe(headline);
+  const inYourCode = mine && mine !== headline ? describe(mine) : null;
+
+  return {
+    claim:
+      `${totalRebuilds} widget rebuild(s) across ${rebuildEvents.length} frame(s). ` +
+      `Busiest: ${where} — ${headline.rebuilds} rebuild(s) over ${headline.frames} frame(s).` +
+      (inYourCode && mine
+        ? ` Busiest in your own code: ${inYourCode} — ${mine.rebuilds} rebuild(s).`
+        : headline.appCode
+          ? ""
+          : " No hotspot resolved to your own code."),
+    // Only a strong claim about the CAUSE of jank when the profile is
+    // build-bound; otherwise it is context, since raster jank is unrelated to
+    // how often widgets rebuilt.
+    strength: buildBound ? 0.85 : 0.6,
+    evidence: rebuildEvents.slice(0, 5).map((e) => e.eventId),
+    fix: buildBound
+      ? `Narrow the rebuild scope around ${inYourCode ?? where}. Split the widget so only the part that depends on changing state rebuilds, add const constructors, and move computation out of build().`
+      : `Rebuild counts are recorded for context — this profile is not build-bound, so ${where} is unlikely to be the cause of the jank.`,
+  };
+}
 
 function phaseFinding(janky: RuntimeEvent[], stats: FrameStats): PerformanceFinding | null {
   const phase = dominantPhase(stats);
@@ -250,13 +355,28 @@ function sampleConfidence(frameCount: number): number {
   return 0.7;
 }
 
-function describeLimitations(store: RuntimeStore, frameCount: number): string[] {
+function describeLimitations(
+  store: RuntimeStore,
+  frameCount: number,
+  haveRebuilds: boolean,
+): string[] {
   const out = [
-    "No CPU sampling. A slow build cannot be attributed to a specific function from here — use the DevTools CPU profiler for that.",
+    "No CPU sampling. A slow build can be attributed to a widget, but not to a specific function — use the DevTools CPU profiler for that.",
     "GC events are not observable: the VM timeline is fetched on demand and not stored, so garbage-collection pauses cannot be ruled in or out.",
-    "No widget rebuild counts. A build-heavy frame cannot be traced to the widget that rebuilt.",
     "Frames are only captured while connected, and older ones roll out of the retention window.",
   ];
+  if (haveRebuilds) {
+    out.push(
+      "Rebuild totals cover the busiest locations in each frame, not every rebuild — the long tail is counted but not itemised.",
+    );
+    out.push(
+      "App-versus-package attribution is a path heuristic: getPubRootDirectories is empty until a DevTools client sets it, so there is no authoritative project root.",
+    );
+  } else {
+    out.push(
+      "No widget rebuild data in this session. Rebuild tracking needs a debug build with widget creation tracking; without it a build-heavy frame cannot be traced to a widget.",
+    );
+  }
   if (store.retention().evicted.frame > 0) {
     out.unshift(
       `${store.retention().evicted.frame} frame(s) have been dropped by retention, so these percentages describe the recent window, not the whole session.`,

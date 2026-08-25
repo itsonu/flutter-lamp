@@ -191,7 +191,110 @@ test("limitations name the blind spots every time", () => {
   const { limitations } = diagnosePerformance(store);
   assert.ok(limitations.some((l) => l.includes("No CPU sampling")));
   assert.ok(limitations.some((l) => l.includes("GC events")));
-  assert.ok(limitations.some((l) => l.includes("widget rebuild counts")));
+  // With no rebuild evidence the tool must say tracking is unavailable — not
+  // claim, as it once did, that rebuild counts are impossible in principle.
+  assert.ok(limitations.some((l) => l.includes("No widget rebuild data in this session")));
+});
+
+function rebuildEvent(
+  store: RuntimeStore,
+  at: number,
+  frameNumber: number,
+  top: Array<{ widget: string; file: string; line: number; count: number; appCode: boolean }>,
+) {
+  return store.add({
+    timestamp: at,
+    source: "Flutter.RebuiltWidgets",
+    severity: "debug",
+    category: "rebuild",
+    message: `Frame #${frameNumber}`,
+    data: {
+      frameNumber,
+      totalRebuilds: top.reduce((s, t) => s + t.count, 0),
+      distinctLocations: top.length,
+      top,
+      truncated: false,
+    },
+  });
+}
+
+test("a build-bound profile names the widget and source line behind it", () => {
+  const store = new RuntimeStore();
+  frames(store, { count: 60 });
+  frames(store, { count: 40, janky: true, buildMs: 30, rasterMs: 4, at: T + 10_000 });
+  for (let i = 0; i < 5; i++) {
+    rebuildEvent(store, T + 10_000 + i * 16, 100 + i, [
+      { widget: "AppShell", file: "lib/features/home/app_shell.dart", line: 221, count: 16, appCode: true },
+      { widget: "GoRouterState", file: "go_router/src/builder.dart", line: 455, count: 40, appCode: false },
+    ]);
+  }
+
+  const d = diagnosePerformance(store);
+  const finding = d.findings.find((f) => /widget rebuild/.test(f.claim));
+  assert.ok(finding, "rebuild attribution should be reported");
+  assert.ok(finding.strength >= 0.8, "a build-bound profile makes this a strong claim");
+
+  // "Busiest" must mean busiest. Package code rebuilt 200 times against
+  // AppShell's 80, so it leads — ranking app code first would make the headline
+  // a false statement.
+  assert.match(finding.claim, /Busiest: GoRouterState at go_router\/src\/builder\.dart:455 — 200/);
+  assert.equal(d.rebuildHotspots[0].widget, "GoRouterState");
+  assert.equal(d.rebuildHotspots[0].rebuilds, 200);
+
+  // But the developer can only edit their own code, so name that too, and aim
+  // the fix at it.
+  assert.match(finding.claim, /Busiest in your own code: AppShell at lib\/features\/home\/app_shell\.dart:221 — 80/);
+  assert.match(finding.fix, /Narrow the rebuild scope around AppShell/);
+
+  const mine = d.rebuildHotspots.find((h) => h.appCode);
+  assert.equal(mine?.widget, "AppShell");
+  assert.equal(mine?.rebuilds, 80);
+  assert.equal(mine?.frames, 5);
+});
+
+test("when nothing resolves to your own code, the claim says so", () => {
+  const store = new RuntimeStore();
+  frames(store, { count: 60 });
+  frames(store, { count: 40, janky: true, buildMs: 30, rasterMs: 4, at: T + 10_000 });
+  rebuildEvent(store, T + 10_000, 100, [
+    { widget: "GoRouterState", file: "go_router/src/builder.dart", line: 455, count: 40, appCode: false },
+  ]);
+
+  const finding = diagnosePerformance(store).findings.find((f) => /widget rebuild/.test(f.claim));
+  assert.ok(finding);
+  assert.match(finding.claim, /No hotspot resolved to your own code/);
+});
+
+test("rebuild data on a raster-bound profile is context, not a cause", () => {
+  const store = new RuntimeStore();
+  frames(store, { count: 60 });
+  frames(store, { count: 40, janky: true, buildMs: 3, rasterMs: 35, at: T + 10_000 });
+  rebuildEvent(store, T + 10_000, 100, [
+    { widget: "AppShell", file: "lib/app_shell.dart", line: 221, count: 4, appCode: true },
+  ]);
+
+  const finding = diagnosePerformance(store).findings.find((f) => /widget rebuild/.test(f.claim));
+  assert.ok(finding);
+  assert.ok(finding.strength < 0.7, "raster jank is not explained by rebuild counts");
+  assert.match(finding.fix, /unlikely to be the cause/);
+});
+
+test("with rebuild data, the limitations describe its real bounds", () => {
+  const store = new RuntimeStore();
+  frames(store, { count: 60 });
+  frames(store, { count: 40, janky: true, buildMs: 30, rasterMs: 4, at: T + 10_000 });
+  rebuildEvent(store, T + 10_000, 100, [
+    { widget: "AppShell", file: "lib/app_shell.dart", line: 221, count: 4, appCode: true },
+  ]);
+
+  const { limitations } = diagnosePerformance(store);
+  assert.ok(!limitations.some((l) => l.includes("No widget rebuild data")));
+  assert.ok(limitations.some((l) => l.includes("busiest locations in each frame")));
+  assert.ok(limitations.some((l) => l.includes("path heuristic")));
+  assert.ok(
+    limitations.some((l) => l.includes("not to a specific function")),
+    "CPU attribution is still out of reach, and must still be stated",
+  );
 });
 
 test("dropped frames are declared, so percentages are not read as whole-session", () => {

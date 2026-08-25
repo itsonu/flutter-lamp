@@ -61,6 +61,7 @@ only ever evict itself.
 | --- | --- |
 | `log` | 3,000 |
 | `navigation` | 500 |
+| `rebuild` | 1,000 |
 | `exception` | 1,000 |
 | `network` | 1,000 |
 | `frame` | 1,000 |
@@ -102,6 +103,7 @@ dashboard can list events without knowing every payload shape.
 | `FrameCollector` | `Extension` stream, `Flutter.Frame`; jank classified against a 16.67ms budget | push |
 | `NetworkCollector` | `ext.dart.io.httpEnableTimelineLogging` at start, `getHttpProfile` on demand; failing requests enriched via `getHttpProfileRequest` | pull |
 | `NavigationCollector` | `Extension` stream, `Flutter.Navigation` — posted by Flutter's own Navigator on push/pop/replace, so no observer is installed in the app | push |
+| `RebuildCollector` | `Extension` stream, `Flutter.RebuiltWidgets` after enabling `trackRebuildDirtyWidgets`; seeds the id→source table from `widgetLocationIdMap` at startup | push |
 
 Widget tree, selected widget, memory and timeline are **not** collectors — they
 are direct RPCs issued by the tool that needs them (`connection.isolateCall`).

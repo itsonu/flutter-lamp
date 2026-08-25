@@ -63,6 +63,7 @@ that is usually the request you want.
 | What is the stack trace? | `get_exceptions` |
 | Which request failed? | `get_network` |
 | Why is it janky? | `diagnose_performance` |
+| What keeps rebuilding? | `get_rebuilds` |
 | What were the raw frame timings? | `get_frames` with `onlyJanky: true` |
 | What did the app print? | `get_logs` with `minSeverity: "warning"` |
 | Which screen is broken? | `get_navigation` |
@@ -99,6 +100,15 @@ than reading noise as a pattern. Its `limitations` are load-bearing: there is no
 CPU sampling, no GC event stream and no rebuild count, so a slow build cannot be
 traced to a function or a widget from here. Send the user to the DevTools CPU
 profiler for that instead of speculating.
+
+**`get_rebuilds`** names the widgets that rebuild and where they live — widget,
+file and line — ranked by how many rebuilds they actually account for, with the
+developer's own code flagged separately from package code. Ranking is by volume
+on purpose: promoting app code above a package location with ten times the
+rebuilds would make "busiest" a false statement. The busiest location is often
+framework code driven by a parent the developer owns, so read both the headline
+and the app-code entry. Needs a debug build with widget creation tracking; the
+report says so when it is unavailable rather than returning an empty list.
 
 **`explain_diagnosis`** resolves every cited id back to its full record and adds
 `missingEvidence`. Use it when the user asks why, or when the confidence

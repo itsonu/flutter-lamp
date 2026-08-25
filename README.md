@@ -44,6 +44,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 - 🌐 **Network capture** via `dart:io` profiling — covers Dio & `package:http`, no interceptor needed
 - 🎞️ **Frame timings** with jank detection, percentiles, and a build-vs-raster verdict
 - 🧭 **Route awareness** — current screen, transitions, and failures attributed to the screen they happened on
+- 🔁 **Widget rebuild attribution** — which widget rebuilt, how often, at which file and line, with your code ranked apart from package code
 - 🧬 **Widget tree & selected-widget** snapshots from the Inspector
 - 🧮 **Memory** (Dart heap / external) and **VM timeline** events
 - 🩺 **`diagnose_runtime`** — correlates evidence into *summary · root cause · evidence · confidence · fixes*; says **"Unknown"** below 70% instead of hallucinating
@@ -58,6 +59,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 | `runtime_health` | One-call triage — verdict plus exception/network/frame/log/memory summary. | read-only |
 | `what_changed` | Evidence from the window before a failure, with a timeline. | read-only |
 | `get_navigation` | Current route and recent transitions, with per-route failures. | read-only |
+| `get_rebuilds` | Widget rebuild hotspots resolved to widget, file and line. | read-only |
 | `explain_diagnosis` | Why a diagnosis was reached: resolved evidence, alternatives, gaps. | read-only |
 | `get_capabilities` | Active collectors, tool safety classes, what cannot be observed. | read-only |
 | `runtime_status` | Connection, session, reconnect state, event counts, retention window. | read-only |
@@ -70,7 +72,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 | `get_memory` | Dart heap + external memory (MB). | read-only |
 | `get_timeline` | Recent VM timeline events (build/paint/layout/GC). | **mutates** |
 | `diagnose_runtime` | Root cause with evidence ids, timeline, alternatives, limitations. | read-only |
-| `diagnose_performance` | Why the app is janky — percentiles, phase split, correlated findings. | read-only |
+| `diagnose_performance` | Why the app is janky — percentiles, phase split, rebuild attribution. | read-only |
 | `get_dashboard_url` | URL of the live browser dashboard. | read-only |
 
 **mutates** means the tool changes app or VM state, not your project — nothing

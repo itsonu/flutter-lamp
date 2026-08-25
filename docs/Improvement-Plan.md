@@ -6,8 +6,8 @@ prioritized backlog that comes out of it.
 **Progress:** P0 is complete — P0-1/P0-2 in 0.2.0, P0-3/P0-4 in 0.3.0,
 P0-5/P0-6 in 0.4.0, P0-7/P0-8/P0-9 in 0.5.0. P1-1 and P1-2 in 0.6.0.
 P1-3, P1-4, P1-7 and P1-8 in 0.7.0, with P1-5 partly done there. P1-6 in
-0.8.0. Navigation in 0.9.0 and `diagnose_performance` in 0.10.0 cover two of
-the three P2 items. Open: the timeline half of P1-5, state-management adapters,
+0.8.0. Navigation in 0.9.0, `diagnose_performance` in 0.10.0 and widget rebuild
+attribution in 0.11.0 cover the P2 items bar state management. Open: the timeline half of P1-5, state-management adapters,
 and all of P3-P4.
 
 Findings are marked **Verified** where the code was read and the behaviour
@@ -553,21 +553,40 @@ Percentiles, the build-versus-raster split, and findings correlating jank
 against in-flight requests, route transitions and heap growth, each with its own
 evidence, strength and fix.
 
-The plan called for correlating against "widget activity" and "GC". Neither is
-observable: widget rebuild counts are not exposed on any stream this project
-reads, and GC events live in the VM timeline, which is fetched on demand and not
-stored. Rather than approximate them, `limitations` states on every run that
-there is no CPU sampling, no GC stream and no rebuild count, and points at the
-DevTools CPU profiler for what this cannot answer. Heap growth is included as
+The plan called for correlating against "widget activity" and "GC".
+
+**Widget activity: this was wrong, and 0.11.0 fixes it.** The 0.10.0 note
+asserted that rebuild counts were "not exposed on any stream this project reads"
+without checking. They are: `ext.flutter.inspector.trackRebuildDirtyWidgets`
+makes the framework post `Flutter.RebuiltWidgets` per frame, with a location
+table resolving to widget name, file and line. Enumerating the 75 registered
+extension RPCs on a real device took one call and disproved the claim.
+`RebuildCollector` and `get_rebuilds` shipped in 0.11.0.
+
+**GC: still not observable.** GC events live in the VM timeline, which is
+fetched on demand and not stored, so that half stands. CPU attribution to a
+function also stands as out of reach; `limitations` still says so and points at
+the DevTools profiler. Heap growth is included as
 the weakest finding, scored below the others and explicitly labelled as
 co-occurrence that cannot be confirmed from here.
 
-### State management — NOT STARTED, and blocked
+### State management — partially unblocked (measured 2026-08-25)
 
-Riverpod and Bloc integration depends on service extensions those packages
-register at runtime. Writing adapters against an assumed API rather than a
-running app is how a confident wrong integration ships. This needs a live
-Flutter app using each package before any code is written.
+Measured against a live Riverpod 3.3.2 app: Riverpod posts `riverpod:new_event`
+on the `Extension` stream, roughly ten events per fifteen seconds of
+interaction. The payload is only `{offset: N}`, a pointer into an in-app buffer,
+and **no `ext.riverpod.*` service extension is registered** - so provider
+*values* cannot be read through the VM Service.
+
+What that permits: counting provider activity and correlating its timing with
+rebuild storms, which covers this plan's own worked example ("39 rebuilds
+correlated with UserProvider invalidation") minus the provider name. What it
+does not permit: reading state. That needs eval-based introspection against
+Riverpod internals, which is version-coupled and not worth shipping.
+
+Bloc remains unmeasured and therefore unstarted - no Bloc app has been observed,
+and writing an adapter against an assumed API is how a confident wrong
+integration ships.
 
 ## P3 — Session intelligence
 

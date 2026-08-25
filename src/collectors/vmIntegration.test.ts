@@ -23,6 +23,7 @@ const FLUTTER_ERROR = {
 };
 
 test("realtime Flutter.Error reaches the store with a stack trace", async () => {
+  let pushError: (() => void) | undefined;
   const wss = new WebSocketServer({ port: 0 });
   await once(wss, "listening");
   const port = (wss.address() as { port: number }).port;
@@ -35,8 +36,11 @@ test("realtime Flutter.Error reaches the store with a stack trace", async () => 
       if (msg.method === "getVM") reply({ isolates: [{ id: "iso-1" }] });
       else reply({}); // streamListen / extensions
     });
-    // Push after the client has attached its stream listeners.
-    setTimeout(() => {
+    // Deliberately NOT on a timer. A fixed delay races collector startup: under
+    // load the push can beat the listeners being attached, and a missed stream
+    // event is missed forever. The test pushes explicitly once connect()
+    // resolves, at which point every collector is subscribed.
+    pushError = () =>
       ws.send(
         JSON.stringify({
           jsonrpc: "2.0",
@@ -47,7 +51,6 @@ test("realtime Flutter.Error reaches the store with a stack trace", async () => 
           },
         }),
       );
-    }, 80);
   });
 
   try {
@@ -55,7 +58,13 @@ test("realtime Flutter.Error reaches the store with a stack trace", async () => 
     const info = await connection.connect(`http://127.0.0.1:${port}/`);
     assert.equal(info.isolateId, "iso-1");
 
-    await new Promise((r) => setTimeout(r, 250)); // let the pushed event land
+    pushError?.();
+    // Poll rather than sleep: a fixed wait is either flaky or needlessly slow.
+    const deadline = Date.now() + 4_000;
+    while (connection.store.query({ category: "exception" }).length === 0) {
+      if (Date.now() > deadline) throw new Error("no exception captured within 4s");
+      await new Promise((r) => setTimeout(r, 20));
+    }
 
     const exceptions = connection.store.query({ category: "exception" });
     assert.equal(exceptions.length, 1, "expected one captured exception");

@@ -4,6 +4,67 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-08-25
+
+Widget rebuild attribution. First release validated against a real app on a
+physical device rather than only against mocks.
+
+### Added
+
+- **`RebuildCollector`** - per-frame widget rebuild counts from
+  `Flutter.RebuiltWidgets`, enabled through
+  `ext.flutter.inspector.trackRebuildDirtyWidgets`, resolved to widget name,
+  file and line. The id-to-source table is seeded from `widgetLocationIdMap` at
+  startup, because location tables are sent incrementally and anything described
+  before connecting is never re-sent.
+- **`get_rebuilds`** - rebuild hotspots ranked by volume, with the developer's
+  own code distinguished from package and framework code.
+- **`diagnose_performance` names the widget behind a build-heavy profile**, with
+  its source line, and aims the fix at the nearest code the developer can
+  actually edit. On a profile that is not build-bound the finding is scored down
+  and explicitly labelled as context rather than cause.
+- A new `rebuild` event category with its own 1,000-event retention budget.
+
+### Fixed
+
+- **A documented limitation that was simply false.** `diagnose_performance`
+  claimed "No widget rebuild counts. A build-heavy frame cannot be traced to the
+  widget that rebuilt." Rebuild counts are available, with file and line. The
+  limitation is replaced with the real bounds: totals cover the busiest
+  locations per frame, app-versus-package attribution is a path heuristic
+  because `getPubRootDirectories` is empty until a DevTools client sets it, and
+  CPU attribution to a *function* still requires the DevTools profiler.
+- **`connect_vm` explains an empty VM instead of just stating it.** "No isolates
+  found on the VM" now says the app is no longer running and that relaunching
+  changes the URI - measured against a device where the app had been swiped away
+  while `flutter run` held the port open.
+- **A race in the mock-VM integration test.** It pushed a stream event on a
+  fixed 80ms timer, which under full-suite load could beat the collectors
+  attaching their listeners, and a missed stream event is missed permanently.
+  The test now pushes once `connect()` has resolved, and polls for the result.
+
+### Notes
+
+Validated live against a Flutter app using Riverpod and go_router on a physical
+Android device. Three things only real data exposed:
+
+- go_router navigation *is* captured - `_PageBasedMaterialPageRoute` reaches
+  `Flutter.Navigation`, and per-route attribution held up: a dialog route
+  accounted for 22 of 24 janky frames while the screen behind it took 2.
+- Ranking hotspots with app code first made "busiest" a false claim. It buried a
+  package location with 200 rebuilds beneath app entries with one each. Ranking
+  is now by volume, with app code surfaced alongside rather than instead.
+- Without the location-table seed, 714 of 1,346 rebuilds resolved to `unknown`.
+
+Empty `get_logs` on a real app turned out to be correct behaviour, not a bug:
+the app under test contains no `print`, `debugPrint` or `developer.log` calls,
+so the VM Service had no `Stdout` or `Logging` events to deliver.
+
+### Compatibility
+
+Purely additive. The new category appears in `runtime_status.byCategory` and the
+retention report; no existing tool changed shape.
+
 ## [0.10.0] — 2026-08-22
 
 Performance diagnosis. Why the app is janky, not just how much.
@@ -389,6 +450,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.11.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.11.0
 [0.10.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.10.0
 [0.9.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.9.0
 [0.8.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.8.0

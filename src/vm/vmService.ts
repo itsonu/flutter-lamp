@@ -140,7 +140,16 @@ export class VmService extends EventEmitter {
   async mainIsolateId(): Promise<string> {
     const vm = await this.call<{ isolates: Array<{ id: string }> }>("getVM");
     const first = vm.isolates?.[0];
-    if (!first) throw new Error("No isolates found on the VM");
+    if (!first) {
+      // The socket answered, so the VM Service is alive but the app's isolate
+      // is not. In practice the process was killed or swiped away while the
+      // service host (`flutter run`) kept the port open — telling the caller
+      // "no isolates" alone sends them looking for a bug in the wrong place.
+      throw new Error(
+        "Connected to the VM Service, but it has no isolates — the app is no longer running. " +
+          "Relaunch it (the VM Service URI changes on relaunch) and call connect_vm with the new URI.",
+      );
+    }
     return first.id;
   }
 
