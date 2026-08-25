@@ -11,6 +11,7 @@ import { diagnosePerformance } from "./diagnosis/performance.js";
 import { rebuildReport } from "./diagnosis/rebuilds.js";
 import { VERSION } from "./version.js";
 import { withInspectorGroup, type IsolateCall } from "./vm/inspectorGroup.js";
+import { timelineStaleness } from "./vm/timelineStaleness.js";
 
 const SEVERITIES = ["debug", "info", "warning", "error", "critical"] as const;
 
@@ -335,7 +336,7 @@ export function registerTools(server: McpServer): void {
       annotations: ann("get_timeline"),
       title: "Get VM timeline events",
       description:
-        "Recent VM timeline trace events (build/paint/layout/GC/etc.), most recent first. Requires timeline recording — enable with recordFrom=true (sets Dart, GC, Compiler & Embedder streams) then reproduce the activity. recordFrom=true is NOT read-only: it changes the VM's recording configuration.",
+        "Recent VM timeline trace events (build/paint/layout/GC/etc.), most recent first. Requires timeline recording — enable with recordFrom=true (sets Dart, GC, Compiler & Embedder streams) then reproduce the activity. recordFrom=true is NOT read-only: it changes the VM's recording configuration. Check recorderLagMs/stalled in the result: the VM recorder can stall permanently once its buffer fills while still reporting its streams as recorded, so events may be historical rather than current.",
       inputSchema: {
         recordFrom: z.boolean().default(false).describe("Turn on timeline recording streams before reading."),
         limit: z.number().int().positive().max(200).default(50),
@@ -350,12 +351,21 @@ export function registerTools(server: McpServer): void {
         return json({ recording: true, message: "Timeline recording enabled. Reproduce the activity, then call get_timeline again." });
       }
       const tl = await connection.vmCall<{ traceEvents?: any[] }>("getVMTimeline");
-      const events = (tl.traceEvents ?? [])
+      const raw = tl.traceEvents ?? [];
+      // The recorder can stall permanently while its flags still claim it is
+      // recording (measured on-device; see vm/timelineStaleness.ts). Compare
+      // against the VM's own timeline clock so stale events are labelled.
+      const nowMicros = await connection
+        .vmCall<{ timestamp?: number }>("getVMTimelineMicros")
+        .then((r) => (typeof r.timestamp === "number" ? r.timestamp : null))
+        .catch(() => null);
+      const staleness = timelineStaleness(nowMicros, raw);
+      const events = raw
         .filter((e) => e.ph === "X" || e.ph === "B" || e.ph === "i")
         .slice(-limit)
         .reverse()
         .map((e) => ({ name: e.name, phase: e.ph, category: e.cat, tsMicros: e.ts, durMicros: e.dur }));
-      return json({ count: events.length, events });
+      return json({ count: events.length, ...staleness, events });
     },
   );
 

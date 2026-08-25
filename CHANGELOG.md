@@ -4,6 +4,39 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-08-25
+
+Timeline honesty. The planned timeline/GC collector was killed by its own
+pre-build verification; what shipped is the guard that measurement demanded.
+
+### Added
+
+- **`get_timeline` reports recorder staleness.** Measured live on a physical
+  Android device: the VM's "Ring" timeline recorder stalls silently once its
+  buffer fills (~24,500 events - under a minute of Dart+GC recording), while
+  `getVMTimelineFlags` keeps reporting the streams as recorded.
+  `clearVMTimeline` restores recording, but nothing detects the stall for
+  you - until now `get_timeline` would happily return minutes-old events as
+  if they were current. The result now carries `recorderLagMs` (the gap
+  between the VM's timeline clock and the newest event) and, past 30s of lag,
+  `stalled: true` with a warning written for the agent.
+
+### Notes
+
+The planned `TimelineCollector` (GC correlation for `diagnose_performance`,
+stored monotonic timestamps) is deferred, with the measured facts recorded in
+`docs/Observability-Roadmap.md`: clear-on-stall self-healing makes a collector
+possible, but a source that lies about its own liveness needs a soak test on a
+real device before diagnosis is allowed to depend on it. GC correlation remains
+a stated limitation until then. One probe conclusion was corrected along the
+way - an earlier read said nothing revives the recorder; a later live check
+showed `clearVMTimeline` does.
+
+### Compatibility
+
+Additive: `recorderLagMs`, `stalled` and (when stalled) `warning` on
+`get_timeline`. No tool renamed or reshaped.
+
 ## [0.13.0] - 2026-08-25
 
 Baseline comparison. "What changed before the failure" answered as a
@@ -519,6 +552,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.14.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.14.0
 [0.13.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.13.0
 [0.12.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.12.0
 [0.11.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.11.0

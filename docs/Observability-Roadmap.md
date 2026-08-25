@@ -106,9 +106,24 @@ today only network carries one, so there is nothing to join.
   comparison; also the verification primitive Phase E remediation needs.
 - **Derived metrics** — error rate, p95 per endpoint, jank ratio, memory growth
   rate; computed from the store, queryable, never fabricated.
-- **Timeline collection** — a collector for VM timeline events (currently
-  on-demand only), unlocking GC correlation `diagnose_performance` presently
-  lists as a blind spot, plus monotonic time.
+- **Timeline collection** — **BLOCKED by measurement (2026-08-25).** Verified
+  live on a physical Android device (Dart 3.12, recorder "Ring") before
+  building, per this document's own rule, and the source failed the audit:
+  (1) GC events are B/E begin-end pairs, not complete events — pairing per
+  (tid, name) is required to derive durations; (2) event `ts` shares a base
+  with `getVMTimelineMicros`, so wall-clock calibration is possible;
+  (3) the recorder **stalls silently once its buffer fills** (~24,500 events —
+  under a minute of Dart+GC recording), while `getVMTimelineFlags` continues
+  to report the streams as recorded; and (4) `clearVMTimeline` restores
+  recording — an earlier read that nothing revives it was premature, corrected
+  after a later live check showed 64ms lag following a clear. A collector is
+  therefore *possible* via clear-on-stall self-healing, but shipping one on a
+  source that lies about its own liveness needs a soak test on a real device,
+  not a single session. What shipped now (0.14.0): `get_timeline` measures
+  recorder staleness against the VM's timeline clock and labels stalled data,
+  so the on-demand path can no longer present minutes-old events as current.
+  GC correlation stays a stated limitation of `diagnose_performance` until the
+  collector earns its way in.
 - **Evidence graph (`get_evidence_graph`)** — typed in-memory nodes/edges over
   what `correlate()` and route attribution already compute; targeted queries
   only, never the whole graph. No graph database — that rejection stands.
