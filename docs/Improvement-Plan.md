@@ -570,30 +570,72 @@ the DevTools profiler. Heap growth is included as
 the weakest finding, scored below the others and explicitly labelled as
 co-occurrence that cannot be confirmed from here.
 
-### State management — partially unblocked (measured 2026-08-25)
+### State management — DONE (measured 2026-08-26, against committed probe apps)
 
-Measured against a live Riverpod 3.3.2 app: Riverpod posts `riverpod:new_event`
-on the `Extension` stream, roughly ten events per fifteen seconds of
-interaction. The payload is only `{offset: N}`, a pointer into an in-app buffer,
-and **no `ext.riverpod.*` service extension is registered** - so provider
-*values* cannot be read through the VM Service.
+Both frameworks are now measured against apps that live in this repo
+(`probe/riverpod_probe`, `probe/bloc_probe`), driven by a self-running phased
+workload and read with `probe/measure.mjs`. Re-running the measurement after a
+package upgrade is one command, so this section can be checked rather than
+trusted.
 
-What that permits: counting provider activity and correlating its timing with
-rebuild storms, which covers this plan's own worked example ("39 rebuilds
-correlated with UserProvider invalidation") minus the provider name. What it
-does not permit: reading state. That needs eval-based introspection against
-Riverpod internals, which is version-coupled and not worth shipping.
+**Riverpod 3.4.2 — activity is observable, state is not.** Over 70 seconds
+(three workload cycles):
 
-Bloc remains unmeasured and therefore unstarted - no Bloc app has been observed,
-and writing an adapter against an assumed API is how a confident wrong
-integration ships.
+```
+non-framework extension RPCs: ["ext.ui.window.impellerEnabled", …]
+riverpod/bloc RPCs: []
 
-## P3 — Session intelligence
+Extension/riverpod:new_event  x98  phases: tick,invalidate,throw
+  sample: {"offset":27}
+```
 
-A versioned, machine-readable session export covering metadata, events,
-correlations and diagnoses, suitable for bug reports, offline analysis and
-regression tests. Plus a compact AI-facing artifact carrying the smallest
-sufficient context rather than the whole buffer.
+98 events, all of them inside the phases that touch providers and none in the
+idle or navigate phases — so the count tracks real provider work. The payload is
+`{offset: N}`, an index into a buffer inside the app, and **no `ext.riverpod.*`
+service extension is registered** (0 of 74), so nothing can resolve it. Provider
+names and values are therefore not available, and none are invented.
+
+Shipped: a `state` event category, `StateCollector`, `get_state_activity`
+(counts, rate, per-second buckets, and how often build-heavy frames coincide
+with activity), and a `diagnose_performance` finding scored at 0.5 — below the
+causal findings, because state churn and expensive builds both follow the same
+tap. Against the probe app it reads: *"62 of 70 janky frames (89%) fell within
+1000ms of riverpod state activity (64 events)"*, and points at `get_rebuilds`
+for the widget names it cannot get from Riverpod.
+
+**Bloc 9.1.1 — nothing to adapt to.** The probe app ran 143 real
+`Bloc`/`Cubit` transitions and 2 handler errors, confirmed by its own
+`BlocObserver`:
+
+```
+143 × PROBE_TRANSITION CounterBloc Increment 0 -> 1 …
+      PROBE_BLOC_ERROR CounterBloc Bad state: deliberate handler failure
+```
+
+The VM Service saw **none of it**: zero `bloc:*` events on the `Extension`
+stream, zero `ext.bloc.*` RPCs. Stock Bloc's observability runs through
+`BlocObserver` inside the app process, which nothing outside can reach.
+
+So there is no Bloc adapter. What ships instead is the collector reporting
+`unavailable` with that reason, because an agent that reads zero state events
+for a Bloc app would otherwise conclude the app has no state. An in-app helper
+the user pastes in would make Bloc observable; it was considered and rejected —
+it moves the integration burden into every user's `main()`.
+
+## P3 — Session intelligence — DONE
+
+`export_session` returns the session as versioned JSON (`schemaVersion: 1`):
+metadata, per-collector health, retention, the events, and every diagnosis
+(runtime, performance, navigation, rebuilds). `mode: "full"` archives everything
+retained; `mode: "brief"` is the compact AI-facing artifact — the diagnoses plus
+*only* the events their own evidence cites, resolved through `byEventId`.
+Against the probe app that is 22 events / 19KB versus 417 events / 152KB, with
+every claim still traceable to a stored record.
+
+Nothing is redacted on the way out because nothing needs to be: redaction
+happens at capture (P0-1), so the exporter cannot leak what was never written.
+The top-level shape is pinned by a test, so a rename breaks the build rather
+than a downstream parser.
 
 ## P4 — Agent capabilities
 

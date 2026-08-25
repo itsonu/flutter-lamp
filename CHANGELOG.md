@@ -4,6 +4,51 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-08-26
+
+Merges the probe-app branch, and corrects a measurement in 0.17.0's favour.
+
+### Added
+
+- **`probe/`** - two self-driving probe apps (`riverpod_probe` on
+  flutter_riverpod 3.4.2, `bloc_probe` on flutter_bloc 9.1.1) and
+  `probe/measure.mjs`, the harness. Each app runs a five-phase workload and
+  prints a phase marker before every phase, so an event on the VM Service can
+  be attributed to what caused it. Claims about state-management observability
+  are now re-checkable instead of remembered.
+- **`export_session`** (P3) - the session as versioned JSON. `full` archives
+  everything; `brief` carries the diagnoses plus only the events their evidence
+  cites, measured at 22 events / 19KB against 417 / 152KB on the probe app.
+- **`get_state_activity`** - query state-change activity directly rather than
+  only through findings.
+
+### Fixed
+
+- **Bloc is observable after all.** The merged branch concluded stock Bloc was
+  invisible: 143 transitions producing zero events and no `ext.bloc.*` RPC.
+  Both halves of that are true, and the conclusion still did not follow.
+  `flutter_bloc` 9.1.1 depends transitively on `provider` (its own
+  `pubspec.lock` says so), and `provider` posts `provider:provider_changed`.
+  Re-measured on that same probe app: 20 printed Bloc transitions alongside
+  1,220 provider events, each burst following a transition marker in the same
+  stream. The collector keeps capturing them, attributed to `provider` - the
+  package that actually emitted the event - and `get_capabilities` now records
+  the real boundary: Bloc is visible *because* flutter_bloc uses provider, and
+  a Bloc app that avoided provider would not be.
+
+  The earlier reading searched for a `bloc:` prefix, did not find one, and
+  stopped. Absence of the name you expected is not absence of the signal.
+
+### Changed
+
+- `diagnose_performance`'s state finding now measures the fraction of janky
+  frames falling within 1s of state activity, rather than comparing raw volumes
+  - a falsifiable claim instead of two counts side by side. Scored 0.5, below
+  every causal finding, because churn and expensive builds both follow the same
+  tap.
+- The state collector registers its handler before subscribing, per 0.16.0. The
+  branch predated that fix and would have reintroduced it.
+
 ## [0.17.0] - 2026-08-26
 
 State-management observability - the P2 item that had been blocked on
@@ -180,6 +225,48 @@ showed `clearVMTimeline` does.
 
 Additive: `recorderLagMs`, `stalled` and (when stalled) `warning` on
 `get_timeline`. No tool renamed or reshaped.
+## [Unreleased]
+
+State-management activity and session export, both measured against apps that
+now live in this repo.
+
+### Added
+
+- **Two probe apps under `probe/`.** `riverpod_probe` and `bloc_probe` run a
+  self-driving five-phase workload and print a phase marker before each phase,
+  so an event seen on the VM Service can be attributed to the thing that caused
+  it. They exist so a claim about a package can be re-checked after an upgrade
+  instead of trusted; `probe/measure.mjs` is the harness, `probe/README.md` the
+  procedure.
+- **`get_state_activity` and a `state` event category.** Riverpod posts
+  `riverpod:new_event` on the `Extension` stream (measured: 98 events over 70
+  seconds, all inside the phases that touch providers). The tool reports volume,
+  rate, per-second buckets, and how often build-heavy frames coincide with
+  activity.
+- **A state co-occurrence finding in `diagnose_performance`**, scored 0.5 -
+  below every causal finding, because provider churn and expensive builds both
+  follow the same tap. It points at `get_rebuilds` for the widget names it
+  cannot get from Riverpod.
+- **`export_session`** - the session as versioned JSON (`schemaVersion: 1`):
+  metadata, collector health, retention, events and every diagnosis. `full`
+  archives everything retained; `brief` carries the diagnoses plus only the
+  events their evidence cites (22 events / 19KB against 417 / 152KB on the probe
+  app), so an agent gets the conclusion *and* the means to check it. Redaction
+  already happens at capture, so the exporter cannot leak what was never
+  written.
+
+### Not added, and why
+
+- **No Bloc adapter.** `bloc_probe` ran 143 real `Bloc`/`Cubit` transitions and
+  2 handler errors, confirmed by its own `BlocObserver`; the VM Service saw zero
+  events and registered zero `ext.bloc.*` RPCs. Stock Bloc's observability lives
+  inside the app process. What ships instead is the `state` collector reporting
+  `unavailable` with that reason - an agent reading an empty state list for a
+  Bloc app would otherwise conclude the app has no state.
+- **No provider names or values.** Riverpod's event payload is `{offset: N}`,
+  an index into an in-app buffer, with no service extension to resolve it.
+  Reading real state would need `evaluate` against Riverpod's private API,
+  which breaks on a minor version.
 
 ## [0.13.0] - 2026-08-25
 
@@ -696,6 +783,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.18.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.18.0
 [0.17.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.17.0
 [0.16.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.16.0
 [0.15.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.15.0

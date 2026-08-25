@@ -16,63 +16,86 @@ function backlogVm(events: unknown[]): VmService {
   return emitter;
 }
 
-test("state changes are captured from every framework that announces them", async () => {
+test("riverpod activity is recorded, with the offset it actually sent", async () => {
+  const store = new RuntimeStore();
+  await new StateCollector().start(
+    backlogVm([{ extensionKind: "riverpod:new_event", extensionData: { offset: 42 } }]),
+    store,
+  );
+
+  const [event] = store.query({ category: "state" });
+  assert.equal(event.data.framework, "riverpod");
+  assert.equal(event.data.providerRef, 42);
+  assert.equal(event.data.valuesAvailable, false, "the value is never available and must say so");
+  assert.equal(event.eventId.startsWith("stt_"), true);
+});
+
+test("a riverpod event with no usable offset still counts", async () => {
+  const store = new RuntimeStore();
+  await new StateCollector().start(
+    backlogVm([{ extensionKind: "riverpod:new_event", extensionData: {} }]),
+    store,
+  );
+  // The activity happened; only its pointer is missing.
+  assert.equal(store.counts().state, 1);
+  assert.equal(store.query({ category: "state" })[0].data.providerRef, undefined);
+});
+
+test("Bloc changes are captured, attributed to provider — the thing that emitted them", async () => {
+  // Measured against probe/bloc_probe on flutter_bloc 9.1.1: 20 printed Bloc
+  // transitions alongside 1,220 provider:provider_changed events, each burst
+  // following a transition marker. bloc itself posts nothing, but flutter_bloc
+  // depends transitively on provider, which does. Attributing these to "bloc"
+  // would credit a package that sent no event.
   const store = new RuntimeStore();
   const collector = new StateCollector();
   await collector.start(
     backlogVm([
-      // The exact payloads measured on real apps: a pointer, never a value.
-      { extensionKind: "riverpod:new_event", extensionData: { offset: 42 } },
       { extensionKind: "provider:provider_changed", extensionData: { id: "0" } },
-      { extensionKind: "bloc:transition", extensionData: {} },
-      { extensionKind: "Flutter.Frame", extensionData: { elapsed: 8000 } },
+      { extensionKind: "provider:provider_changed", extensionData: { id: "1" } },
     ]),
     store,
   );
 
-  const events = store.query({ category: "state" });
-  assert.equal(events.length, 3, "frames are not state changes");
-  assert.deepEqual(
-    events.map((e) => e.data.framework).sort(),
-    ["bloc", "provider", "riverpod"],
-  );
-  assert.equal(
-    events.every((e) => e.data.valuesAvailable === false),
-    true,
-    "every event must state that the value is not readable",
-  );
-  assert.equal(store.query({ category: "state" })[0].eventId.startsWith("stt_"), true);
+  assert.equal(store.counts().state, 2, "a Bloc app is not invisible");
+  assert.equal(store.query({ category: "state" })[0].data.framework, "provider");
+  assert.match(String(collector.health().detail), /Observing provider/);
 });
 
-test("the opaque pointer is kept, since it distinguishes one provider from another", async () => {
+test("nothing else on the Extension stream is treated as state activity", async () => {
   const store = new RuntimeStore();
   await new StateCollector().start(
     backlogVm([
-      { extensionKind: "provider:provider_changed", extensionData: { id: "7" } },
-      { extensionKind: "riverpod:new_event", extensionData: { offset: 99 } },
+      { extensionKind: "Flutter.Frame", extensionData: { elapsed: 8000 } },
+      { extensionKind: "Flutter.Navigation", extensionData: { route: null } },
+      { extensionKind: "HttpTimelineLoggingStateChange", extensionData: {} },
     ]),
     store,
   );
-  // Newest-first: the riverpod offset, then the provider id. Both kept as the
-  // runtime gave them — a numeric offset and a string id.
-  const refs = store.query({ category: "state" }).map((e) => e.data.providerRef);
-  assert.deepEqual(refs, [99, "7"], "ids and offsets both survive, untouched");
+  assert.equal(store.counts().state, 0);
 });
 
-test("health names the frameworks actually observed, and resets with the session", async () => {
+test("health explains an empty result instead of implying the app has no state", async () => {
   const collector = new StateCollector();
-  // Before anything arrives, silence is ambiguous and must be described as such.
-  assert.match(String(collector.health().detail), /looks identical here/);
+  const quiet = collector.health();
+  assert.equal(quiet.status, "active", "the collector is working; the app is simply quiet");
+  assert.match(String(quiet.detail), /look the same from here/);
+  // The Bloc caveat matters most here: an empty list must never be read as
+  // proof that an app has no blocs.
+  assert.match(String(quiet.detail), /never proves an app has no blocs/);
 
   await collector.start(
-    backlogVm([{ extensionKind: "provider:provider_changed", extensionData: { id: "0" } }]),
+    backlogVm([{ extensionKind: "riverpod:new_event", extensionData: { offset: 1 } }]),
     new RuntimeStore(),
   );
-  assert.match(String(collector.health().detail), /Observing provider/);
+  assert.match(String(collector.health().detail), /Observing riverpod/);
+  assert.match(String(collector.health().detail), /not a provider name or value/);
 
   collector.reset();
-  assert.match(String(collector.health().detail), /looks identical here/);
+  assert.match(String(collector.health().detail), /look the same from here/);
 });
+
+const T = 1_700_000_000_000;
 
 function frames(store: RuntimeStore, count: number, janky: boolean, at: number) {
   for (let i = 0; i < count; i++) {
@@ -118,8 +141,6 @@ function rebuilds(store: RuntimeStore, frameCount: number, at: number) {
   }
 }
 
-const T = 1_700_000_000_000;
-
 test("a state-change burst alongside rebuilds is reported as co-occurrence", () => {
   const store = new RuntimeStore();
   frames(store, 60, false, T);
@@ -127,14 +148,15 @@ test("a state-change burst alongside rebuilds is reported as co-occurrence", () 
   rebuilds(store, 6, T + 10_000);
   stateChanges(store, 120, T + 10_000);
 
-  const finding = diagnosePerformance(store).findings.find((f) => /state change/.test(f.claim));
+  const finding = diagnosePerformance(store).findings.find((f) => /state activity/.test(f.claim));
   assert.ok(finding, "a burst this size should be surfaced");
-  assert.match(finding.claim, /120 provider state change\(s\)/);
-  assert.match(finding.claim, /state changes per rebuilding frame/);
-  assert.ok(finding.strength <= 0.7, "co-occurrence is a lead, never proof");
+  // The claim is about janky frames near state activity, not raw volume — a
+  // falsifiable statement rather than two counts side by side.
+  assert.match(finding.claim, /janky frames .* fell within 1000ms of provider state activity/);
+  assert.ok(finding.strength <= 0.5, "provider churn and expensive builds both follow the same tap");
 
   // The one thing it must never do is name a provider it cannot see.
-  assert.match(finding.fix, /not visible from the runtime/);
+  assert.match(finding.fix, /not observable from here/);
   assert.ok(!/UserProvider|CounterCubit|CounterBloc/.test(finding.claim));
 });
 
@@ -143,10 +165,14 @@ test("a handful of state changes is not a story", () => {
   frames(store, 60, false, T);
   frames(store, 40, true, T + 10_000);
   rebuilds(store, 6, T + 10_000);
-  stateChanges(store, 3, T + 10_000);
+  stateChanges(store, 3, T - 600_000);
 
-  const finding = diagnosePerformance(store).findings.find((f) => /state change/.test(f.claim));
-  assert.equal(finding, undefined, "three changes is noise, not a burst");
+  // Three events an hour before the jank cannot be near it.
+  assert.equal(
+    diagnosePerformance(store).findings.find((f) => /state activity/.test(f.claim)),
+    undefined,
+    "state activity nowhere near the janky frames is not a finding",
+  );
 });
 
 test("limitations distinguish 'no state framework' from 'values unreadable'", () => {

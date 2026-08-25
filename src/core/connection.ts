@@ -6,8 +6,8 @@ import { LogCollector } from "../collectors/logCollector.js";
 import { NavigationCollector } from "../collectors/navigationCollector.js";
 import { NetworkCollector } from "../collectors/networkCollector.js";
 import { RebuildCollector } from "../collectors/rebuildCollector.js";
-import { StateCollector } from "../collectors/stateCollector.js";
 import { RuntimeStore } from "./runtimeStore.js";
+import { StateCollector } from "../collectors/stateCollector.js";
 import { VmService } from "../vm/vmService.js";
 import { diagnoseUnreachable } from "../vm/adb.js";
 

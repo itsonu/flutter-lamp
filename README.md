@@ -62,6 +62,8 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 | `what_changed` | Evidence from the window before a failure, with a timeline. | read-only |
 | `get_navigation` | Current route and recent transitions, with per-route failures. | read-only |
 | `get_rebuilds` | Widget rebuild hotspots resolved to widget, file and line. | read-only |
+| `get_state_activity` | Riverpod provider activity over time, and how often it coincides with build-heavy frames. | read-only |
+| `export_session` | The whole session as versioned JSON — `brief` (diagnoses + cited evidence) or `full`. | read-only |
 | `explain_diagnosis` | Why a diagnosis was reached: resolved evidence, alternatives, gaps. | read-only |
 | `get_capabilities` | Active collectors, tool safety classes, what cannot be observed. | read-only |
 | `runtime_status` | Connection, session, reconnect state, event counts, retention window. | read-only |
