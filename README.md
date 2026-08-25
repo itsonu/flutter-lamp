@@ -56,6 +56,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 | Tool | Purpose | Safety |
 | --- | --- | --- |
 | `connect_vm` | Connect to a running app's Dart VM Service (`ws://` or `http://`). | **mutates** |
+| `ensure_tcp_device` | Android transports; recommend wireless, optionally promote USB. | **mutates** |
 | `runtime_health` | One-call triage — verdict plus exception/network/frame/log/memory summary. | read-only |
 | `what_changed` | Evidence from the window before a failure, with a timeline. | read-only |
 | `get_navigation` | Current route and recent transitions, with per-route failures. | read-only |
@@ -170,6 +171,26 @@ Optional environment variables:
 
 3. Open **http://127.0.0.1:7373** in a browser for the live dashboard — it runs
    alongside the AI, not instead of it.
+
+### Debugging without a cable (Android)
+
+A `flutter run` started over USB loses its VM Service tunnel the moment the
+cable moves; one started over a TCP transport does not. Ask the server which
+transports exist:
+
+```
+ensure_tcp_device                  # read-only: lists transports, recommends one
+ensure_tcp_device { promote: true } # puts a USB-only device on TCP (needs the cable once)
+```
+
+Then launch against the wireless serial it recommends:
+
+```bash
+flutter run -d 192.168.88.3:5555
+```
+
+The cable is only needed for the one-time promotion. Reverse it any time with
+`adb usb`.
 
 ## Live dashboard
 

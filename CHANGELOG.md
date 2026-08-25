@@ -4,6 +4,51 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-08-25
+
+Wireless transports. A debugging session should not end because a cable moved.
+
+### Added
+
+- **`ensure_tcp_device`** - reports Android device transports and recommends
+  one, preferring wireless. Read-only by default; with `promote:true` it runs
+  `adb tcpip` and `adb connect` to put a USB-attached device onto a TCP
+  transport (declared mutating, since it restarts adbd on the device; needs the
+  cable once and not afterwards; reversible with `adb usb`).
+- **`connect_vm` explains failures in transport terms.** A bare
+  `ECONNREFUSED` tells an agent nothing actionable, so a failed connect now
+  also reports whether adb sees a device at all - distinguishing "the device
+  dropped off adb" from "the transport is up, the app is not running" - and
+  flags when every transport is USB.
+- **Reconnection says why it gave up.** After exhausting its attempts the
+  manager records the same transport diagnosis alongside the attempt count.
+- `get_capabilities` reports `transports`, and lists adb device transports
+  among what the server can observe.
+
+### Notes
+
+Wireless is preferred because it is measurably more durable: a `flutter run`
+started on a TCP transport keeps its VM Service tunnel when the cable is
+removed, and one started on USB does not. Verified on a physical device by
+dropping every USB-owned forward mid-session and confirming the VM Service
+stayed reachable.
+
+A stable `ip:port` is recommended over an Android 11+ mDNS serial when both
+exist for the same device: mDNS serials are regenerated and cannot be dialled
+again by address.
+
+Entirely optional and Android-only. With no adb installed the report is
+`adbAvailable:false` with a note that iOS, desktop and web targets are
+unaffected - an absent capability, never a broken setup. adb is invoked with
+`execFile` and argument arrays rather than a shell, and every serial is
+validated before use, because serials arrive from tool input as well as from
+adb's own output.
+
+### Compatibility
+
+Additive: one new tool, plus `transport` on a failed `connect_vm` and
+`transports` in `get_capabilities`. No existing tool renamed or reshaped.
+
 ## [0.14.0] - 2026-08-25
 
 Timeline honesty. The planned timeline/GC collector was killed by its own
@@ -552,6 +597,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.15.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.15.0
 [0.14.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.14.0
 [0.13.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.13.0
 [0.12.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.12.0

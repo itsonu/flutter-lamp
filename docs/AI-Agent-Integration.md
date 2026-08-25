@@ -38,6 +38,13 @@ you one, ask for that single line — never for pasted logs. Suggest
 This tool is **not read-only**: it enables `dart:io` HTTP timeline logging on
 the app.
 
+If it fails, read the `transport` field before blaming the URI: it says whether
+adb sees a device at all, which separates "the device dropped off adb" from
+"the transport is up and the app is not running". On Android, `ensure_tcp_device`
+reports the available transports and recommends a wireless one — a session
+started over USB dies when the cable moves, so prefer the wireless serial when
+suggesting a `flutter run` command.
+
 **`runtime_health`** is the triage call. One request returns a verdict plus
 exception, network, frame, log and memory summaries, each carrying event ids.
 

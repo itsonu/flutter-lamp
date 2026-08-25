@@ -8,6 +8,7 @@ import { NetworkCollector } from "../collectors/networkCollector.js";
 import { RebuildCollector } from "../collectors/rebuildCollector.js";
 import { RuntimeStore } from "./runtimeStore.js";
 import { VmService } from "../vm/vmService.js";
+import { diagnoseUnreachable } from "../vm/adb.js";
 
 export interface ReconnectPolicy {
   /** Delay before the first retry; doubles each attempt. */
@@ -177,14 +178,21 @@ class ConnectionManager {
   private scheduleReconnect(): void {
     const { baseMs, maxMs, maxAttempts } = this.reconnectPolicy;
     if (this.reconnectAttempt >= maxAttempts) {
-      this.store.add({
-        timestamp: Date.now(),
-        source: "system",
-        severity: "error",
-        category: "system",
-        message: `Gave up reconnecting after ${maxAttempts} attempts. Call connect_vm with a fresh URI.`,
-        data: { attempts: maxAttempts },
-      });
+      // Say WHY it is unreachable. Retrying a dead URI eight times and then
+      // reporting only the count leaves the developer to guess whether the
+      // cable moved, the device dropped off adb, or the app exited.
+      void diagnoseUnreachable()
+        .catch(() => [] as string[])
+        .then((transport) => {
+          this.store.add({
+            timestamp: Date.now(),
+            source: "system",
+            severity: "error",
+            category: "system",
+            message: `Gave up reconnecting after ${maxAttempts} attempts. Call connect_vm with a fresh URI.`,
+            data: { attempts: maxAttempts, transport },
+          });
+        });
       this.wantConnection = false;
       return;
     }

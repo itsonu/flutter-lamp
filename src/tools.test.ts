@@ -42,10 +42,11 @@ async function callTool(name: string, args: Record<string, unknown> = {}) {
  * timeline logging on the app; `get_timeline` with recordFrom=true rewrites the
  * VM's recording flags. Everything else only reads.
  */
-const MUTATING = new Set(["connect_vm", "get_timeline"]);
+const MUTATING = new Set(["connect_vm", "get_timeline", "ensure_tcp_device"]);
 
 const EXPECTED = [
   "connect_vm",
+  "ensure_tcp_device",
   "runtime_status",
   "runtime_health",
   "what_changed",

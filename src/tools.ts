@@ -12,6 +12,7 @@ import { rebuildReport } from "./diagnosis/rebuilds.js";
 import { VERSION } from "./version.js";
 import { withInspectorGroup, type IsolateCall } from "./vm/inspectorGroup.js";
 import { timelineStaleness } from "./vm/timelineStaleness.js";
+import { diagnoseUnreachable, promoteToTcp, transportReport } from "./vm/adb.js";
 
 const SEVERITIES = ["debug", "info", "warning", "error", "critical"] as const;
 
@@ -24,6 +25,7 @@ const SEVERITIES = ["debug", "info", "warning", "error", "critical"] as const;
  */
 export const TOOL_SAFETY = {
   connect_vm: "mutating",
+  ensure_tcp_device: "mutating",
   runtime_status: "read-only",
   runtime_health: "read-only",
   what_changed: "read-only",
@@ -91,8 +93,48 @@ export function registerTools(server: McpServer): void {
         const info = await connection.connect(uri);
         return json({ ok: true, ...info, message: "Connected. Collectors active." });
       } catch (err) {
-        return json({ ok: false, error: errMsg(err) });
+        // A bare ECONNREFUSED tells the agent nothing it can act on. Ask adb
+        // whether the device is even attached before blaming the URI.
+        return json({ ok: false, error: errMsg(err), transport: await diagnoseUnreachable() });
       }
+    },
+  );
+
+  server.registerTool(
+    "ensure_tcp_device",
+    {
+      annotations: ann("ensure_tcp_device"),
+      title: "Prefer a wireless device transport",
+      description:
+        "Report Android device transports and recommend one, preferring wireless. A `flutter run` started on a USB transport loses its VM Service tunnel when the cable moves; one started on a TCP transport does not. Read-only by default. With promote:true it runs `adb tcpip` and `adb connect` to put a USB-attached device on a TCP transport — that restarts adbd on the device, needs the cable once, and is reversible with `adb usb`. Android-only: reports adbAvailable:false and changes nothing on iOS, desktop or web targets.",
+      inputSchema: {
+        promote: z
+          .boolean()
+          .default(false)
+          .describe("Put a USB-only device onto a TCP transport. Changes device state."),
+        serial: z
+          .string()
+          .optional()
+          .describe("Which USB device to promote. Defaults to the first promotable one."),
+        port: z.number().int().positive().max(65535).default(5555).describe("Device-side TCP port."),
+      },
+    },
+    async ({ promote, serial, port }) => {
+      const report = await transportReport();
+      if (!promote) return json(report);
+      if (!report.adbAvailable) {
+        return json({ ...report, promotion: { ok: false, detail: "adb is not available on this machine." } });
+      }
+      const target = serial ?? report.promotable[0]?.serial;
+      if (!target) {
+        return json({
+          ...report,
+          promotion: { ok: false, detail: "No USB-only device to promote." },
+        });
+      }
+      const promotion = await promoteToTcp(target, port);
+      // Re-read: promotion changes what transports exist.
+      return json({ ...(await transportReport()), promotion });
     },
   );
 
@@ -501,6 +543,7 @@ export function registerTools(server: McpServer): void {
           reconnecting: status.reconnecting,
         },
         collectors: connection.collectorNames(),
+        transports: await transportReport(),
         // Health per collector: "unavailable" here means the empty evidence an
         // agent sees is blindness on this target, not a quiet app.
         collectorHealth: connection.collectorHealth(),
@@ -513,6 +556,7 @@ export function registerTools(server: McpServer): void {
           "dart:io HTTP requests (covers Dio and package:http)",
           "Widget tree and selected widget (debug builds only)",
           "Route changes via Flutter.Navigation (debug and profile builds)",
+          "Android device transports via adb, when adb is installed",
           "Dart heap and external memory",
           "VM timeline events (on demand)",
         ],
