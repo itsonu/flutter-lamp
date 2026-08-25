@@ -3,6 +3,8 @@ import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { CollectorReport } from "../core/connection.js";
 import { correlate, timelineAround, type TimelineEntry } from "./correlation.js";
 import { routeHistory } from "./navigation.js";
+import { compareWindows, type WindowComparison } from "./comparison.js";
+import { round2 } from "./stats.js";
 
 /**
  * Compact runtime summaries for agents.
@@ -154,6 +156,8 @@ export interface ChangeWindow {
   frames: { total: number; janky: number; worstMs: number | null };
   memory: { from: number | null; to: number | null; deltaMB: number | null };
   timeline: TimelineEntry[];
+  /** Baseline window vs incident window, per dimension. */
+  comparison: WindowComparison;
   notes: string[];
 }
 
@@ -196,6 +200,13 @@ export function whatChanged(
     );
   }
   if (!anchorEvent) notes.push("No exception found; the window ends at the current time.");
+
+  const comparison = compareWindows(store, all, toMs, windowMs);
+  if (!comparison.baselineCovered) {
+    notes.push(
+      "The baseline window predates observation (session start or retention), so change directions are reported as unknown rather than compared against silence.",
+    );
+  }
 
   const inWindow = all.filter((e) => e.timestamp >= fromMs && e.timestamp <= toMs);
   const frames = inWindow.filter((e) => e.category === "frame");
@@ -240,6 +251,7 @@ export function whatChanged(
     },
     memory: { from, to, deltaMB: from !== null && to !== null ? round2(to - from) : null },
     timeline: anchorEvent ? timelineAround(all, anchorEvent, windowMs) : [],
+    comparison,
     notes,
   };
 }
@@ -253,6 +265,4 @@ function summarize(events: RuntimeEvent[]): EventSummary[] {
   }));
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
+

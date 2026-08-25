@@ -4,6 +4,37 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-08-25
+
+Baseline comparison. "What changed before the failure" answered as a
+measurement, not a listing.
+
+### Added
+
+- **`what_changed` compares the incident window against the equal window
+  before it.** A new `comparison` block reports per-dimension changes -
+  exceptions, network volume, network failures, latency p50/p95, jank ratio,
+  log errors and warnings, heap - each with baseline value, incident value, a
+  direction (`new` / `spiked` / `increased` / `decreased` / `unknown`) and
+  citable incident evidence, the latency dimensions citing the single slowest
+  request so the agent can inspect the concrete offender rather than trust a
+  percentile over a small sample.
+- `spiked` means at least 3x baseline - a documented policy threshold, like the
+  diagnosis engine's 70%, chosen so ordinary jitter reads as `increased`.
+- **Uncovered baselines are never compared against silence.** When observation
+  began after the baseline window opened - session started later, or retention
+  dropped it - `baselineCovered` is false, directions become `unknown`, and a
+  note says why. Without this, every count in a young session would read as
+  "new".
+- Unchanged and doubly-empty dimensions are omitted: it is a list of changes.
+- `src/diagnosis/stats.ts` - the percentile/mean/round helpers, extracted from
+  the performance module so window comparison and performance diagnosis cannot
+  drift onto disagreeing percentile definitions.
+
+### Compatibility
+
+Purely additive: `comparison` on `what_changed`. No tool renamed or reshaped.
+
 ## [0.12.0] - 2026-08-25
 
 Observability foundation (Phase A of docs/Observability-Roadmap.md). One rule
@@ -488,6 +519,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.13.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.13.0
 [0.12.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.12.0
 [0.11.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.11.0
 [0.10.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.10.0

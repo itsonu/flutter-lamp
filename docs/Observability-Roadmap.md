@@ -99,10 +99,9 @@ today only network carries one, so there is nothing to join.
 
 ## Phase B — Correlation and comparison
 
-- **Baseline-vs-incident `what_changed`** — compare two windows across
-  exceptions, network latency/failures, frames, memory; emit
-  `new/increased/decreased/spiked` with per-dimension evidence. Extends
-  `what_changed`; no new tool.
+- **Baseline-vs-incident `what_changed`** — DONE (0.13.0). Adjacent equal
+  windows, per-dimension directions with evidence, `unknown` when the baseline
+  predates observation. Extended `what_changed`; no new tool.
 - **Snapshots + `diff_runtime_snapshots`** — deterministic before/after
   comparison; also the verification primitive Phase E remediation needs.
 - **Derived metrics** — error rate, p95 per endpoint, jank ratio, memory growth

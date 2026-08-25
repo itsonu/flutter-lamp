@@ -2,6 +2,7 @@ import { CATEGORIES, type Category, type RuntimeEvent } from "../core/events.js"
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import { correlate, timelineAround, type Correlated, type TimelineEntry } from "./correlation.js";
 import { routeAtIn, routeEventAt } from "./navigation.js";
+import { round2 } from "./stats.js";
 
 export interface EvidenceItem {
   /** Stable id of the captured event this rests on, e.g. `exc_00142`. */
@@ -373,9 +374,7 @@ function toEvidence(e: RuntimeEvent): EvidenceItem {
   };
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
+
 
 function unknown(
   reason: string,

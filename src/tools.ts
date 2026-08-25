@@ -383,7 +383,7 @@ export function registerTools(server: McpServer): void {
       annotations: ann("what_changed"),
       title: "What changed before an incident",
       description:
-        "Evidence from the window leading up to a failure: exceptions, network activity, warning/error logs, connection events, frame and memory deltas, plus a chronological timeline. Anchors on the given eventId, or the most recent exception, or the current time. Network uses interval matching, so a request that started before the window but failed inside it still counts.",
+        "Evidence from the window leading up to a failure, plus a baseline comparison: the incident window measured against the equal window before it, per dimension (exceptions, network volume/failures/latency p50/p95, jank ratio, log errors, memory) with directions new/spiked/increased/decreased and citable evidence. Anchors on the given eventId, or the most recent exception, or the current time. Network uses interval matching, so a request that started before the window but failed inside it still counts. When the baseline predates observation, directions are unknown rather than fabricated.",
       inputSchema: {
         eventId: z
           .string()

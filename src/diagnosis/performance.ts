@@ -2,6 +2,7 @@ import type { RuntimeEvent } from "../core/events.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import { intervalOf } from "./correlation.js";
 import { routeAtIn } from "./navigation.js";
+import { mean, percentile, round2 } from "./stats.js";
 
 export interface RebuildHotspot {
   widget?: string;
@@ -388,17 +389,4 @@ function describeLimitations(
   return out;
 }
 
-function percentile(sorted: number[], q: number): number | null {
-  if (sorted.length === 0) return null;
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1));
-  return round2(sorted[index]);
-}
 
-function mean(values: number[]): number | null {
-  if (values.length === 0) return null;
-  return round2(values.reduce((a, b) => a + b, 0) / values.length);
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}

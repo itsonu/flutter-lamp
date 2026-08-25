@@ -64,6 +64,12 @@ or the most recent exception, or now. Network matching is interval-based, so a
 request that started before the window and failed inside it still appears —
 that is usually the request you want.
 
+Its `comparison` block measures the incident window against the equal window
+before it, per dimension, with directions `new`/`spiked`/`increased`/
+`decreased`. Read `baselineCovered` first: when false, observation began after
+the baseline window opened and every direction is `unknown` — do not report
+"new failures" off an unobserved baseline.
+
 **Targeted `get_*` calls.** Only fetch what you are going to use.
 
 | Question | Tool |
