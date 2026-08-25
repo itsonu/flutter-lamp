@@ -60,8 +60,6 @@ export class RebuildCollector implements Collector {
   }
 
   async start(vm: VmService, store: RuntimeStore, isolateId: string): Promise<void> {
-    await vm.streamListen("Extension");
-
     try {
       // Without widget creation tracking there are no location ids to resolve,
       // so rebuild counts would be anonymous numbers. Say so rather than
@@ -158,6 +156,10 @@ export class RebuildCollector implements Collector {
         },
       });
     });
+
+    // Subscribe last: see the note in frameCollector.ts. The backlog arrives
+    // the moment this resolves, and the handler above must already be in place.
+    await vm.streamListen("Extension");
   }
 
   /** `locations` carries names; prefer it over `newLocations`. */

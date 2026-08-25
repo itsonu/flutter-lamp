@@ -4,6 +4,51 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-08-26
+
+Fixes a bug that silently discarded the entire history of an already-running
+app - the normal case for a tool that attaches to a live process.
+
+### Fixed
+
+- **Collectors subscribed before they listened.** The VM Service, through DDS,
+  delivers a backlog of buffered stream events the instant a subscription is
+  accepted, and that burst arrives before the continuation after
+  `await streamListen` runs. Every collector registered its handler after
+  subscribing, so every one of them dropped the burst. Measured on a physical
+  device: 622 events with the handler registered first, 0 with it registered
+  after. Connecting to an app that had been running for a few minutes captured
+  nothing at all - `runtime_status` reported zeroes across every category while
+  the app was demonstrably producing frames.
+
+  All five collectors now register their handlers before subscribing. Verified
+  live on the same session that had been returning nothing: 111 frames and 5
+  rebuild events captured on connect, where the identical call had returned 0.
+
+### Notes
+
+Found while verifying that a debugging session survives unplugging the USB
+cable. It did not, and chasing why exposed this instead - the failure had been
+invisible because an idle app produces no live events, so an empty result
+looked like a quiet app rather than a dropped backlog.
+
+The regression test reproduces DDS's behaviour with a VM stand-in whose
+`streamListen` flushes a backlog before resolving. Reverting any collector to
+the old ordering fails it, which was checked rather than assumed.
+
+Separately observed and left unexplained: on a physical Android device the VM
+Service delivered no `Stdout`, `Stderr` or `Logging` events while the app was
+emitting `I/flutter` lines to logcat, with handlers registered first. This is
+consistent with Flutter routing `print` through the engine to logcat rather
+than through the Dart VM's stdout, but the app's source was not available to
+confirm which logging API it used, so no claim is made in `get_capabilities`
+yet.
+
+### Compatibility
+
+No API change. Behaviour only: collectors now capture evidence that predates
+the connection.
+
 ## [0.15.0] - 2026-08-25
 
 Wireless transports. A debugging session should not end because a cable moved.
@@ -597,6 +642,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.16.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.16.0
 [0.15.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.15.0
 [0.14.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.14.0
 [0.13.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.13.0

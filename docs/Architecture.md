@@ -146,12 +146,18 @@ Implement `Collector`, register it in the `ConnectionManager` collector list.
 Nothing else changes — the store, the tools and the dashboard pick it up through
 the shared event shape.
 
+**Register the handler before subscribing.** The VM Service delivers a backlog
+of buffered events the moment a subscription is accepted, and that burst lands
+before the code after `await streamListen` runs. Subscribing first discards
+everything the app produced before the session connected — which, for a tool
+that attaches to already-running apps, is most of the evidence.
+
 ```ts
 export class MyCollector implements Collector {
   readonly name = "mine";
   async start(vm: VmService, store: RuntimeStore, isolateId: string) {
-    await vm.streamListen("SomeStream");
     vm.on("stream:SomeStream", (event) => store.add({ /* RuntimeEvent */ }));
+    await vm.streamListen("SomeStream"); // last: the backlog arrives here
   }
 }
 ```

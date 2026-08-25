@@ -16,8 +16,13 @@ export class FrameCollector implements Collector {
   readonly name = "frames";
 
   async start(vm: VmService, store: RuntimeStore): Promise<void> {
-    await vm.streamListen("Extension");
-
+    // Handlers are registered BEFORE subscribing, deliberately. The VM Service
+    // (through DDS) delivers a backlog of buffered stream events the instant a
+    // subscription is accepted, and those arrive before the continuation after
+    // `await streamListen` runs. Subscribing first therefore drops everything
+    // the app produced before this session connected -- measured on a real
+    // device as 622 events lost versus 0 with this ordering, which is the
+    // entire history when attaching to an already-running app.
     vm.on("stream:Extension", (event: any) => {
       if (event?.extensionKind !== "Flutter.Frame") return;
       const d = event.extensionData ?? {};
@@ -45,6 +50,8 @@ export class FrameCollector implements Collector {
         },
       });
     });
+
+    await vm.streamListen("Extension");
   }
 }
 

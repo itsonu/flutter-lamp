@@ -30,10 +30,13 @@ export class LogCollector implements Collector {
   }
 
   async start(vm: VmService, store: RuntimeStore): Promise<void> {
-    await vm.streamListen("Stdout");
-    await vm.streamListen("Stderr");
-    await vm.streamListen("Logging");
-
+    // Handlers are registered BEFORE subscribing, deliberately. The VM Service
+    // (through DDS) delivers a backlog of buffered stream events the instant a
+    // subscription is accepted, and those arrive before the continuation after
+    // `await streamListen` runs. Subscribing first therefore drops everything
+    // the app produced before this session connected -- measured on a real
+    // device as 622 events lost versus 0 with this ordering, which is the
+    // entire history when attaching to an already-running app.
     for (const streamId of ["Stdout", "Stderr"] as const) {
       vm.on(`stream:${streamId}`, (event: any) => {
         if (event?.kind !== "WriteEvent") return;
@@ -76,5 +79,9 @@ export class LogCollector implements Collector {
         },
       });
     });
+
+    await vm.streamListen("Stdout");
+    await vm.streamListen("Stderr");
+    await vm.streamListen("Logging");
   }
 }
