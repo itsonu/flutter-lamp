@@ -371,7 +371,9 @@ export function registerTools(server: McpServer): void {
     },
     async () => {
       const status = connection.status();
-      return json(runtimeHealth(connection.store, status.connected, status.reconnecting));
+      return json(
+        runtimeHealth(connection.store, status.connected, status.reconnecting, connection.collectorHealth()),
+      );
     },
   );
 
@@ -489,6 +491,9 @@ export function registerTools(server: McpServer): void {
           reconnecting: status.reconnecting,
         },
         collectors: connection.collectorNames(),
+        // Health per collector: "unavailable" here means the empty evidence an
+        // agent sees is blindness on this target, not a quiet app.
+        collectorHealth: connection.collectorHealth(),
         tools: Object.entries(TOOL_SAFETY).map(([name, safety]) => ({ name, safety })),
         canObserve: [
           "Dart VM Service streams: Stdout, Stderr, Logging, Extension, Debug",

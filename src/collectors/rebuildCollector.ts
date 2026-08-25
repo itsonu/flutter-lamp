@@ -1,4 +1,4 @@
-import type { Collector } from "./collector.js";
+import type { Collector, CollectorHealth } from "./collector.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { VmService } from "../vm/vmService.js";
 
@@ -48,9 +48,15 @@ const TOP_N = 12;
 export class RebuildCollector implements Collector {
   readonly name = "rebuilds";
   private locations = new Map<number, WidgetLocation>();
+  private state: CollectorHealth = { status: "active" };
+
+  health(): CollectorHealth {
+    return this.state;
+  }
 
   reset(): void {
     this.locations.clear();
+    this.state = { status: "active" };
   }
 
   async start(vm: VmService, store: RuntimeStore, isolateId: string): Promise<void> {
@@ -65,6 +71,11 @@ export class RebuildCollector implements Collector {
         { isolateId },
       );
       if (tracked?.result !== true) {
+        this.state = {
+          status: "unavailable",
+          detail:
+            "Widget creation tracking is off in this build, so rebuilds cannot be attributed to widgets.",
+        };
         store.add({
           timestamp: Date.now(),
           source: "system",
@@ -89,7 +100,11 @@ export class RebuildCollector implements Collector {
         enabled: "true", // the extension expects the string, not a bool
       });
     } catch {
-      return; // no Inspector (release build) — nothing to collect
+      this.state = {
+        status: "unavailable",
+        detail: "Flutter Inspector is unavailable on this target (release build?), so rebuild tracking is off.",
+      };
+      return;
     }
 
     vm.on("stream:Extension", (event: any) => {

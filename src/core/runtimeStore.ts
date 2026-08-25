@@ -87,6 +87,12 @@ class Ring<T> {
     return this.items[(this.head - this.count + this.capacity) % this.capacity];
   }
 
+  /** The most recently written entry, or undefined when empty. */
+  newest(): T | undefined {
+    if (this.count === 0) return undefined;
+    return this.items[(this.head - 1 + this.capacity) % this.capacity];
+  }
+
   clear(): void {
     this.items.fill(undefined);
     this.head = 0;
@@ -102,6 +108,8 @@ export interface RetentionReport {
   evicted: Record<Category, number>;
   /** Epoch ms of the oldest retained event, or null when the store is empty. */
   oldestEventMs: number | null;
+  /** Epoch ms of the newest retained event, or null when the store is empty. */
+  newestEventMs: number | null;
 }
 
 /**
@@ -232,6 +240,7 @@ export class RuntimeStore extends EventEmitter {
     const retained = {} as Record<Category, number>;
     const evicted = {} as Record<Category, number>;
     let oldest: number | null = null;
+    let newest: number | null = null;
     for (const category of CATEGORIES) {
       const ring = this.rings[category];
       capacity[category] = ring.capacity;
@@ -239,8 +248,10 @@ export class RuntimeStore extends EventEmitter {
       evicted[category] = ring.evicted;
       const first = ring.oldest();
       if (first && (oldest === null || first.timestamp < oldest)) oldest = first.timestamp;
+      const last = ring.newest();
+      if (last && (newest === null || last.timestamp > newest)) newest = last.timestamp;
     }
-    return { capacity, retained, evicted, oldestEventMs: oldest };
+    return { capacity, retained, evicted, oldestEventMs: oldest, newestEventMs: newest };
   }
 
   size(): number {
@@ -257,5 +268,14 @@ export class RuntimeStore extends EventEmitter {
   /** Per-category capacities, for capability reporting. */
   capacities(): Record<Category, number> {
     return this.retention().capacity;
+  }
+
+  /** Epoch ms of the newest retained event per category — collector liveness. */
+  newestByCategory(): Record<Category, number | null> {
+    const out = {} as Record<Category, number | null>;
+    for (const category of CATEGORIES) {
+      out[category] = this.rings[category].newest()?.timestamp ?? null;
+    }
+    return out;
   }
 }

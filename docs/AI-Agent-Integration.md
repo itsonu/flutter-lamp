@@ -51,6 +51,14 @@ exception, network, frame, log and memory summaries, each carrying event ids.
 Read `notes`. It says when the numbers are qualified — disconnected, mid-reconnect,
 evidence dropped by retention, network not refreshed.
 
+Read `collectors` before trusting any empty list. A collector that is
+`unavailable` or `degraded` means its evidence is *invisible on this target*,
+not absent from the app — an empty network list under an unavailable network
+collector says nothing about whether requests happened. `diagnose_runtime`'s
+`coverage` field carries the same discipline in structured form: which
+categories have evidence, which are empty, what retention has dropped, and the
+observed window.
+
 **`what_changed`** answers "what happened before this". Anchors on an `eventId`,
 or the most recent exception, or now. Network matching is interval-based, so a
 request that started before the window and failed inside it still appears —

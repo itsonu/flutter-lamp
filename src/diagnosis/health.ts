@@ -1,5 +1,6 @@
 import type { RuntimeEvent } from "../core/events.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
+import type { CollectorReport } from "../core/connection.js";
 import { correlate, timelineAround, type TimelineEntry } from "./correlation.js";
 import { routeHistory } from "./navigation.js";
 
@@ -27,6 +28,8 @@ export interface HealthReport {
   /** The route the user is on, and how long they have been there. */
   currentRoute: { eventId: string; name: string | null; enteredMs: number; exceptions: number } | null;
   retention: ReturnType<RuntimeStore["retention"]>;
+  /** Per-collector health — empty evidence from a non-active collector is blindness, not quiet. */
+  collectors: CollectorReport[];
   /** Anything an agent should know before trusting the numbers above. */
   notes: string[];
 }
@@ -35,6 +38,7 @@ export function runtimeHealth(
   store: RuntimeStore,
   connected: boolean,
   reconnecting = false,
+  collectors: CollectorReport[] = [],
 ): HealthReport {
   const all = store.query({ limit: 5_000 });
   const exceptions = all.filter((e) => e.category === "exception");
@@ -63,6 +67,11 @@ export function runtimeHealth(
   }
   if (Object.values(store.retention().evicted).some((n) => n > 0)) {
     notes.push("Retention limit reached: some older evidence has been dropped.");
+  }
+  for (const c of collectors) {
+    if (c.status !== "active") {
+      notes.push(`Collector "${c.name}" is ${c.status}${c.detail ? `: ${c.detail}` : "."}`);
+    }
   }
 
   return {
@@ -101,6 +110,7 @@ export function runtimeHealth(
     },
     currentRoute: currentRouteOf(store),
     retention: store.retention(),
+    collectors,
     notes,
   };
 }

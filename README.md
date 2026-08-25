@@ -286,6 +286,7 @@ Docs live in [`docs/`](docs/):
 | [Phases](docs/Phases.md) | Roadmap and status |
 | [AI Agent Integration](docs/AI-Agent-Integration.md) | The investigation protocol agents should follow |
 | [Improvement Plan](docs/Improvement-Plan.md) | Current audit and prioritized backlog |
+| [Observability Roadmap](docs/Observability-Roadmap.md) | Architecture target, phases, and explicit rejections |
 | [Releasing](docs/Releasing.md) | How versions are staged, tagged and published |
 | [Design](docs/Design.md) | Dashboard visual and interaction spec |
 | [Implementation Notes](docs/Implementation-Notes.md) | Non-obvious things learned building it |

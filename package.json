@@ -1,6 +1,6 @@
 {
   "name": "flutter-lamp",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Flutter Lamp — an MCP server giving AI live eyes on a running Flutter app over the Dart VM Service: exceptions, logs, network, frames, memory + root-cause diagnosis.",
   "type": "module",
   "license": "MIT",

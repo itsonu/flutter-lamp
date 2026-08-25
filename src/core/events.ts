@@ -35,6 +35,12 @@ export interface RuntimeEvent {
    * Null for events added outside a session (tests, direct store use).
    */
   sessionId: string | null;
+  /**
+   * Identity shared with other events from the same operation, when the
+   * runtime provides one (the dart:io HTTP profile request id today). Absent
+   * when no real identity exists — never invented.
+   */
+  correlationId?: string;
   /** Epoch milliseconds. */
   timestamp: number;
   /** Origin stream/extension, e.g. "Stdout", "Flutter.Error", "Flutter.Frame". */

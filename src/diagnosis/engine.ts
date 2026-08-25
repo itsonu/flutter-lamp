@@ -1,4 +1,4 @@
-import { CATEGORIES, type RuntimeEvent } from "../core/events.js";
+import { CATEGORIES, type Category, type RuntimeEvent } from "../core/events.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import { correlate, timelineAround, type Correlated, type TimelineEntry } from "./correlation.js";
 import { routeAtIn, routeEventAt } from "./navigation.js";
@@ -31,6 +31,22 @@ export interface ConfidenceBreakdown {
   basis: string;
 }
 
+/**
+ * What the diagnosis could and could not see, as structure rather than prose.
+ * `limitations` stays for humans; agents read this.
+ */
+export interface EvidenceCoverage {
+  /** Categories with at least one event in the current session. */
+  present: Category[];
+  /** Categories with none — absence of evidence, not evidence of absence. */
+  empty: Category[];
+  /** Events dropped by retention, per category. */
+  evicted: Record<Category, number>;
+  /** The observed window: oldest and newest retained event, epoch ms. */
+  oldestEventMs: number | null;
+  newestEventMs: number | null;
+}
+
 export interface AlternativeCause {
   rootCause: string;
   strength: number;
@@ -49,6 +65,7 @@ export interface Diagnosis {
   alternativeCauses: AlternativeCause[];
   /** What this diagnosis could not see. */
   limitations: string[];
+  coverage: EvidenceCoverage;
   /** 0..1. Rendered as a percentage; below 0.7 the status is "unknown". */
   confidence: number;
   confidenceBreakdown: ConfidenceBreakdown;
@@ -97,6 +114,7 @@ interface Hypothesis {
 export function diagnose(store: RuntimeStore): Diagnosis {
   const all = store.query({ limit: 2_000 }); // most-recent-first, current session
   const limitations = describeLimitations(store, all);
+  const coverage = coverageOf(store, all);
 
   if (all.length === 0) {
     return unknown(
@@ -104,6 +122,7 @@ export function diagnose(store: RuntimeStore): Diagnosis {
       ["Interact with the running app to generate runtime activity, then diagnose again."],
       limitations,
       0,
+      coverage,
     );
   }
 
@@ -123,6 +142,7 @@ export function diagnose(store: RuntimeStore): Diagnosis {
       ["The app appears healthy. Reproduce the issue while connected, then diagnose again."],
       limitations,
       completeness,
+      coverage,
     );
   }
 
@@ -141,6 +161,7 @@ export function diagnose(store: RuntimeStore): Diagnosis {
       evidence: h.evidence.slice(0, 5).map((e) => e.eventId),
     })),
     limitations,
+    coverage,
     confidence: round2(primary.strength),
     confidenceBreakdown: {
       evidenceStrength: round2(primary.strength),
@@ -295,6 +316,18 @@ function dataCompleteness(store: RuntimeStore, all: RuntimeEvent[]): number {
   return Math.max(0, present / CATEGORIES.length - (anyEvicted ? 0.1 : 0));
 }
 
+function coverageOf(store: RuntimeStore, all: RuntimeEvent[]): EvidenceCoverage {
+  const seen = new Set(all.map((e) => e.category));
+  const retention = store.retention();
+  return {
+    present: CATEGORIES.filter((c) => seen.has(c)),
+    empty: CATEGORIES.filter((c) => !seen.has(c)),
+    evicted: retention.evicted,
+    oldestEventMs: retention.oldestEventMs,
+    newestEventMs: retention.newestEventMs,
+  };
+}
+
 function describeLimitations(store: RuntimeStore, all: RuntimeEvent[]): string[] {
   const out: string[] = [];
   const retention = store.retention();
@@ -349,6 +382,7 @@ function unknown(
   fixes: string[],
   limitations: string[],
   completeness: number,
+  coverage: EvidenceCoverage,
 ): Diagnosis {
   return {
     status: "unknown",
@@ -358,6 +392,7 @@ function unknown(
     timeline: [],
     alternativeCauses: [],
     limitations,
+    coverage,
     confidence: 0.3,
     confidenceBreakdown: {
       evidenceStrength: 0.3,

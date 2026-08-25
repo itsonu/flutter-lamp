@@ -135,6 +135,16 @@ test("get_capabilities states what cannot be observed, not just what can", async
   ]);
 });
 
+test("runtime_health lists every collector with its health", async () => {
+  const health = await callTool("runtime_health");
+  const names = health.collectors.map((c: { name: string }) => c.name).sort();
+  assert.deepEqual(names, ["exceptions", "frames", "logs", "navigation", "network", "rebuilds"]);
+  for (const c of health.collectors) {
+    assert.ok(["active", "degraded", "unavailable"].includes(c.status), `${c.name}: ${c.status}`);
+    assert.equal(typeof c.eventsRetained, "number");
+  }
+});
+
 test("runtime_health answers without a connection instead of throwing", async () => {
   // An agent's first call may land before connect_vm; it should get a verdict,
   // not an error it has to interpret.

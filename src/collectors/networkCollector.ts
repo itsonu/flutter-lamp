@@ -1,4 +1,4 @@
-import type { Collector } from "./collector.js";
+import type { Collector, CollectorHealth } from "./collector.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { Severity } from "../core/events.js";
 import type { VmService } from "../vm/vmService.js";
@@ -20,6 +20,11 @@ export class NetworkCollector implements Collector {
   readonly name = "network";
   /** Request ids already stored as completed, so refresh() stays idempotent. */
   private stored = new Set<string>();
+  private state: CollectorHealth = { status: "active" };
+
+  health(): CollectorHealth {
+    return this.state;
+  }
 
   /**
    * Request ids restart from low numbers in a new app run, so a dedup set kept
@@ -28,6 +33,7 @@ export class NetworkCollector implements Collector {
    */
   reset(): void {
     this.stored.clear();
+    this.state = { status: "active" };
   }
 
   async start(vm: VmService, _store: RuntimeStore, isolateId: string): Promise<void> {
@@ -37,7 +43,13 @@ export class NetworkCollector implements Collector {
         enabled: true,
       });
     } catch {
-      // Extension unavailable (e.g. web target) — get_network will simply find nothing.
+      // Extension unavailable (e.g. web target). get_network will find nothing,
+      // and health says why, so empty is not mistaken for quiet.
+      this.state = {
+        status: "unavailable",
+        detail:
+          "dart:io HTTP profiling is not available on this target. Empty network evidence means requests are invisible here, not that none happened.",
+      };
     }
   }
 
@@ -46,7 +58,12 @@ export class NetworkCollector implements Collector {
     try {
       profile = await vm.call("ext.dart.io.getHttpProfile", { isolateId });
     } catch {
-      return; // profiling not supported on this target
+      this.state = {
+        status: "unavailable",
+        detail:
+          "dart:io HTTP profiling is not available on this target. Empty network evidence means requests are invisible here, not that none happened.",
+      };
+      return;
     }
     const requests: any[] = profile?.requests ?? [];
     for (const r of requests) {
@@ -107,6 +124,7 @@ export class NetworkCollector implements Collector {
 
       store.add({
         timestamp: microsToMs(r.startTime) ?? Date.now(),
+        correlationId: id, // real identity from the runtime, shared with getHttpProfileRequest
         source: "HttpProfile",
         severity,
         category: "network",

@@ -4,6 +4,44 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-08-25
+
+Observability foundation (Phase A of docs/Observability-Roadmap.md). One rule
+drives all three changes: an agent must be able to distinguish "no events" from
+"events are invisible on this target".
+
+### Added
+
+- **Collector health.** Collectors fail politely by design - a missing service
+  extension must not kill the session - but until now they failed silently,
+  so `get_network` returning `[]` on a target without dart:io profiling read
+  exactly like a quiet app. Each collector now reports
+  `active | degraded | unavailable` with a reason written for the agent.
+  Surfaced in `runtime_health` (a `collectors` array, plus a note per
+  non-active collector) and `get_capabilities` (additive `collectorHealth`;
+  `collectors` stays a name list). Health resets per session, so a reconnect
+  onto a more capable target clears stale blindness.
+- **Structured evidence coverage on every diagnosis.** `diagnose_runtime`
+  gains `coverage`: categories present and empty, per-category evicted counts,
+  and the observed window (oldest and newest retained event). `limitations`
+  stays for humans; agents read structure.
+- **`correlationId` on events.** Nullable, set only when the runtime provides a
+  real identity - the dart:io HTTP profile request id today. Never invented;
+  every other source leaves it absent.
+- **`docs/Observability-Roadmap.md`** - the architecture audit: what already
+  exists mapped to where it lives, Phase A-E sequencing, and explicit
+  rejections with reasons (store indexes rejected at current scale with the
+  0.3.0 benchmark as evidence; monotonic timestamps deferred until a stored
+  source exists rather than shipping an always-null field; an
+  observed/inferred enum rejected because everything in the store is observed
+  by construction).
+
+### Compatibility
+
+Purely additive: `collectors` on `runtime_health`, `collectorHealth` on
+`get_capabilities`, `coverage` on `diagnose_runtime`, `newestEventMs` in
+retention reports, optional `correlationId` on events.
+
 ## [0.11.0] - 2026-08-25
 
 Widget rebuild attribution. First release validated against a real app on a
@@ -450,6 +488,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.12.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.12.0
 [0.11.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.11.0
 [0.10.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.10.0
 [0.9.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.9.0

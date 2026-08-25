@@ -1,4 +1,5 @@
-import type { Collector } from "../collectors/collector.js";
+import type { Collector, CollectorStatus } from "../collectors/collector.js";
+import type { Category } from "./events.js";
 import { ExceptionCollector } from "../collectors/exceptionCollector.js";
 import { FrameCollector } from "../collectors/frameCollector.js";
 import { LogCollector } from "../collectors/logCollector.js";
@@ -16,6 +17,25 @@ export interface ReconnectPolicy {
   /** Give up after this many consecutive failures. */
   maxAttempts: number;
 }
+
+/** One collector's health joined with what the store shows it has produced. */
+export interface CollectorReport {
+  name: string;
+  status: CollectorStatus;
+  detail?: string;
+  eventsRetained: number;
+  lastEventMs: number | null;
+}
+
+/** Which store category each collector writes, for liveness reporting. */
+const COLLECTOR_CATEGORY: Record<string, Category> = {
+  logs: "log",
+  exceptions: "exception",
+  frames: "frame",
+  network: "network",
+  navigation: "navigation",
+  rebuilds: "rebuild",
+};
 
 export interface ConnectionStatus {
   connected: boolean;
@@ -69,6 +89,25 @@ class ConnectionManager {
   /** Names of the registered collectors, for capability reporting. */
   collectorNames(): string[] {
     return this.collectors.map((c) => c.name);
+  }
+
+  /**
+   * Per-collector health: whether the collector can see its domain on this
+   * target, plus what the store shows it has produced. This is how an agent
+   * distinguishes "no events" from "events are invisible here".
+   */
+  collectorHealth(): CollectorReport[] {
+    const counts = this.store.counts();
+    const newest = this.store.newestByCategory();
+    return this.collectors.map((c) => {
+      const category = COLLECTOR_CATEGORY[c.name];
+      return {
+        name: c.name,
+        ...(c.health?.() ?? { status: "active" as const }),
+        eventsRetained: category ? counts[category] : 0,
+        lastEventMs: category ? newest[category] : null,
+      };
+    });
   }
 
   async connect(uri: string): Promise<{ wsUri: string; isolateId: string; collectors: string[]; sessionId: string }> {
