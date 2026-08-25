@@ -36,6 +36,8 @@ const FRAME_BUDGET_MS = 16.67;
 const MIN_FRAMES = 20;
 /** A frame is "during" a request if it lands inside the request's span. */
 const ROUTE_SETTLE_MS = 1_000;
+/** State activity this close to a janky frame counts as co-occurring. */
+const STATE_WINDOW_MS = 1_000;
 
 export interface PerformanceFinding {
   claim: string;
@@ -115,6 +117,7 @@ export function diagnosePerformance(store: RuntimeStore): PerformanceDiagnosis {
     phaseFinding(janky, stats),
     networkFinding(all, janky),
     routeFinding(all, janky),
+    stateFinding(all, janky),
     memoryFinding(all, stats),
   ].filter((f): f is PerformanceFinding => f !== null);
 
@@ -299,6 +302,44 @@ function routeFinding(all: RuntimeEvent[], janky: RuntimeEvent[]): PerformanceFi
       ...navigations.slice(0, 2).map((e) => e.eventId),
     ],
     fix: "The cost is in building a new screen, not in steady-state rendering. Defer heavy work past the first frame with addPostFrameCallback, precache images, and keep the initial subtree small.",
+  };
+}
+
+/**
+ * Janky frames sitting next to state-management activity.
+ *
+ * Deliberately weak, and deliberately unnamed. Riverpod's VM Service event
+ * carries no provider name (see `src/collectors/stateCollector.ts`), so this
+ * can say "state churn coincided with the jank" and no more — and churn and
+ * jank both following the same tap is as consistent with the evidence as one
+ * causing the other. It exists because knowing *where* to look next (get_rebuilds,
+ * then the providers those widgets watch) is worth more than silence.
+ */
+function stateFinding(all: RuntimeEvent[], janky: RuntimeEvent[]): PerformanceFinding | null {
+  const stateEvents = all
+    .filter((e) => e.category === "state")
+    .sort((a, b) => a.timestamp - b.timestamp);
+  if (stateEvents.length === 0) return null;
+
+  const near = janky.filter((frame) =>
+    stateEvents.some((s) => Math.abs(s.timestamp - frame.timestamp) <= STATE_WINDOW_MS),
+  );
+  const ratio = near.length / janky.length;
+  if (near.length < 3 || ratio < 0.4) return null;
+
+  const frameworks = [...new Set(stateEvents.map((e) => String(e.data.framework)))].join(", ");
+  return {
+    claim:
+      `${near.length} of ${janky.length} janky frames (${Math.round(ratio * 100)}%) fell within ` +
+      `${STATE_WINDOW_MS}ms of ${frameworks} state activity (${stateEvents.length} events).`,
+    // Below the route and network findings: this is co-occurrence between two
+    // things a single user action would produce together.
+    strength: 0.5,
+    evidence: [
+      ...near.slice(0, 5).map((e) => e.eventId),
+      ...stateEvents.slice(0, 3).map((e) => e.eventId),
+    ],
+    fix: "Provider names are not observable from here, so confirm before acting: call get_rebuilds to see which widgets rebuilt in these frames, then narrow what those widgets watch (select/family providers) so one change stops rebuilding the whole subtree.",
   };
 }
 

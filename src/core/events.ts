@@ -15,7 +15,16 @@ export type Severity = "debug" | "info" | "warning" | "error" | "critical";
  * Every event category. Declared as a value so the store can build one buffer
  * per category and iterate them; the type is derived so the two cannot drift.
  */
-export const CATEGORIES = ["log", "exception", "frame", "rebuild", "network", "navigation", "system"] as const;
+export const CATEGORIES = [
+  "log",
+  "exception",
+  "frame",
+  "rebuild",
+  "network",
+  "navigation",
+  "state",
+  "system",
+] as const;
 
 export type Category = (typeof CATEGORIES)[number];
 
@@ -61,6 +70,7 @@ export const CATEGORY_PREFIX: Record<Category, string> = {
   rebuild: "rbd",
   network: "net",
   navigation: "nav",
+  state: "stt",
   system: "sys",
 };
 

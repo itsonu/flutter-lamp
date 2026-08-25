@@ -7,6 +7,7 @@ import { NavigationCollector } from "../collectors/navigationCollector.js";
 import { NetworkCollector } from "../collectors/networkCollector.js";
 import { RebuildCollector } from "../collectors/rebuildCollector.js";
 import { RuntimeStore } from "./runtimeStore.js";
+import { StateCollector } from "../collectors/stateCollector.js";
 import { VmService } from "../vm/vmService.js";
 
 export interface ReconnectPolicy {
@@ -35,6 +36,7 @@ const COLLECTOR_CATEGORY: Record<string, Category> = {
   network: "network",
   navigation: "navigation",
   rebuilds: "rebuild",
+  state: "state",
 };
 
 export interface ConnectionStatus {
@@ -71,6 +73,7 @@ class ConnectionManager {
     new NetworkCollector(),
     new NavigationCollector(),
     new RebuildCollector(),
+    new StateCollector(),
   ];
 
   /** Tunable so tests do not wait on real backoff. */

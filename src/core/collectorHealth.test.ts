@@ -154,6 +154,6 @@ test("an empty store still reports coverage instead of omitting it", () => {
   const { coverage, status } = diagnose(new RuntimeStore());
   assert.equal(status, "unknown");
   assert.deepEqual(coverage.present, []);
-  assert.equal(coverage.empty.length, 7);
+  assert.equal(coverage.empty.length, 8);
   assert.equal(coverage.oldestEventMs, null);
 });

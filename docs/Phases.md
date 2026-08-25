@@ -16,8 +16,8 @@ Status of each phase. Detail on what is planned next, and why, lives in
 | 7 | Correlation engine — fold memory, timeline and frames into diagnosis | Planned |
 | — | Evidence intelligence — stable IDs, temporal correlation, `runtime_health`, `what_changed`, `explain_diagnosis` | Planned |
 | — | Navigation intelligence — current route, transitions, route-scoped evidence | Planned |
-| — | State management — optional Riverpod and Bloc adapters, rebuild diagnosis | Planned |
-| — | Session recording — versioned export for bug reports and offline analysis | Planned |
+| — | State management — Riverpod activity correlation; Bloc measured as unobservable | Shipped |
+| — | Session recording — versioned export for bug reports and offline analysis | Shipped |
 | 9 | Knowledge graph over runtime evidence | Exploratory |
 | 10 | Proposed fixes with human approval | Exploratory |
 

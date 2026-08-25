@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { connection } from "./core/connection.js";
 import { diagnose } from "./diagnosis/engine.js";
+import { exportSession } from "./export/session.js";
 import { getDashboardInfo } from "./dashboard/server.js";
 import { redactionEnabled } from "./core/redaction.js";
 import type { Severity } from "./core/events.js";
@@ -9,6 +10,7 @@ import { runtimeHealth, whatChanged } from "./diagnosis/health.js";
 import { routeHistory } from "./diagnosis/navigation.js";
 import { diagnosePerformance } from "./diagnosis/performance.js";
 import { rebuildReport } from "./diagnosis/rebuilds.js";
+import { stateActivity } from "./diagnosis/stateActivity.js";
 import { VERSION } from "./version.js";
 import { withInspectorGroup, type IsolateCall } from "./vm/inspectorGroup.js";
 
@@ -28,7 +30,9 @@ export const TOOL_SAFETY = {
   what_changed: "read-only",
   get_navigation: "read-only",
   get_rebuilds: "read-only",
+  get_state_activity: "read-only",
   get_capabilities: "read-only",
+  export_session: "read-only",
   get_dashboard_url: "read-only",
   get_logs: "read-only",
   get_exceptions: "read-only",
@@ -440,6 +444,29 @@ export function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "get_state_activity",
+    {
+      annotations: ann("get_state_activity"),
+      title: "State-management activity",
+      description:
+        "How much Riverpod provider activity the app is doing and when, plus how often build-heavy frames coincide with it — use with get_rebuilds to answer 'is this rebuild storm driven by state churn'. Reports counts and timing only: Riverpod's VM Service event carries an app-side buffer offset with no provider name or value, so none is reported. Bloc and Cubit post nothing to the VM Service and are invisible here, which this says explicitly rather than returning a misleading zero.",
+      inputSchema: {
+        buckets: z
+          .number()
+          .int()
+          .positive()
+          .max(60)
+          .default(5)
+          .describe("How many of the busiest one-second buckets to return."),
+      },
+    },
+    async ({ buckets }) => {
+      connection.requireConnectedOrThrow();
+      return json(stateActivity(connection.store, buckets));
+    },
+  );
+
+  server.registerTool(
     "explain_diagnosis",
     {
       annotations: ann("explain_diagnosis"),
@@ -468,6 +495,39 @@ export function registerTools(server: McpServer): void {
         missingEvidence: missingEvidenceFor(diagnosis),
         limitations: diagnosis.limitations,
       });
+    },
+  );
+
+  server.registerTool(
+    "export_session",
+    {
+      annotations: ann("export_session"),
+      title: "Export the debugging session",
+      description:
+        "The whole session as one versioned JSON artifact: metadata, per-collector health, retention, the captured events, and every diagnosis (runtime, performance, navigation, rebuilds). Use mode 'brief' for the smallest sufficient context — the diagnoses plus only the events their evidence cites — and 'full' to archive everything retained, for a bug report, offline analysis or a regression fixture. Credentials are already redacted at capture, so nothing here was ever stored raw.",
+      inputSchema: {
+        mode: z
+          .enum(["full", "brief"])
+          .default("brief")
+          .describe("'brief': diagnoses plus only the cited events. 'full': everything retained."),
+      },
+    },
+    async ({ mode }) => {
+      connection.requireConnectedOrThrow();
+      await connection.refreshPullCollectors();
+      const status = connection.status();
+      return json(
+        exportSession(
+          connection.store,
+          {
+            connected: status.connected,
+            sessionId: status.sessionId,
+            wsUri: status.wsUri,
+            collectors: connection.collectorHealth(),
+          },
+          { mode },
+        ),
+      );
     },
   );
 
@@ -503,6 +563,7 @@ export function registerTools(server: McpServer): void {
           "dart:io HTTP requests (covers Dio and package:http)",
           "Widget tree and selected widget (debug builds only)",
           "Route changes via Flutter.Navigation (debug and profile builds)",
+          "Riverpod provider activity — timing and volume only, with no provider name or value",
           "Dart heap and external memory",
           "VM timeline events (on demand)",
         ],
@@ -513,7 +574,8 @@ export function registerTools(server: McpServer): void {
           "Evidence older than the retention window",
           "Redacted credential values (headers, sensitive query parameters, tokens in text)",
           "CPU samples and GC events — a slow build can be traced to a widget, but not to a function",
-          "Riverpod/Bloc state and provider changes — not implemented",
+          "Riverpod provider names and values — its VM Service event carries only an app-side buffer offset, and no ext.riverpod.* RPC exists to resolve it",
+          "Bloc and Cubit entirely — stock bloc posts nothing to the VM Service (measured against bloc 9.1.1), so an empty state result says nothing about whether the app uses Bloc",
         ],
         configuration: {
           redaction: redactionEnabled() ? "on" : "off (FLUTTER_LAMP_REDACT=off)",

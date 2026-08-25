@@ -305,3 +305,40 @@ test("dropped frames are declared, so percentages are not read as whole-session"
   const { limitations } = diagnosePerformance(store);
   assert.match(limitations[0], /dropped by retention/);
 });
+
+test("state activity beside janky frames is reported, without naming a provider", () => {
+  const store = new RuntimeStore();
+  frames(store, { count: 40 });
+  const janky = frames(store, { count: 12, janky: true, buildMs: 30, at: T + 5_000 });
+
+  // Provider activity interleaved with the janky frames, as measured from
+  // probe/riverpod_probe: an offset and nothing else.
+  for (let i = 0; i < 12; i++) {
+    store.add({
+      timestamp: T + 5_000 + i * 16,
+      source: "riverpod:new_event",
+      severity: "debug",
+      category: "state",
+      message: "Riverpod provider activity",
+      data: { framework: "riverpod", offset: i },
+    });
+  }
+
+  const result = diagnosePerformance(store);
+  const finding = result.findings.find((f) => f.claim.includes("state activity"));
+  assert.ok(finding, "state co-occurrence should be reported");
+  assert.match(finding.claim, /riverpod/);
+  assert.ok(finding.strength < 0.6, "co-occurrence must rank below the causal findings");
+  assert.ok(finding.evidence.some((id) => janky.includes(id)));
+  // No provider name exists, so none may appear in the fix either.
+  assert.match(finding.fix, /not observable/);
+});
+
+test("no state finding when nothing posted state activity", () => {
+  const store = new RuntimeStore();
+  frames(store, { count: 40 });
+  frames(store, { count: 12, janky: true, buildMs: 30, at: T + 5_000 });
+
+  const result = diagnosePerformance(store);
+  assert.ok(!result.findings.some((f) => f.claim.includes("state activity")));
+});

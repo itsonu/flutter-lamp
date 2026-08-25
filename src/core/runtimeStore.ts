@@ -43,6 +43,9 @@ export const DEFAULT_CAPACITIES: Record<Category, number> = {
   // Route changes are infrequent and each one scopes everything after it, so a
   // small buffer covers a long session.
   navigation: 500,
+  // State-management activity is roughly as frequent as frames on a busy
+  // screen — Riverpod posted ~1.4 events/second under the probe app's workload.
+  state: 1_000,
   system: 500,
 };
 
