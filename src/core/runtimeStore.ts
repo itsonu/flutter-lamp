@@ -40,6 +40,9 @@ export const DEFAULT_CAPACITIES: Record<Category, number> = {
   frame: 1_000,
   // One event per rendered frame, like frames themselves.
   rebuild: 1_000,
+  // Provider changes can burst hard during a rebuild storm, which is exactly
+  // when they matter, so this needs room comparable to frames.
+  state: 2_000,
   // Route changes are infrequent and each one scopes everything after it, so a
   // small buffer covers a long session.
   navigation: 500,

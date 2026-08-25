@@ -556,6 +556,7 @@ export function registerTools(server: McpServer): void {
           "dart:io HTTP requests (covers Dio and package:http)",
           "Widget tree and selected widget (debug builds only)",
           "Route changes via Flutter.Navigation (debug and profile builds)",
+          "State-management activity (Riverpod, Provider, Bloc) — timing and volume only",
           "Android device transports via adb, when adb is installed",
           "Dart heap and external memory",
           "VM timeline events (on demand)",
@@ -567,7 +568,7 @@ export function registerTools(server: McpServer): void {
           "Evidence older than the retention window",
           "Redacted credential values (headers, sensitive query parameters, tokens in text)",
           "CPU samples and GC events — a slow build can be traced to a widget, but not to a function",
-          "Riverpod/Bloc state and provider changes — not implemented",
+          "State values and provider names — Riverpod and Provider broadcast only an opaque change pointer, and register no service extension to resolve it",
         ],
         configuration: {
           redaction: redactionEnabled() ? "on" : "off (FLUTTER_LAMP_REDACT=off)",

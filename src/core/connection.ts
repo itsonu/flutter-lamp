@@ -6,6 +6,7 @@ import { LogCollector } from "../collectors/logCollector.js";
 import { NavigationCollector } from "../collectors/navigationCollector.js";
 import { NetworkCollector } from "../collectors/networkCollector.js";
 import { RebuildCollector } from "../collectors/rebuildCollector.js";
+import { StateCollector } from "../collectors/stateCollector.js";
 import { RuntimeStore } from "./runtimeStore.js";
 import { VmService } from "../vm/vmService.js";
 import { diagnoseUnreachable } from "../vm/adb.js";
@@ -36,6 +37,7 @@ const COLLECTOR_CATEGORY: Record<string, Category> = {
   network: "network",
   navigation: "navigation",
   rebuilds: "rebuild",
+  state: "state",
 };
 
 export interface ConnectionStatus {
@@ -72,6 +74,7 @@ class ConnectionManager {
     new NetworkCollector(),
     new NavigationCollector(),
     new RebuildCollector(),
+    new StateCollector(),
   ];
 
   /** Tunable so tests do not wait on real backoff. */

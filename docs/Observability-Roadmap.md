@@ -155,7 +155,7 @@ today only network carries one, so there is nothing to join.
 
 ## Phase E — Advanced
 
-- Riverpod activity collector — measured constraint (2026-08-25): posts
+- Riverpod/Provider/Bloc activity collector — DONE (0.17.0). Measured: posts
   `riverpod:new_event {offset}` with **no** `ext.riverpod.*` RPC, so activity
   can be counted and correlated with rebuild storms; values cannot be read.
   Bloc unmeasured, therefore unbuilt.

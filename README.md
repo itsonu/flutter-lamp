@@ -44,6 +44,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 - 🌐 **Network capture** via `dart:io` profiling — covers Dio & `package:http`, no interceptor needed
 - 🎞️ **Frame timings** with jank detection, percentiles, and a build-vs-raster verdict
 - 🧭 **Route awareness** — current screen, transitions, and failures attributed to the screen they happened on
+- 🧠 **State-management activity** — Riverpod, Provider and Bloc churn correlated with rebuild storms
 - 🔁 **Widget rebuild attribution** — which widget rebuilt, how often, at which file and line, with your code ranked apart from package code
 - 🧬 **Widget tree & selected-widget** snapshots from the Inspector
 - 🧮 **Memory** (Dart heap / external) and **VM timeline** events

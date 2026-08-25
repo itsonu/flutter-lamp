@@ -146,6 +146,12 @@ export function compareWindows(
   );
   add("jankPercent", ratio(baseline), ratio(incident), iJank.map((e) => e.eventId));
 
+  // State-management activity. Volume only: the frameworks broadcast that a
+  // change happened, never what changed.
+  const isState = (e: RuntimeEvent) => e.category === "state";
+  const iState = count(incident, isState);
+  add("stateChanges", count(baseline, isState).length, iState.length, iState.map((e) => e.eventId));
+
   // Logs by severity
   const logsAt = (events: RuntimeEvent[], severities: string[]) =>
     count(events, (e) => e.category === "log" && severities.includes(e.severity));

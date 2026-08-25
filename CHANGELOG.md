@@ -4,6 +4,60 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-08-26
+
+State-management observability - the P2 item that had been blocked on
+measurement since 0.11.0, now measured and built to what the runtime actually
+exposes.
+
+### Added
+
+- **`StateCollector`** - captures state-change activity from Riverpod, Provider
+  and Bloc, in a new `state` category. Measured against live Riverpod and
+  Provider/Bloc apps on a physical device rather than assumed:
+
+      riverpod:new_event        { offset: 42 }
+      provider:provider_changed { id: "0" }
+
+  Both announce on the `Extension` stream; neither carries the state, and
+  neither registers a service extension to resolve the pointer. Bloc is
+  included by observation: flutter_bloc builds on provider, so a Bloc app's
+  changes arrive as `provider:provider_changed`.
+- **`diagnose_performance` correlates state churn with rebuild storms** - the
+  question that motivated the feature. Against the live Bloc probe: *"2000
+  provider state change(s) accompanied 10416 rebuild(s) across 59 frame(s) -
+  about 33.9 state changes per rebuilding frame."* Scored as co-occurrence
+  (0.55-0.7), never as cause.
+- `what_changed` gains a `stateChanges` dimension, so a state burst shows up in
+  the baseline comparison like any other signal.
+- Collector health names the frameworks actually observed.
+
+### Notes
+
+**What this deliberately does not do is name a provider.** Values and provider
+names are not obtainable through the VM Service, and reading them would need
+eval-based introspection into package internals that breaks on every version
+bump. The finding says how much state churned and when, points at the busiest
+widget in your own code, and sends you to the DevTools provider/Bloc inspector
+for the name. `limitations` states this on every run, and distinguishes "no
+state-management activity observed" from "observed, but values unreadable" -
+an app with no such package looks identical to one that simply has not changed
+state.
+
+Two earlier observations were resolved along the way. `Stdout` **does** work on
+Android - the 0.16.0 note about missing log events was app-specific (the app
+under test contained no print calls; the `I/flutter` lines came from other apps
+sharing the device log). And a debug Flutter app announces its VM Service URI,
+auth token included, to logcat at startup - so `flutter run` is not the only
+source of a connectable URI, contrary to the limitation recorded in 0.15.0.
+Automatic discovery from logcat is a follow-up, not in this release.
+
+### Compatibility
+
+Additive: a new `state` category in `runtime_status.byCategory`, retention and
+coverage reports; a new dimension in `what_changed`; a new finding in
+`diagnose_performance`. No tool renamed or reshaped.
+
 ## [0.16.0] - 2026-08-26
 
 Fixes a bug that silently discarded the entire history of an already-running
@@ -642,6 +696,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.17.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.17.0
 [0.16.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.16.0
 [0.15.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.15.0
 [0.14.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.14.0

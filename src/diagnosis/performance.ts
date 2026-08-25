@@ -112,6 +112,7 @@ export function diagnosePerformance(store: RuntimeStore): PerformanceDiagnosis {
 
   const findings = [
     rebuildFinding(hotspots, all, stats),
+    stateFinding(all, hotspots),
     phaseFinding(janky, stats),
     networkFinding(all, janky),
     routeFinding(all, janky),
@@ -183,6 +184,44 @@ function rebuildHotspots(all: RuntimeEvent[]): RebuildHotspot[] {
 
 function describe(h: RebuildHotspot): string {
   return [h.widget, h.line ? `${h.file}:${h.line}` : h.file].filter(Boolean).join(" at ");
+}
+
+/**
+ * State changes arriving alongside a rebuild storm.
+ *
+ * This is the classic cause of needless rebuilds — a provider invalidating far
+ * more often than the UI needs. What can be said is the volume and the timing;
+ * what cannot is *which* provider, because neither Riverpod nor Provider
+ * exposes that through the VM Service. The claim stops where the evidence does.
+ */
+function stateFinding(all: RuntimeEvent[], hotspots: RebuildHotspot[]): PerformanceFinding | null {
+  const changes = all.filter((e) => e.category === "state");
+  const rebuildEvents = all.filter((e) => e.category === "rebuild");
+  if (changes.length < 10 || rebuildEvents.length === 0) return null;
+
+  const totalRebuilds = rebuildEvents.reduce((sum, e) => sum + (Number(e.data.totalRebuilds) || 0), 0);
+  if (totalRebuilds === 0) return null;
+
+  const frameworks = [...new Set(changes.map((e) => String(e.data.framework)))].join(", ");
+  const perRebuildFrame = Math.round((changes.length / rebuildEvents.length) * 10) / 10;
+  const mine = hotspots.find((h) => h.appCode);
+
+  return {
+    claim:
+      `${changes.length} ${frameworks} state change(s) accompanied ${totalRebuilds} rebuild(s) across ` +
+      `${rebuildEvents.length} frame(s) — about ${perRebuildFrame} state changes per rebuilding frame.`,
+    // Co-occurrence, and scored as such. High volume is a lead worth following,
+    // not proof that the state changes caused the rebuilds.
+    strength: perRebuildFrame >= 5 ? 0.7 : 0.55,
+    evidence: [
+      ...changes.slice(0, 3).map((e) => e.eventId),
+      ...rebuildEvents.slice(0, 2).map((e) => e.eventId),
+    ],
+    fix:
+      `State is changing often enough to be worth checking as the rebuild driver` +
+      (mine ? `, starting at ${mine.widget ?? mine.file}` : "") +
+      ". Narrow what each widget watches — select or listen to the single field it needs rather than the whole object. Which provider is responsible is not visible from the runtime; the DevTools provider/Bloc inspector can name it.",
+  };
 }
 
 /** Name the widget behind a build-heavy profile, with its source location. */
@@ -366,6 +405,15 @@ function describeLimitations(
     "GC events are not observable: the VM timeline is fetched on demand and not stored, so garbage-collection pauses cannot be ruled in or out.",
     "Frames are only captured while connected, and older ones roll out of the retention window.",
   ];
+  if (!store.counts().state) {
+    out.push(
+      "No state-management activity observed. Riverpod, Provider and Bloc announce changes on the Extension stream; an app using none of them looks identical to one that simply has not changed state.",
+    );
+  } else {
+    out.push(
+      "State changes are counted, never read: neither Riverpod nor Provider exposes values or provider names through the VM Service, so no claim is made about which provider is responsible.",
+    );
+  }
   if (haveRebuilds) {
     out.push(
       "Rebuild totals cover the busiest locations in each frame, not every rebuild — the long tail is counted but not itemised.",
