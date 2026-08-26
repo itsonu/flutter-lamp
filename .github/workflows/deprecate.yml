@@ -1,0 +1,99 @@
+name: Deprecate a published version
+
+# Marks a published version deprecated, so `npm install flutter-lamp@<that>`
+# warns instead of silently handing someone a version we know is bad.
+#
+# This exists because 0.18.0 shipped a credential leak. A package that
+# publishes on a schedule can ship a bad version faster than a human notices,
+# so withdrawing one has to be as automated as releasing one — and for the same
+# reason: no long-lived npm token exists anywhere, so there is nothing to leak
+# and nothing a person has to keep on their laptop to clean up a mistake.
+#
+# Deprecation is reversible: an empty message un-deprecates. Nothing is
+# unpublished, so anyone who already depends on the version keeps working.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to deprecate, e.g. 0.18.0"
+        required: true
+      message:
+        description: "Why. Shown on install. Empty string un-deprecates."
+        required: true
+
+permissions:
+  contents: read
+  id-token: write # same OIDC exchange the release job uses
+
+concurrency:
+  group: npm-write
+  cancel-in-progress: false
+
+jobs:
+  deprecate:
+    if: github.repository == 'itsonu/flutter-lamp'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Refuse to deprecate what is not there
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version }}"
+          if ! npm view "flutter-lamp@$version" version >/dev/null 2>&1; then
+            echo "::error::flutter-lamp@$version is not published — nothing to deprecate"
+            exit 1
+          fi
+          # Deprecating the version people install by default would be a
+          # self-inflicted outage. Withdraw it by publishing a fix first.
+          latest="$(npm view flutter-lamp dist-tags.latest)"
+          if [ "$version" = "$latest" ]; then
+            echo "::error::$version is the current latest. Publish a replacement first."
+            exit 1
+          fi
+          echo "flutter-lamp@$version is published, and latest is $latest — safe to mark."
+
+      - name: Deprecate
+        env:
+          # Fallback only, exactly as in release.yml. Unset here, which means
+          # the OIDC path below is what actually runs.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version }}"
+
+          # npm >= 11.5.1 for the OIDC exchange; Node 22 bundles an older one.
+          npm install -g npm@latest >/dev/null 2>&1 || echo "::warning::Could not upgrade npm."
+          echo "npm $(npm --version)"
+
+          if npm deprecate "flutter-lamp@$version" "${{ inputs.message }}"; then
+            echo "Deprecated flutter-lamp@$version." >> "$GITHUB_STEP_SUMMARY"
+          else
+            # Trusted publishing grants a credential scoped to `npm publish`.
+            # If npm does not extend it to deprecate, say so plainly rather
+            # than leaving a green run that changed nothing.
+            echo "::error::npm rejected the deprecate. The trusted publisher's allowed action is 'npm publish', which may not cover this. Run it locally after 'npm login', or add an automation token as NPM_TOKEN."
+            exit 1
+          fi
+
+      - name: Confirm npm recorded it
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version }}"
+          for attempt in 1 2 3 4 5; do
+            got="$(npm view "flutter-lamp@$version" deprecated 2>/dev/null || true)"
+            if [ -n "$got" ]; then
+              echo "npm reports: $got"
+              echo "Verified: flutter-lamp@$version is deprecated." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::npm still reports no deprecation for $version"
+          exit 1
