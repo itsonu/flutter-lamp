@@ -8,7 +8,7 @@ confidently wrong is worse than one that is missing.
 | App | Package | What it proves |
 | --- | --- | --- |
 | `riverpod_probe` | `flutter_riverpod` | Riverpod posts `riverpod:new_event` on the `Extension` stream, payload `{offset: N}`, no `ext.riverpod.*` RPC |
-| `bloc_probe` | `flutter_bloc` | Stock `bloc` posts **nothing** itself — no events, no `ext.bloc.*` RPC. But `flutter_bloc` 9.1.1 depends transitively on `provider`, which posts `provider:provider_changed`: a later run measured 20 printed transitions alongside 1,220 provider events, each burst following a transition marker. Bloc changes **are** observable, as provider activity. |
+| `bloc_probe` | `flutter_bloc` | Stock `bloc` posts nothing itself — no events, no `ext.bloc.*` RPC. A flutter_bloc app is still visible through `provider`, which it depends on transitively, but those events count notified dependents rather than transitions. See [EVIDENCE.md](EVIDENCE.md). |
 
 Neither app needs to be tapped. Each runs a five-phase workload on a 20-second
 loop (idle → state churn → rebuild storm → error → navigate) and prints
@@ -52,16 +52,23 @@ docs.
 
 ## A correction worth reading
 
-An earlier measurement here concluded Bloc was unobservable. It looked for
+An earlier measurement here concluded Bloc was unobservable. It searched for
 `bloc:`-prefixed extension kinds and `ext.bloc.*` RPCs, found neither, and
-stopped — both of those are genuinely absent, so the conclusion looked sound.
+stopped. Both of those are genuinely absent, so the conclusion looked sound.
 
-It was wrong. `flutter_bloc` pulls in `provider` transitively (see
-`bloc_probe/pubspec.lock`), and `provider` posts `provider:provider_changed` in
-debug builds. Re-measured on the same app: 20 Bloc transitions, 1,220 provider
-events, interleaved so each burst follows a transition marker in the same
-stream.
+It was incomplete. `flutter_bloc` pulls in `provider` transitively, and
+`provider` posts `provider:provider_changed`, so a flutter_bloc app is not
+silent on the VM Service.
 
-The lesson for anyone extending this harness: measure the *stream*, not the
-prefix you expected to find on it. Absence of the name you searched for is not
-absence of the signal.
+The correction then needed its own correction. "Bloc is observable" overstates
+it: the probe emits ~61 provider events per transition, because
+`stormWatchers = 60` widgets each watch the bloc. Provider events count
+*dependent notifications*, not state changes, so Bloc transition counts cannot
+be recovered from them, and Bloc itself remains uninstrumented.
+
+Two lessons for anyone extending this harness. Measure the stream, not the
+prefix you expected on it — absence of a name is not absence of a signal. And
+when a signal does appear, check what its *volume* is a function of before
+reporting the number as if it meant the thing you were looking for.
+
+See [EVIDENCE.md](EVIDENCE.md) for the table, and `measure-bloc.mjs` to re-run it.

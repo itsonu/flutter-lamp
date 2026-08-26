@@ -1,3 +1,4 @@
+import { redactVmServiceUri } from "../core/redaction.js";
 import { CATEGORIES, type Category, type RuntimeEvent } from "../core/events.js";
 import type { CollectorReport } from "../core/connection.js";
 import type { RetentionReport, RuntimeStore } from "../core/runtimeStore.js";
@@ -104,7 +105,10 @@ export function exportSession(
       startedAt: store.sessionStarted(),
       exportedAt: now(),
       connected: meta.connected,
-      wsUri: meta.wsUri,
+      // The path segment of a VM Service URI is an auth token granting
+      // evaluate — arbitrary Dart execution in the app. Redacted here, in
+      // the exporter, so the artifact is safe no matter who builds it.
+      wsUri: redactVmServiceUri(meta.wsUri),
     },
     collectors: meta.collectors,
     counts: store.counts(),

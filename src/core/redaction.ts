@@ -126,3 +126,20 @@ function safeDecode(s: string): string {
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+/**
+ * Strip the auth token out of a VM Service URI.
+ *
+ * `ws://127.0.0.1:62435/ik1OKnShsmc=/ws` — that path segment is a credential
+ * granting full control of the running VM, `evaluate` included, which means
+ * arbitrary Dart execution in the app. The host and port are useful context and
+ * are kept; the token is not, and an exported session is meant to be shared.
+ */
+export function redactVmServiceUri(uri: string | null): string | null {
+  if (!uri) return uri;
+  if (!config.enabled) return uri;
+  // ws://host:port/<token>/ws  ->  ws://host:port/[REDACTED]/ws
+  return uri.replace(/^(wss?:\/\/[^/]+\/)([^/]+)(\/.*)?$/i, (_m, head, _token, tail) =>
+    `${head}${REDACTED}${tail ?? ""}`,
+  );
+}

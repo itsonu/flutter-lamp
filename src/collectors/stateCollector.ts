@@ -12,41 +12,51 @@ import type { VmService } from "../vm/vmService.js";
  * provider is created, updated, disposed or fails. Measured against
  * `probe/riverpod_probe` on flutter_riverpod 3.4.2: 98 events over 70 seconds,
  * all inside the workload phases (tick, invalidate, throw) and none in the idle
- * or navigate phases — so the count tracks real provider work.
+ * or navigate phases — so the count tracked real provider work in that run.
+ * That is one observation, not a repeated invariant; `probe/EVIDENCE.md` labels
+ * it as such and `probe/measure.mjs` re-runs it.
  *
  * The payload is `{offset: N}` and nothing else: a pointer into a buffer inside
  * the app, with no `ext.riverpod.*` service extension registered to read it.
  * **Provider names and values are therefore unavailable, and none is invented.**
  *
- * ## Bloc: observable, but only through provider
+ * ## Bloc: not directly observable; its notifications are
  *
- * `bloc` itself posts nothing to the VM Service and registers no `ext.bloc.*`
- * RPC — its own observability goes through `BlocObserver`, inside the app
- * process, which nothing outside can reach. That much is measured and true.
+ * Stock `bloc` posts nothing to the VM Service and registers no `ext.bloc.*`
+ * RPC (measured, flutter_bloc 9.1.1). Its own observability runs through
+ * `BlocObserver`, inside the app process, which nothing outside can reach. Bloc
+ * transitions, events, states and errors are therefore **not** observable here,
+ * and Bloc is **not** natively instrumented for the VM Service.
  *
- * It does not follow that a Bloc app is invisible. `flutter_bloc` 9.1.1 depends
- * transitively on `provider` (confirmed in `probe/bloc_probe/pubspec.lock`), and
- * `provider` posts `provider:provider_changed` in debug builds. Measured against
- * `probe/bloc_probe`: 20 printed `Bloc`/`Cubit` transitions alongside 1,220
- * `provider:provider_changed` events, each burst following a transition marker
- * in the same stream. So Bloc state changes *are* observable as provider
- * activity — attributed to `provider`, which is what actually emitted them,
- * rather than to `bloc`, which did not.
+ * A flutter_bloc app is still not silent, for an indirect reason: `flutter_bloc`
+ * depends transitively on `provider` (`probe/bloc_probe/pubspec.lock`), and
+ * `provider` posts `provider:provider_changed` when dependents are notified.
+ * Measured on `probe/bloc_probe`: 20 printed transitions alongside ~1,220
+ * provider events.
  *
- * The payload is `{id: "0"}` — again a pointer, again no names or values.
+ * That ratio is the important part. The probe has `stormWatchers = 60`, each a
+ * `BlocBuilder`, so ~60 notifications per transition — which means the event
+ * count measures **how many widgets were notified, not how many state changes
+ * happened**. Bloc transition counts cannot be recovered from it, and an app
+ * whose lookup avoided provider would produce nothing at all.
+ *
+ * See `probe/EVIDENCE.md` for the measurements and what each does not
+ * establish.
  *
  * ## What this collector claims
  *
- * That state changed, which framework announced it, and when. Never what
- * changed, and never which provider. Reading values would need `evaluate`
- * against package internals, coupled to private APIs that break on a minor
- * version bump; that is not shipped.
+ * That state-management activity occurred, which package announced it, and
+ * when. Never what changed, never which provider, and never how many state
+ * changes there were — a provider event is one notified dependent. Reading
+ * values would need `evaluate` against package internals, coupled to private
+ * APIs that break on a minor version bump; that is not shipped.
  */
 
-/** Extension-kind prefixes that mean "application state changed". */
+/** Extension-kind prefixes that mean "state-management activity happened". */
 const FRAMEWORKS: Array<{ prefix: string; framework: string }> = [
   { prefix: "riverpod:", framework: "riverpod" },
-  // Also the route by which Bloc and Cubit changes surface — see above.
+  // The only route by which a flutter_bloc app shows up at all — and it
+  // counts notified dependents, not transitions. See above.
   { prefix: "provider:", framework: "provider" },
   // Matched in case a future bloc release adds VM Service integration; as of
   // 9.1.1 it posts nothing, so this never fires today.
@@ -63,8 +73,9 @@ export class StateCollector implements Collector {
       return {
         status: "active",
         detail:
-          `Observing ${[...this.seen].sort().join(", ")} state changes. Counted only: the events carry an ` +
-          "opaque pointer, not a provider name or value, and no service extension exists to resolve it.",
+          `Observing ${[...this.seen].sort().join(", ")} activity. Counted only: each event carries an ` +
+          "opaque pointer, not a provider name or value, and no service extension exists to resolve it. " +
+          "A provider event means dependents were notified, so the count is not a count of state changes.",
       };
     }
     // Silence here is genuinely ambiguous, and the ambiguity is the useful
@@ -74,9 +85,9 @@ export class StateCollector implements Collector {
       status: "active",
       detail:
         "No state-management activity observed yet. Riverpod posts riverpod:new_event and provider posts " +
-        "provider:provider_changed (which is how flutter_bloc's changes surface, since it depends on provider). " +
-        "An app using none of them, and one that simply has not changed state yet, look the same from here. " +
-        "Stock bloc alone posts nothing to the VM Service, so an empty result never proves an app has no blocs.",
+        "provider:provider_changed when dependents are notified (which is the only way a flutter_bloc app " +
+        "shows up, since bloc itself posts nothing). An app using none of them, and one that simply has not " +
+        "changed state yet, look the same from here, so an empty result never proves an app has no blocs.",
     };
   }
 
@@ -102,7 +113,7 @@ export class StateCollector implements Collector {
         // aggregate, correlated against something that is.
         severity: "debug",
         category: "state",
-        message: `${match.framework} state changed`,
+        message: `${match.framework} state activity`,
         data: {
           framework: match.framework,
           kind,

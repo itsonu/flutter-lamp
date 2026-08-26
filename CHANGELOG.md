@@ -24,20 +24,53 @@ Merges the probe-app branch, and corrects a measurement in 0.17.0's favour.
 
 ### Fixed
 
-- **Bloc is observable after all.** The merged branch concluded stock Bloc was
-  invisible: 143 transitions producing zero events and no `ext.bloc.*` RPC.
-  Both halves of that are true, and the conclusion still did not follow.
-  `flutter_bloc` 9.1.1 depends transitively on `provider` (its own
-  `pubspec.lock` says so), and `provider` posts `provider:provider_changed`.
-  Re-measured on that same probe app: 20 printed Bloc transitions alongside
-  1,220 provider events, each burst following a transition marker in the same
-  stream. The collector keeps capturing them, attributed to `provider` - the
-  package that actually emitted the event - and `get_capabilities` now records
-  the real boundary: Bloc is visible *because* flutter_bloc uses provider, and
-  a Bloc app that avoided provider would not be.
+- **Bloc: both earlier conclusions were wrong, in opposite directions.** The
+  merged branch concluded stock Bloc was invisible - 143 transitions, zero
+  events, no `ext.bloc.*` RPC. All of that is true, and the conclusion still did
+  not follow: `flutter_bloc` 9.1.1 depends transitively on `provider` (its own
+  `pubspec.lock`), and `provider` posts `provider:provider_changed`, so a
+  flutter_bloc app is not silent.
 
-  The earlier reading searched for a `bloc:` prefix, did not find one, and
-  stopped. Absence of the name you expected is not absence of the signal.
+  The correction then overstated in the other direction. Measured on the probe:
+  20 transitions against ~1,220 provider events, because `stormWatchers = 60`
+  widgets each watch the bloc. `provider:provider_changed` fires **once per
+  notified dependent, not once per transition** - so the count measures how many
+  widgets were notified, Bloc transition counts cannot be recovered from it, and
+  Bloc itself remains uninstrumented for the VM Service.
+
+  What is now claimed, and no more: there is no `ext.bloc.*` RPC; flutter_bloc
+  depends on provider; provider emits change notifications; therefore a Bloc app
+  on that dependency path exposes state-*related* activity indirectly. Bloc
+  internals are not directly observable, and an app avoiding provider-backed
+  lookup would be silent here. `probe/EVIDENCE.md` records each measurement with
+  its kind (observed / inferred / documented) and what it does not establish.
+
+### Fixed - audit pass
+
+- **The session export leaked the VM Service auth token.** `export_session`
+  carried `session.wsUri` verbatim, and the path segment of a VM Service URI is
+  a credential granting `evaluate`, i.e. arbitrary Dart execution in the running
+  app - in an artifact whose stated purpose is to be attached to bug reports.
+  Redaction now happens inside `exportSession` itself rather than at one call
+  site, so the artifact is safe regardless of caller. Host and port survive.
+- **`stateFinding` reported saturated activity as a discovery.** With continuous
+  state churn - exactly what a rebuild storm produces - every frame falls inside
+  the 1s window and the ratio reads 100% whether or not jank is related. It now
+  computes the same ratio for smooth frames as a control and withholds the
+  finding when the difference is under 15 points. Documented as a correlation
+  heuristic, with the symmetric window called out: it cannot show the state
+  change came first.
+- **`stateFinding` was invoked twice**, duplicating itself in every performance
+  diagnosis - a merge artifact git resolved silently.
+- **The reconnection give-up event was emitted asynchronously**, behind an adb
+  subprocess call added in 0.15.0. The most important record in a session's
+  timeline was gated on an optional external tool that can block, making the
+  test flaky (1 run in 3) and the behaviour genuinely wrong. The terminal event
+  is now recorded synchronously; the transport explanation follows as a separate
+  enriching event.
+- Corrected three places that contradicted each other on Bloc after the merge:
+  `performance.ts` claimed Bloc announces on the Extension stream, and
+  `stateActivity.ts` claimed Bloc is invisible.
 
 ### Changed
 
@@ -96,6 +129,21 @@ sharing the device log). And a debug Flutter app announces its VM Service URI,
 auth token included, to logcat at startup - so `flutter run` is not the only
 source of a connectable URI, contrary to the limitation recorded in 0.15.0.
 Automatic discovery from logcat is a follow-up, not in this release.
+
+### Added - audit pass
+
+- `probe/EVIDENCE.md` - the state-management evidence table: measurement,
+  observation, interpretation, limitation, each row labelled observed, inferred
+  or documented, plus an explicit list of what has *not* been measured.
+- `probe/measure-bloc.mjs` - reproduces the transition/notification relationship
+  across repeated runs from a single socket, so ordering is a property of one
+  stream rather than of two clocks.
+- Adversarial test matrix for `stateFinding` covering aligned activity, activity
+  without jank, jank without activity, dense independent activity, one long
+  burst, and one frame inside many windows.
+- Contract tests for `export_session` (token redaction, cited-subset fidelity,
+  ordering, determinism, empty and full sessions, pinned schema keys) and
+  boundary tests for `get_state_activity`.
 
 ### Compatibility
 

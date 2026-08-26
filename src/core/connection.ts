@@ -181,22 +181,39 @@ class ConnectionManager {
   private scheduleReconnect(): void {
     const { baseMs, maxMs, maxAttempts } = this.reconnectPolicy;
     if (this.reconnectAttempt >= maxAttempts) {
-      // Say WHY it is unreachable. Retrying a dead URI eight times and then
-      // reporting only the count leaves the developer to guess whether the
-      // cable moved, the device dropped off adb, or the app exited.
+      // The terminal event is recorded synchronously and unconditionally. An
+      // earlier version awaited an adb probe first so it could explain WHY,
+      // which made the most important record in the timeline depend on an
+      // optional external process: if adb is slow the event arrives late, if
+      // adb hangs it never arrives at all, and an agent polling status sees
+      // reconnecting:false with nothing in the evidence explaining it.
+      this.store.add({
+        timestamp: Date.now(),
+        source: "system",
+        severity: "error",
+        category: "system",
+        message: `Gave up reconnecting after ${maxAttempts} attempts. Call connect_vm with a fresh URI.`,
+        data: { attempts: maxAttempts },
+      });
+      this.wantConnection = false;
+
+      // The explanation is worth having, so it still runs — as a separate,
+      // later event that enriches the timeline rather than gating it.
       void diagnoseUnreachable()
-        .catch(() => [] as string[])
         .then((transport) => {
+          if (transport.length === 0) return;
           this.store.add({
             timestamp: Date.now(),
             source: "system",
-            severity: "error",
+            severity: "info",
             category: "system",
-            message: `Gave up reconnecting after ${maxAttempts} attempts. Call connect_vm with a fresh URI.`,
-            data: { attempts: maxAttempts, transport },
+            message: "Why the VM Service is unreachable",
+            data: { transport },
           });
+        })
+        .catch(() => {
+          /* adb is optional; its absence must never surface as an error here */
         });
-      this.wantConnection = false;
       return;
     }
 

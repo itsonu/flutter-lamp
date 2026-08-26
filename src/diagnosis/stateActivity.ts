@@ -60,8 +60,9 @@ export function stateActivity(store: RuntimeStore, bucketLimit = 5): StateActivi
 
   const limitations = [
     "Provider and notifier names are not observable: Riverpod's VM Service event carries only an app-side buffer offset, and no ext.riverpod.* RPC exists to resolve it.",
-    "Bloc and Cubit are invisible here — they post nothing to the VM Service — so this report says nothing about them either way.",
+    "Stock bloc posts nothing to the VM Service. A flutter_bloc app still appears here, because its notifications run through provider — but these counts are notifications to dependents, not Bloc transitions, and the two differ by however many widgets are watching (measured: 20 transitions, ~1,220 notifications, 60 watchers).",
     "Co-occurrence between state activity and expensive frames is not causation; both can follow the same user action.",
+    "When state activity is continuous, essentially every frame falls inside a window and the ratio approaches 1 regardless of any relationship. Compare it against the same ratio for smooth frames before reading anything into it.",
   ];
 
   if (events.length === 0) {

@@ -501,7 +501,7 @@ export function registerTools(server: McpServer): void {
       annotations: ann("get_state_activity"),
       title: "State-management activity",
       description:
-        "How much Riverpod provider activity the app is doing and when, plus how often build-heavy frames coincide with it — use with get_rebuilds to answer 'is this rebuild storm driven by state churn'. Reports counts and timing only: Riverpod's VM Service event carries an app-side buffer offset with no provider name or value, so none is reported. Bloc and Cubit post nothing to the VM Service and are invisible here, which this says explicitly rather than returning a misleading zero.",
+        "How much state-management activity the app is doing and when, plus how often build-heavy frames coincide with it — use with get_rebuilds to answer 'is this rebuild storm driven by state churn'. Counts and timing only: Riverpod sends an app-side buffer offset and provider an element id, neither resolvable to a provider name or value. Counts are NOT transition counts — a provider event means dependents were notified, so one state change in a widget-heavy tree produces many events. Stock Bloc posts nothing itself; a flutter_bloc app appears here only as the provider activity its notifications cause.",
       inputSchema: {
         buckets: z
           .number()
@@ -574,7 +574,7 @@ export function registerTools(server: McpServer): void {
           {
             connected: status.connected,
             sessionId: status.sessionId,
-            wsUri: status.wsUri,
+            wsUri: status.wsUri, // redacted inside exportSession
             collectors: connection.collectorHealth(),
           },
           { mode },
@@ -616,7 +616,8 @@ export function registerTools(server: McpServer): void {
           "dart:io HTTP requests (covers Dio and package:http)",
           "Widget tree and selected widget (debug builds only)",
           "Route changes via Flutter.Navigation (debug and profile builds)",
-          "Riverpod provider activity, and Bloc/Cubit changes by way of provider — timing and volume only, with no provider name or value",
+          "Riverpod provider activity — timing and volume only, with no provider name or value",
+          "Provider dependent-notification activity (provider:provider_changed). In a flutter_bloc app this fires when a Bloc change notifies its dependents, so such an app is not silent here — but the event count tracks how many widgets were notified, NOT how many Bloc transitions occurred",
           "Android device transports via adb, when adb is installed",
           "Dart heap and external memory",
           "VM timeline events (on demand)",
@@ -629,7 +630,7 @@ export function registerTools(server: McpServer): void {
           "Redacted credential values (headers, sensitive query parameters, tokens in text)",
           "CPU samples and GC events — a slow build can be traced to a widget, but not to a function",
           "Provider names and values — Riverpod sends an app-side buffer offset and provider an element id, with no service extension to resolve either",
-          "Bloc directly — stock bloc posts nothing to the VM Service and registers no ext.bloc.* RPC (measured against 9.1.1). Its changes are visible only because flutter_bloc depends on provider; a Bloc app that avoided provider would be invisible here",
+          "Bloc transitions, events, states and errors — stock bloc posts nothing to the VM Service and registers no ext.bloc.* RPC (measured against 9.1.1). Its own observability runs through BlocObserver inside the app process. Bloc transition COUNTS cannot be derived from provider events: measured at 20 transitions against ~1,220 provider notifications, because the probe has 60 widgets watching. A flutter_bloc app that used no provider-backed lookup would be silent here entirely",
         ],
         configuration: {
           redaction: redactionEnabled() ? "on" : "off (FLUTTER_LAMP_REDACT=off)",

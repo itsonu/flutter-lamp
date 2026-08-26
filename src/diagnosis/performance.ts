@@ -114,11 +114,10 @@ export function diagnosePerformance(store: RuntimeStore): PerformanceDiagnosis {
 
   const findings = [
     rebuildFinding(hotspots, all, stats),
-    stateFinding(all, janky),
+    stateFinding(all, janky, frames),
     phaseFinding(janky, stats),
     networkFinding(all, janky),
     routeFinding(all, janky),
-    stateFinding(all, janky),
     memoryFinding(all, stats),
   ].filter((f): f is PerformanceFinding => f !== null);
 
@@ -308,40 +307,74 @@ function routeFinding(all: RuntimeEvent[], janky: RuntimeEvent[]): PerformanceFi
 }
 
 /**
- * Janky frames sitting next to state-management activity.
+ * A correlation heuristic, and named as one.
  *
- * Deliberately weak, and deliberately unnamed. Riverpod's VM Service event
- * carries no provider name (see `src/collectors/stateCollector.ts`), so this
- * can say "state churn coincided with the jank" and no more — and churn and
- * jank both following the same tap is as consistent with the evidence as one
- * causing the other. It exists because knowing *where* to look next (get_rebuilds,
- * then the providers those widgets watch) is worth more than silence.
+ * It answers a single narrow question: what fraction of janky frames had state
+ * activity within `STATE_WINDOW_MS`, and is that fraction meaningfully higher
+ * than for the frames that were fine?
+ *
+ * The base-rate comparison is the whole point. Without it the measure is
+ * worthless whenever state activity is continuous — and continuous is exactly
+ * what a rebuild storm looks like. A `flutter_bloc` probe with 60 watching
+ * widgets emits roughly 1,200 provider notifications in a few seconds; against
+ * that, *every* frame falls inside a window, janky or not, and a naive ratio
+ * reports 100% co-occurrence for a relationship that does not exist. So the
+ * same ratio is computed for smooth frames, and when the two are close the
+ * finding is withheld rather than dressed up.
+ *
+ * Even when it does fire, this is co-occurrence. State churn and an expensive
+ * build both follow the same tap; nothing here can order them, and the window
+ * is symmetric, so activity *after* a frame counts as much as activity before.
+ * Hence the strength ceiling of 0.5 — below every causal finding in this file.
  */
-function stateFinding(all: RuntimeEvent[], janky: RuntimeEvent[]): PerformanceFinding | null {
+function stateFinding(
+  all: RuntimeEvent[],
+  janky: RuntimeEvent[],
+  frames: RuntimeEvent[],
+): PerformanceFinding | null {
   const stateEvents = all
     .filter((e) => e.category === "state")
     .sort((a, b) => a.timestamp - b.timestamp);
-  if (stateEvents.length === 0) return null;
+  if (stateEvents.length === 0 || janky.length === 0) return null;
 
-  const near = janky.filter((frame) =>
-    stateEvents.some((s) => Math.abs(s.timestamp - frame.timestamp) <= STATE_WINDOW_MS),
-  );
+  const nearState = (frame: RuntimeEvent) =>
+    stateEvents.some((s) => Math.abs(s.timestamp - frame.timestamp) <= STATE_WINDOW_MS);
+
+  const near = janky.filter(nearState);
   const ratio = near.length / janky.length;
   if (near.length < 3 || ratio < 0.4) return null;
 
+  // The control group: frames that were fine. If they sit inside the window
+  // just as often, proximity says nothing about jank.
+  const smooth = frames.filter((f) => f.data.janky !== true);
+  const smoothNear = smooth.filter(nearState).length;
+  const baseRate = smooth.length > 0 ? smoothNear / smooth.length : null;
+  const lift = baseRate === null ? null : ratio - baseRate;
+
+  // Withhold when the control group is equally saturated. 0.15 is a policy
+  // threshold, not a calibrated one — chosen so a difference has to be visible
+  // before it is reported at all.
+  if (lift !== null && lift < 0.15) return null;
+
   const frameworks = [...new Set(stateEvents.map((e) => String(e.data.framework)))].join(", ");
+  const baseRateText =
+    baseRate === null
+      ? " No smooth frames to compare against, so this is a raw rate, not a lift."
+      : ` For comparison, ${Math.round(baseRate * 100)}% of the ${smooth.length} smooth frames were also inside a window.`;
+
   return {
     claim:
       `${near.length} of ${janky.length} janky frames (${Math.round(ratio * 100)}%) fell within ` +
-      `${STATE_WINDOW_MS}ms of ${frameworks} state activity (${stateEvents.length} events).`,
-    // Below the route and network findings: this is co-occurrence between two
-    // things a single user action would produce together.
+      `${STATE_WINDOW_MS}ms of ${frameworks} state activity (${stateEvents.length} events).` +
+      baseRateText,
+    // Co-occurrence between two things a single user action would produce
+    // together. Never promoted above the causal findings.
     strength: 0.5,
     evidence: [
       ...near.slice(0, 5).map((e) => e.eventId),
       ...stateEvents.slice(0, 3).map((e) => e.eventId),
     ],
-    fix: "Provider names are not observable from here, so confirm before acting: call get_rebuilds to see which widgets rebuilt in these frames, then narrow what those widgets watch (select/family providers) so one change stops rebuilding the whole subtree.",
+    fix: "Correlation only, and the window is symmetric, so this does not show the state change came first. Provider names are not observable from here either: call get_rebuilds to see which widgets rebuilt in these frames, then narrow what those widgets watch (select/family providers) so one change stops rebuilding the whole subtree.",
   };
 }
 
@@ -411,7 +444,7 @@ function describeLimitations(
   ];
   if (!store.counts().state) {
     out.push(
-      "No state-management activity observed. Riverpod, Provider and Bloc announce changes on the Extension stream; an app using none of them looks identical to one that simply has not changed state.",
+      "No state-management activity observed. Riverpod and provider announce on the Extension stream (a flutter_bloc app surfaces through provider, since its notifications go through it); stock bloc announces nothing of its own. An app using none of them looks identical to one that simply has not changed state.",
     );
   } else {
     out.push(
