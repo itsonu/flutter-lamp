@@ -24,9 +24,12 @@ import { VERSION } from "../version.js";
  *   cannot check it. `brief` is both: every claim, and exactly the events
  *   behind it.
  *
- * Nothing is redacted here, because there is nothing left to redact: redaction
- * happens at capture (`src/core/redaction.ts`), so credentials never enter the
- * store and an exporter cannot leak what was never written.
+ * Redaction happens at capture (`src/core/redaction.ts`), so event bodies carry
+ * no credentials by the time they reach here. That is not sufficient on its
+ * own: session *metadata* never passed through capture, and the VM Service URI
+ * is itself a credential — its path segment authorises `evaluate`, i.e.
+ * arbitrary Dart execution in the app. It is redacted below, in the exporter
+ * rather than at a call site, so the artifact is safe whoever builds it.
  *
  * `schemaVersion` is pinned by a test over the top-level key set. A consumer
  * parsing this should refuse a version it does not know rather than guess.

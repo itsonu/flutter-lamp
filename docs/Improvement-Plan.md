@@ -616,11 +616,20 @@ The VM Service saw **none of it**: zero `bloc:*` events on the `Extension`
 stream, zero `ext.bloc.*` RPCs. Stock Bloc's observability runs through
 `BlocObserver` inside the app process, which nothing outside can reach.
 
-So there is no Bloc adapter. What ships instead is the collector reporting
-`unavailable` with that reason, because an agent that reads zero state events
-for a Bloc app would otherwise conclude the app has no state. An in-app helper
-the user pastes in would make Bloc observable; it was considered and rejected —
-it moves the integration burden into every user's `main()`.
+So there is no Bloc adapter, and Bloc is not natively instrumented for the VM
+Service. **That is not the whole picture, and a later pass corrected it:**
+`flutter_bloc` 9.1.1 depends transitively on `provider`, which does post
+`provider:provider_changed`, so a flutter_bloc app is not silent here — it
+appears as the notifications its transitions cause. Those events count
+*notified dependents*, not transitions (measured: 20 transitions, ~1,220
+events, 60 watching widgets), so Bloc transition counts cannot be recovered
+from them. See `probe/EVIDENCE.md`.
+
+What ships is the collector staying `active` and saying what silence means: no
+state package, or one that has not changed anything yet, look identical from
+outside, so an empty result never proves an app has no blocs. An in-app helper
+the user pastes in would make Bloc directly observable; it was considered and
+rejected — it moves the integration burden into every user's `main()`.
 
 ## P3 — Session intelligence — DONE
 
@@ -629,13 +638,18 @@ metadata, per-collector health, retention, the events, and every diagnosis
 (runtime, performance, navigation, rebuilds). `mode: "full"` archives everything
 retained; `mode: "brief"` is the compact AI-facing artifact — the diagnoses plus
 *only* the events their own evidence cites, resolved through `byEventId`.
-Against the probe app that is 22 events / 19KB versus 417 events / 152KB, with
-every claim still traceable to a stored record.
+One measured example, on `probe/riverpod_probe`: 22 events / 19KB versus 417
+events / 152KB, with every claim still traceable to a stored record. That is a
+single benchmark, not a guaranteed ratio — the reduction depends on how much
+the session captured and how much of it the diagnoses cite.
 
-Nothing is redacted on the way out because nothing needs to be: redaction
-happens at capture (P0-1), so the exporter cannot leak what was never written.
-The top-level shape is pinned by a test, so a rename breaks the build rather
-than a downstream parser.
+Redaction at capture (P0-1) covers event bodies, and does *not* cover session
+metadata, which never passes through capture. The VM Service URI is itself a
+credential: its path segment authorises `evaluate`, arbitrary Dart execution in
+the app. The exporter redacts it, and does so inside `exportSession` rather
+than at a call site, so a direct caller cannot bypass it. The top-level shape
+is pinned by a test, so a rename breaks the build rather than a downstream
+parser.
 
 ## P4 — Agent capabilities
 

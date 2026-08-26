@@ -207,3 +207,17 @@ test("a single state event yields a defined, non-infinite rate", () => {
     `eventsPerSecond was ${report.eventsPerSecond}`,
   );
 });
+
+test("an event cited twice is carried once", () => {
+  // Runtime evidence and the runtime timeline routinely name the same event.
+  // The export must dedupe rather than ship it twice and inflate the artifact.
+  const exported = exportSession(populated(), META, { mode: "brief" });
+  const ids = exported.events.map((e) => e.eventId);
+  assert.deepEqual(ids, [...new Set(ids)], "the cited subset must be a set, not a bag");
+
+  const runtime = exported.diagnoses.runtime;
+  const citedTwice = runtime.evidence
+    .map((e) => e.eventId)
+    .filter((id) => runtime.timeline.some((t) => t.eventId === id));
+  assert.ok(citedTwice.length > 0, "fixture must actually produce a doubly-cited event");
+});

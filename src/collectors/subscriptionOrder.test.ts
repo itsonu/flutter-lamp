@@ -7,6 +7,7 @@ import { NavigationCollector } from "./navigationCollector.js";
 import { ExceptionCollector } from "./exceptionCollector.js";
 import { LogCollector } from "./logCollector.js";
 import { RebuildCollector } from "./rebuildCollector.js";
+import { StateCollector } from "./stateCollector.js";
 import type { VmService } from "../vm/vmService.js";
 
 /**
@@ -128,4 +129,26 @@ test("RebuildCollector captures buffered rebuild events after its setup RPCs", a
   assert.equal(event.data.totalRebuilds, 12);
   // And the seeded location table resolved the id, rather than "unknown".
   assert.equal((event.data.top as any[])[0].widget, "HomeScreen");
+});
+
+test("StateCollector captures state activity that predates the connection", async () => {
+  // The newest collector, and the one most likely to matter here: state churn
+  // that happened before the agent connected is exactly the history a rebuild
+  // storm needs explaining against.
+  const store = new RuntimeStore();
+  const vm = backlogVm({
+    Extension: [
+      { extensionKind: "riverpod:new_event", extensionData: { offset: 3 } },
+      { extensionKind: "provider:provider_changed", extensionData: { id: "el-9" } },
+      { extensionKind: "Flutter.Frame", extensionData: { number: 1, elapsed: 8_000 } },
+    ],
+  });
+
+  await new StateCollector().start(vm, store);
+
+  assert.equal(store.counts().state, 2, "state activity buffered before connecting must not be lost");
+  const frameworks = store.query({ category: "state" }).map((e) => e.data.framework).sort();
+  assert.deepEqual(frameworks, ["provider", "riverpod"]);
+  // Unrelated extension kinds on the same stream stay out.
+  assert.equal(store.counts().frame, 0);
 });

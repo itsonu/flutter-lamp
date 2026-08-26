@@ -18,7 +18,9 @@ Merges the probe-app branch, and corrects a measurement in 0.17.0's favour.
   are now re-checkable instead of remembered.
 - **`export_session`** (P3) - the session as versioned JSON. `full` archives
   everything; `brief` carries the diagnoses plus only the events their evidence
-  cites, measured at 22 events / 19KB against 417 / 152KB on the probe app.
+  cites. One measured example, on `probe/riverpod_probe`: 22 events / 19KB
+  against 417 / 152KB. The ratio depends entirely on how much the session
+  captured and how much of it the diagnoses cite.
 - **`get_state_activity`** - query state-change activity directly rather than
   only through findings.
 
@@ -273,49 +275,6 @@ showed `clearVMTimeline` does.
 
 Additive: `recorderLagMs`, `stalled` and (when stalled) `warning` on
 `get_timeline`. No tool renamed or reshaped.
-## [Unreleased]
-
-State-management activity and session export, both measured against apps that
-now live in this repo.
-
-### Added
-
-- **Two probe apps under `probe/`.** `riverpod_probe` and `bloc_probe` run a
-  self-driving five-phase workload and print a phase marker before each phase,
-  so an event seen on the VM Service can be attributed to the thing that caused
-  it. They exist so a claim about a package can be re-checked after an upgrade
-  instead of trusted; `probe/measure.mjs` is the harness, `probe/README.md` the
-  procedure.
-- **`get_state_activity` and a `state` event category.** Riverpod posts
-  `riverpod:new_event` on the `Extension` stream (measured: 98 events over 70
-  seconds, all inside the phases that touch providers). The tool reports volume,
-  rate, per-second buckets, and how often build-heavy frames coincide with
-  activity.
-- **A state co-occurrence finding in `diagnose_performance`**, scored 0.5 -
-  below every causal finding, because provider churn and expensive builds both
-  follow the same tap. It points at `get_rebuilds` for the widget names it
-  cannot get from Riverpod.
-- **`export_session`** - the session as versioned JSON (`schemaVersion: 1`):
-  metadata, collector health, retention, events and every diagnosis. `full`
-  archives everything retained; `brief` carries the diagnoses plus only the
-  events their evidence cites (22 events / 19KB against 417 / 152KB on the probe
-  app), so an agent gets the conclusion *and* the means to check it. Redaction
-  already happens at capture, so the exporter cannot leak what was never
-  written.
-
-### Not added, and why
-
-- **No Bloc adapter.** `bloc_probe` ran 143 real `Bloc`/`Cubit` transitions and
-  2 handler errors, confirmed by its own `BlocObserver`; the VM Service saw zero
-  events and registered zero `ext.bloc.*` RPCs. Stock Bloc's observability lives
-  inside the app process. What ships instead is the `state` collector reporting
-  `unavailable` with that reason - an agent reading an empty state list for a
-  Bloc app would otherwise conclude the app has no state.
-- **No provider names or values.** Riverpod's event payload is `{offset: N}`,
-  an index into an in-app buffer, with no service extension to resolve it.
-  Reading real state would need `evaluate` against Riverpod's private API,
-  which breaks on a minor version.
-
 ## [0.13.0] - 2026-08-25
 
 Baseline comparison. "What changed before the failure" answered as a
