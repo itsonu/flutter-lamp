@@ -183,9 +183,10 @@ bin_path="$(node -p "require('./package.json').bin['$PACKAGE']")"
 echo "$listing" | grep -qx "package/$bin_path" || fail "tarball is missing $bin_path, the declared bin"
 ok "declared bin present: $bin_path"
 
-# And the version inside the tarball, not just the one on disk.
-tar -xzf "$tmp/$tarball" -C "$tmp" package/package.json
-packed_version="$(node -p "require('$tmp/package/package.json').version")"
+# And the version inside the tarball, not just the one on disk. Piped rather
+# than extracted to a path: under Git Bash `mktemp -d` yields a POSIX path that
+# a Windows node cannot resolve, and this script has to run in both places.
+packed_version="$(tar -xzOf "$tmp/$tarball" package/package.json   | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).version))")"
 [ "$packed_version" = "$VERSION" ] || fail "tarball declares $packed_version, expected $VERSION"
 ok "tarball declares $VERSION"
 
