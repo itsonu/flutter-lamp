@@ -1,4 +1,4 @@
-import type { Collector } from "./collector.js";
+import { eventTime, type Collector } from "./collector.js";
 import { decodeBytes } from "./collector.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { Severity } from "../core/events.js";
@@ -48,7 +48,7 @@ export class LogCollector implements Collector {
           if (raw.trim() === "") continue;
           const line = redactText(raw);
           store.add({
-            timestamp: Date.now(),
+            timestamp: eventTime(event),
             source: streamId,
             severity,
             category: "log",
@@ -66,7 +66,7 @@ export class LogCollector implements Collector {
       const message = redactText(rec.message?.valueAsString ?? "");
       const loggerName = rec.loggerName?.valueAsString ?? "";
       store.add({
-        timestamp: rec.time ?? Date.now(),
+        timestamp: rec.time ?? eventTime(event),
         source: "Logging",
         severity: levelToSeverity(level),
         category: "log",

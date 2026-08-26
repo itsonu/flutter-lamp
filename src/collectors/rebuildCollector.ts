@@ -1,4 +1,4 @@
-import type { Collector, CollectorHealth } from "./collector.js";
+import { eventTime, type Collector, type CollectorHealth } from "./collector.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { VmService } from "../vm/vmService.js";
 
@@ -140,7 +140,7 @@ export class RebuildCollector implements Collector {
       const headline = top[0];
 
       store.add({
-        timestamp: Date.now(),
+        timestamp: eventTime(event),
         source: "Flutter.RebuiltWidgets",
         severity: "debug",
         category: "rebuild",

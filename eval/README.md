@@ -70,13 +70,21 @@ jank that clears the hypothesis' threshold. The right answers are opposite, so
 no fixed ordering of `exception` against `jank` can satisfy both, which is how
 the unconditional priority that used to exist was found to be wrong.
 
-A note on what a golden here may lean on. Events are stamped when the server
-receives them, and over adb/WiFi delivery stalls and then flushes — 111 frame
-events inside one second, above any refresh rate. Anything argued from
-fine-grained ordering has to be recorded over a transport that does not batch,
-and has to be delivered live rather than in the backlog that DDS drains during
-connect, where receipt order is drain order. Both are stated in each incident's
-`capturedFrom`.
+A note on what a golden here may lean on — and on what changed because of these
+three. All of them were recorded while events were stamped on *receipt*, which
+made fine-grained ordering unusable: DDS drains a backlog at connect, where
+receipt order is drain order, and over adb/WiFi delivery stalls and then flushes
+111 frame events into one second. That is why one incident's `why` withdraws an
+ordering claim, and why another had to be recorded over loopback after four
+device captures were discarded.
+
+Collectors now stamp events with the VM's own clock, so that constraint is
+lifted for anything recorded from here on, and a device recording of an
+ordering-sensitive incident is viable again. The three fixtures above predate
+the fix and their `capturedFrom` says so. When re-recording one, check
+`session.clockOffsetMs` in the export: captured events carry the VM's clock
+while this server's own notes carry the host's, and a large offset means the two
+are not comparable.
 
 Verified by mutation — the gate is not decoration:
 

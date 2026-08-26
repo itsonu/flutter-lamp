@@ -83,7 +83,7 @@ interface RuntimeEvent {
   id: number;               // monotonic, assigned by the store
   eventId: string;          // stable, citable identity: "exc_00142"
   sessionId: string | null; // which debugging session produced it
-  timestamp: number;        // epoch ms
+  timestamp: number;        // epoch ms, on the VM's clock (see below)
   source: string;           // "Stdout" | "Flutter.Error" | "HttpProfile" | …
   severity: Severity;       // debug | info | warning | error | critical
   category: Category;       // log | exception | frame | network | system
@@ -110,6 +110,21 @@ dashboard can list events without knowing every payload shape.
 Widget tree, selected widget, memory and timeline are **not** collectors — they
 are direct RPCs issued by the tool that needs them (`connection.isolateCall`).
 Memory additionally snapshots into the store so diagnosis can reference it.
+
+Timestamps come from the app, not from us. Every VM Service `Event` carries the
+time the VM posted it, and the collectors use that. Receipt time is not a
+substitute: DDS hands over a backlog the moment a subscription is accepted, and
+a slow link stalls and then flushes, so `Date.now()` collapses distinct moments
+onto one — measured, six backlog frames inside 1ms of each other by receipt
+against 331ms of real spread, and 111 frame events in a single second over
+adb/WiFi. Every window in the diagnosis layer rests on this.
+
+Two exceptions, both deliberate: this server's own notes about the connection,
+and polled memory samples, are our observations and carry this machine's clock.
+That mixes two clocks in one timeline, so `clockOffsetMs` (VM minus ours, last
+observed) is reported by the status tool and recorded in every export. It is
+reported rather than corrected — a correction that has never been measured
+against a genuinely skewed device would be a guess applied to every timestamp.
 
 `Flutter.Error` deserves a note: `extensionData` is a serialized `DiagnosticsNode`
 tree, not a flat object. The stack trace is a run of child nodes whose

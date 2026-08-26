@@ -86,6 +86,29 @@ point of the metric.
 
 ### Fixed
 
+- **Events are stamped with the app's clock, not with ours.** Every collector
+  used `Date.now()` at the moment of receipt. A VM Service `Event` carries the
+  time the VM posted it, and the difference is not cosmetic: DDS hands over a
+  backlog the instant a stream subscription is accepted, and a slow link stalls
+  and then flushes. Measured against a running app — six backlog frames arrived
+  within 1ms of each other by receipt while their posted times spanned 331ms,
+  and a nine-second session lost 1.1s of its span. Over adb/WiFi it is far
+  worse: 111 frame events inside one second, above any refresh rate.
+
+  Everything that reasons about order or windows was wrong by exactly that
+  much: the 3s correlation window, `what_changed`'s baseline-versus-incident
+  comparison, the timeline handed to a human, and the ordering arguments a
+  recorded incident rests on. After the fix, a live capture shows at most 10
+  frames in any second against a 100ms tick, with a median inter-frame gap of
+  103.0ms.
+
+  Two stamps stay on this machine's clock on purpose — this server's own notes
+  about the connection, and polled memory samples, which are our observations
+  rather than the app's. Because that mixes two clocks in one timeline, the
+  status tool and every export now report `clockOffsetMs` (VM minus ours, last
+  observed; 0ms measured on a loopback target). Reported, not corrected: a
+  correction never measured against a genuinely skewed device would be a guess
+  applied to every timestamp.
 - **A chatty app could starve the exception out of its own diagnosis.**
   `diagnose()` read a flat most-recent-2,000-event window across all categories,
   so a category that bursts could crowd out a rare one. Measured, not

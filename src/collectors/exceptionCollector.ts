@@ -1,4 +1,4 @@
-import type { Collector } from "./collector.js";
+import { eventTime, type Collector } from "./collector.js";
 import { extractFlutterError, firstLine } from "./flutterError.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { VmService } from "../vm/vmService.js";
@@ -27,7 +27,7 @@ export class ExceptionCollector implements Collector {
       const info = extractFlutterError(event.extensionData ?? {});
       const summary = redactText(info.summary);
       store.add({
-        timestamp: Date.now(),
+        timestamp: eventTime(event),
         source: "Flutter.Error",
         severity: "error",
         category: "exception",
@@ -50,7 +50,7 @@ export class ExceptionCollector implements Collector {
         exc.valueAsString ?? exc.class?.name ?? "Unhandled exception",
       );
       store.add({
-        timestamp: Date.now(),
+        timestamp: eventTime(event),
         source: "Debug.PauseException",
         severity: "critical",
         category: "exception",

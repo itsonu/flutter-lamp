@@ -161,6 +161,10 @@ export function registerTools(server: McpServer): void {
         sessionId: status.sessionId,
         reconnecting: status.reconnecting,
         reconnectAttempt: status.reconnectAttempt,
+        // Captured events carry the VM's clock; this server's own notes carry
+        // this machine's. A large offset means a timeline mixing the two is off
+        // by that much.
+        clockOffsetMs: status.clockOffsetMs,
         eventsCaptured: connection.store.size(),
         byCategory: connection.store.counts(),
         // Retention is bounded; say so rather than letting an agent reason over
@@ -584,6 +588,7 @@ export function registerTools(server: McpServer): void {
             connected: status.connected,
             sessionId: status.sessionId,
             wsUri: status.wsUri, // redacted inside exportSession
+            clockOffsetMs: status.clockOffsetMs,
             collectors: connection.collectorHealth(),
           },
           { mode },

@@ -49,6 +49,12 @@ export interface SessionExport {
     exportedAt: number;
     connected: boolean;
     wsUri: string | null;
+    /**
+     * VM clock minus this machine's, ms, when the export was taken. Events are
+     * stamped by the VM; this server's own notes are not. Recorded so a reader
+     * of the artifact can tell whether the two are comparable.
+     */
+    clockOffsetMs: number | null;
   };
   collectors: CollectorReport[];
   counts: Record<Category, number>;
@@ -69,6 +75,7 @@ export interface ExportMeta {
   connected: boolean;
   sessionId: string | null;
   wsUri: string | null;
+  clockOffsetMs?: number | null;
   /** Per-collector health, so a reader can tell empty from blind. */
   collectors: CollectorReport[];
 }
@@ -112,6 +119,7 @@ export function exportSession(
       // evaluate — arbitrary Dart execution in the app. Redacted here, in
       // the exporter, so the artifact is safe no matter who builds it.
       wsUri: redactVmServiceUri(meta.wsUri),
+      clockOffsetMs: meta.clockOffsetMs ?? null,
     },
     collectors: meta.collectors,
     counts: store.counts(),

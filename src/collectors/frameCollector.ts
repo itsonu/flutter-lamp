@@ -1,4 +1,4 @@
-import type { Collector } from "./collector.js";
+import { eventTime, type Collector } from "./collector.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { Severity } from "../core/events.js";
 import type { VmService } from "../vm/vmService.js";
@@ -36,7 +36,7 @@ export class FrameCollector implements Collector {
 
       const janky = elapsedUs > FRAME_BUDGET_US;
       store.add({
-        timestamp: Date.now(),
+        timestamp: eventTime(event),
         source: "Flutter.Frame",
         severity,
         category: "frame",

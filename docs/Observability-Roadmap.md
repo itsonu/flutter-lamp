@@ -192,15 +192,23 @@ to true in debug off the web, which is why the event exists at all
 (`widget_inspector.dart:1028`).
 
 Recording the ranking pair surfaced the transport limit that any timing argument
-has to respect. Events are stamped when the server receives them, and over
-adb/WiFi delivery stalls for seconds and then flushes — 111 frame events inside
-one second, above any refresh rate. The DDS backlog drained during connect has
-the same property: within it, receipt order is drain order. An incident arguing
-from ordering therefore has to be recorded live, over a transport that does not
-batch. Carrying app-side frame time (`Flutter.Frame` reports `startTime`) would
-remove the constraint, and is deliberately *not* done here — it changes
-production instrumentation and the correlation window's meaning, which is a
-separate decision from adding an incident.
+has to respect, and it has since been fixed at the source. Events were stamped
+on receipt, and over adb/WiFi delivery stalls for seconds and then flushes — 111
+frame events inside one second, above any refresh rate; the DDS backlog drained
+at connect has the same property, since within it receipt order is drain order.
+
+Every VM Service `Event` already carried the time the VM posted it, and the
+collectors now use it. Measured before the change: six backlog frames within 1ms
+of each other by receipt against 331ms of real spread. After: at most 10 frames
+in any second against a 100ms tick, median gap 103.0ms. This is what the 3s
+correlation window, `what_changed`'s baseline-versus-incident comparison, and
+every future ordering-sensitive incident rest on.
+
+Left as a known, reported property rather than corrected: this server's own
+notes and polled memory samples still carry the host clock, so a timeline can
+mix two clocks. `clockOffsetMs` is on the status tool and in every export;
+correcting it without ever measuring a genuinely skewed device would be a guess
+applied to every timestamp.
 
 Capturing the exception incident surfaced a real defect ahead of the golden: `diagnose()` read a
 flat most-recent-2,000-event window, and the probe's 2,000 provider events in 30

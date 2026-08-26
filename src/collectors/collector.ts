@@ -44,3 +44,26 @@ export function decodeBytes(bytes: string | undefined): string {
   if (!bytes) return "";
   return Buffer.from(bytes, "base64").toString("utf8");
 }
+
+/**
+ * When the app posted an event, not when we happened to receive it.
+ *
+ * Every VM Service `Event` carries a `timestamp` from the VM's own clock, and
+ * receipt time is not a usable substitute for it. DDS delivers a backlog the
+ * instant a stream subscription is accepted, and a slow link stalls and then
+ * flushes, so `Date.now()` collapses distinct moments onto one.
+ *
+ * Measured against a running app rather than assumed: six backlog frames
+ * arrived within 1ms of each other by receipt while their posted times were
+ * spread across 331ms, and a nine-second session lost 1.1s of its span. Over
+ * adb/WiFi it is worse — 111 frame events landing inside one second, above any
+ * refresh rate. Everything that reasons about order or windows (correlation,
+ * baseline-vs-incident comparison, a timeline handed to a human) is wrong by
+ * exactly that much.
+ *
+ * Falls back to receipt time: a slightly misplaced event beats a dropped one.
+ */
+export function eventTime(event: unknown): number {
+  const ts = (event as { timestamp?: unknown } | undefined)?.timestamp;
+  return typeof ts === "number" && Number.isFinite(ts) ? ts : Date.now();
+}

@@ -1,4 +1,4 @@
-import type { Collector } from "./collector.js";
+import { eventTime, type Collector } from "./collector.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { VmService } from "../vm/vmService.js";
 import { redactText } from "../core/redaction.js";
@@ -36,7 +36,7 @@ export class NavigationCollector implements Collector {
 
       if (!route) {
         store.add({
-          timestamp: Date.now(),
+          timestamp: eventTime(event),
           source: "Flutter.Navigation",
           severity: "info",
           category: "navigation",
@@ -53,7 +53,7 @@ export class NavigationCollector implements Collector {
       const label = name ?? description ?? "unnamed route";
 
       store.add({
-        timestamp: Date.now(),
+        timestamp: eventTime(event),
         source: "Flutter.Navigation",
         severity: "info",
         category: "navigation",

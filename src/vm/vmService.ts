@@ -19,6 +19,11 @@ export class VmService extends EventEmitter {
     string,
     { resolve: (v: unknown) => void; reject: (e: Error) => void }
   >();
+  /**
+   * VM clock minus ours, in ms, from the most recent stamped event. Null until
+   * one arrives. See the note where it is set.
+   */
+  clockOffsetMs: number | null = null;
 
   private constructor(public readonly wsUri: string) {
     super();
@@ -81,6 +86,17 @@ export class VmService extends EventEmitter {
     // Stream notification (no id): re-emit for collectors.
     if (msg.method === "streamNotify" && msg.params) {
       const { streamId, event } = msg.params;
+      // How far the VM's clock sits from ours, as most recently observed.
+      // Events are stamped with the VM's clock and our own notes with this
+      // process's, so the two are mixed in one timeline. On the same machine
+      // this is single-digit milliseconds; across a device it is whatever the
+      // device's clock says, and nothing here can tell the difference between
+      // that and a real gap. Recorded so a reader can check rather than
+      // corrected silently — a correction that has never been measured against
+      // a skewed device would be a guess applied to every timestamp.
+      if (typeof event?.timestamp === "number" && Number.isFinite(event.timestamp)) {
+        this.clockOffsetMs = event.timestamp - Date.now();
+      }
       this.emit(`stream:${streamId}`, event);
       this.emit("streamNotify", streamId, event);
       return;

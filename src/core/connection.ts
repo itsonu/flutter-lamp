@@ -51,6 +51,16 @@ export interface ConnectionStatus {
   reconnecting: boolean;
   /** Consecutive failed reconnect attempts. */
   reconnectAttempt: number;
+  /**
+   * The VM's clock minus this process's, in ms, as last observed on a stream
+   * event. Null before any stamped event arrives.
+   *
+   * Captured events are stamped with the VM's clock; our own notes about the
+   * connection, and polled memory samples, are stamped with ours. A large
+   * value here means the two are being compared across a real offset, and a
+   * timeline that mixes them is off by that much.
+   */
+  clockOffsetMs: number | null;
 }
 
 /**
@@ -320,6 +330,7 @@ class ConnectionManager {
       sessionId: this.store.currentSession(),
       reconnecting: this.reconnectTimer !== undefined,
       reconnectAttempt: this.reconnectAttempt,
+      clockOffsetMs: this.vm?.clockOffsetMs ?? null,
     };
   }
 

@@ -1,4 +1,4 @@
-import type { Collector, CollectorHealth } from "./collector.js";
+import { eventTime, type Collector, type CollectorHealth } from "./collector.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { VmService } from "../vm/vmService.js";
 
@@ -114,7 +114,7 @@ export class StateCollector implements Collector {
       this.seen.add(match.framework);
       const data = event.extensionData ?? {};
       store.add({
-        timestamp: Date.now(),
+        timestamp: eventTime(event),
         source: kind,
         // One provider update is not notable on its own. It becomes evidence in
         // aggregate, correlated against something that is.
