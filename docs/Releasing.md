@@ -109,8 +109,14 @@ an interactive login:
 
 ```bash
 npm login
-npm deprecate flutter-lamp@X.Y.Z "why"
+npm deprecate flutter-lamp@X.Y.Z "why" --otp=<code>
 ```
+
+`--otp` is not optional if the account has 2FA on writes: npm answers `EOTP`
+without it. That is also the second reason this cannot be automated — an
+authenticator code is, by definition, something a person supplies. An
+automation token would bypass both the OIDC scope limit and the 2FA prompt,
+which is precisely the trade being declined here.
 
 [`deprecate.yml`](../.github/workflows/deprecate.yml) automates this and stays
 inert until an `NPM_TOKEN` exists or npm broadens the scope. Its guards are
