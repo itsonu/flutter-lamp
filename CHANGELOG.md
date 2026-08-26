@@ -132,6 +132,45 @@ auth token included, to logcat at startup - so `flutter run` is not the only
 source of a connectable URI, contrary to the limitation recorded in 0.15.0.
 Automatic discovery from logcat is a follow-up, not in this release.
 
+### Fixed - release pipeline
+
+The release automation could publish a tree nobody meant to publish. Its only
+check was that the selected commit's `package.json` version matched the queue —
+which two different commits can both satisfy, and did.
+
+- **The queue could name a mutable ref.** Nothing validated field 2, so a branch
+  or tag name would have been checked out happily; "release the queued commit"
+  would have meant "release whatever that ref points at this morning". Entries
+  are now full 40-character SHAs, validated before checkout, and `HEAD` is
+  asserted equal to the named commit afterwards rather than assumed.
+- **`src/version.ts` was never checked.** It is a second version declaration and
+  the one the running server reports over MCP, so a drift there would have
+  shipped a server that misreports itself. All three declarations —
+  `package.json`, `package-lock.json`, `src/version.ts` — must now agree.
+- **An existing tag was reused blindly.** A `v0.18.0` already pointing at a
+  different commit was logged as "reusing it", which would publish a tarball
+  built from one tree under a tag naming another. Refused now. A tag already
+  pointing at the release commit is still fine, so re-running after a partial
+  failure works.
+- **Nothing confirmed the publish landed.** The publish step deliberately does
+  not fail the run when no credential is configured, so a run could go green
+  having published nothing. npm is now re-read afterwards, and the published
+  `gitHead` is compared against the release commit.
+- **No changelog check.** The queue could name a version with no release notes;
+  the GitHub release would silently fall back to "See CHANGELOG.md."
+
+### Added - release pipeline
+
+- `scripts/verify-release.sh` - the whole chain as one command, answering "is
+  this exact commit safe to publish as this version?" Queue entry, commit SHA,
+  clean tree, three version declarations, changelog section, tag state, npm
+  state, build, tests, and the packed tarball's contents and declared version.
+  It publishes nothing and writes nothing outside a temp directory. CI runs it
+  in place of the old version check and the bare build/test step; run it by hand
+  with `npm run verify-release -- 0.18.0 $(git rev-parse HEAD)`.
+- `publishConfig` in `package.json`, so the registry and public access are
+  declared in the repository rather than left to a CLI flag.
+
 ### Added - audit pass
 
 - `probe/EVIDENCE.md` - the state-management evidence table: measurement,

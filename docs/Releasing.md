@@ -11,9 +11,47 @@ advances itself and is never written back to. It keys on the registry rather
 than on tags because a version can be tagged and released on GitHub while its
 npm publish is still pending; a tag-based check would skip it forever.
 
-Each run: check the gap since the last tag, check out that commit, verify its
-`package.json` version matches the queue, build, test, tag, publish to npm, and
-create a GitHub release from the matching `CHANGELOG.md` section.
+Each run: check the gap since the last tag, check out that commit, run
+`scripts/verify-release.sh`, tag, publish to npm, confirm the version landed,
+and create a GitHub release from the matching `CHANGELOG.md` section.
+
+## The verification chain
+
+A published tarball has to be traceable to a reviewed commit, so every link
+between the two is checked and any disagreement is fatal:
+
+```
+release queue entry
+  -> expected commit SHA   full 40 hex chars, never an abbreviation or a ref
+  -> checked-out HEAD      asserted equal to it after the detached checkout
+  -> package version       package.json, package-lock.json and src/version.ts
+  -> changelog section     a non-empty "## [X.Y.Z]" exists
+  -> release tag           absent, or already pointing at this exact commit
+  -> npm                   not already published
+  -> tarball               built from this tree, carrying nothing extra
+```
+
+`scripts/verify-release.sh <version> <full-sha>` is that chain, as one command.
+It publishes nothing and writes nothing outside a temporary directory, so it is
+safe to run at any time:
+
+```bash
+npm run verify-release -- 0.18.0 $(git rev-parse HEAD)
+```
+
+Run it from a checkout of the commit being released. The workflow runs the same
+script, which is why the queue must name a full SHA: an abbreviation can become
+ambiguous as the repo grows, and a branch or tag name is mutable, so "release
+the queued commit" would quietly become "release whatever that ref points at
+this morning".
+
+Two links deserve their own note. A **tag that already exists but points
+somewhere else** is refused rather than reused: reusing it would publish a
+tarball built from one tree under a tag naming another, and a tag is the one
+artifact here that outlives a bad run. A tag already pointing at the release
+commit is fine, so re-running after a partial failure works. And **npm is
+re-read after publishing** — previously nothing confirmed the version actually
+landed, so a run could go green having published nothing at all.
 
 The cron is daily and the ~48h gap is enforced inside the job. GitHub's `*/2`
 day-of-month skips awkwardly across month boundaries — the 31st is followed by
@@ -94,8 +132,11 @@ commit being released, not from `main`, or you will ship the wrong tree.
 
 1. Land the work with a version bump in `package.json`, `package-lock.json` and
    `src/version.ts`, plus a `CHANGELOG.md` entry under `## [X.Y.Z]`.
-2. Append `X.Y.Z <commit>` to `.github/release-queue.txt`.
+2. Append `X.Y.Z <full-40-char-sha>` to `.github/release-queue.txt`, in a
+   separate commit — the release commit is written first, so it cannot contain
+   the entry that names it. The workflow reads the queue from the branch before
+   checking out the release commit, for exactly this reason.
+3. Verify it: `npm run verify-release -- X.Y.Z <sha>` from that commit.
 
-The workflow refuses to release a commit whose `package.json` version does not
-match the queue, so a mismatch fails loudly rather than publishing the wrong
-tree under the right tag.
+Every check above fails loudly rather than publishing the wrong tree under the
+right tag.

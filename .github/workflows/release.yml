@@ -68,6 +68,23 @@ jobs:
             exit 0
           fi
 
+          # A full 40-character hex SHA and nothing else. An abbreviation can
+          # become ambiguous as the repo grows; a branch or tag name is worse,
+          # because it is mutable — "release the queued commit" would quietly
+          # mean "release whatever that ref points at this morning".
+          case "$commit" in
+            *[!0-9a-f]*) echo "::error::Queue entry for $version is '$commit', not a hex SHA"; exit 1 ;;
+          esac
+          if [ "${#commit}" -ne 40 ]; then
+            echo "::error::Queue entry for $version is ${#commit} chars; a full 40-char SHA is required"
+            exit 1
+          fi
+
+          # The commit being released is written before the queue entry naming
+          # it, so its own tree does not contain that entry. Keep the branch's
+          # copy, which is the authoritative one.
+          cp .github/release-queue.txt "$RUNNER_TEMP/release-queue.txt"
+
           echo "Selected $version at $commit"
           {
             echo "skip=false"
@@ -103,7 +120,16 @@ jobs:
 
       - name: Check out the release commit
         if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
-        run: git checkout --detach "${{ steps.pick.outputs.commit }}"
+        run: |
+          set -euo pipefail
+          expected="${{ steps.pick.outputs.commit }}"
+          git checkout --detach "$expected"
+          head="$(git rev-parse HEAD)"
+          if [ "$head" != "$expected" ]; then
+            echo "::error::Checked out $head but the queue named $expected"
+            exit 1
+          fi
+          echo "Standing on $head"
 
       - uses: actions/setup-node@v5
         if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
@@ -112,23 +138,16 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
-      - name: Verify the commit really is this version
+      - name: Verify the release candidate
         if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
-        run: |
-          set -euo pipefail
-          actual="$(node -p "require('./package.json').version")"
-          expected="${{ steps.pick.outputs.version }}"
-          if [ "$actual" != "$expected" ]; then
-            echo "::error::Queue says $expected but ${{ steps.pick.outputs.commit }} has $actual"
-            exit 1
-          fi
-
-      - name: Build and test
-        if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
+        env:
+          # The branch's queue, stashed before the detached checkout.
+          RELEASE_QUEUE: ${{ runner.temp }}/release-queue.txt
         run: |
           npm ci
-          npm run build
-          npm test
+          bash scripts/verify-release.sh \
+            "${{ steps.pick.outputs.version }}" \
+            "${{ steps.pick.outputs.commit }}"
 
       - name: Tag the release
         if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
@@ -136,7 +155,12 @@ jobs:
           set -euo pipefail
           version="${{ steps.pick.outputs.version }}"
           if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
-            echo "Tag v$version already exists — reusing it."
+            at="$(git rev-list -n 1 "refs/tags/v$version")"
+            if [ "$at" != "${{ steps.pick.outputs.commit }}" ]; then
+              echo "::error::Tag v$version already points at $at, not the release commit"
+              exit 1
+            fi
+            echo "Tag v$version already points here — reusing it."
             exit 0
           fi
           git config user.name "github-actions[bot]"
@@ -200,6 +224,36 @@ jobs:
             echo "Then re-run this workflow. Nothing else changes, and no credential"
             echo "is ever created or stored."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify what landed on npm
+        if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          version="${{ steps.pick.outputs.version }}"
+
+          # The registry is read-after-write eventually consistent; give it a
+          # moment before concluding the publish did not happen.
+          for attempt in 1 2 3 4 5; do
+            if npm view "flutter-lamp@$version" version >/dev/null 2>&1; then
+              published=true; break
+            fi
+            published=false
+            sleep 10
+          done
+
+          if [ "$published" != "true" ]; then
+            echo "::warning::flutter-lamp@$version is not on npm. The tag and GitHub release stand; see the publish step for what to configure."
+            echo "not-published=true" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # It is on npm — now check it is the artifact we meant to ship.
+          gitHead="$(npm view "flutter-lamp@$version" gitHead 2>/dev/null || true)"
+          if [ -n "$gitHead" ] && [ "$gitHead" != "${{ steps.pick.outputs.commit }}" ]; then
+            echo "::error::flutter-lamp@$version on npm was built from $gitHead, not ${{ steps.pick.outputs.commit }}"
+            exit 1
+          fi
+          echo "Verified flutter-lamp@$version on npm${gitHead:+ (gitHead $gitHead)}." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create the GitHub release
         if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
