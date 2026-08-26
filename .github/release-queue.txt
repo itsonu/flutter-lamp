@@ -1,28 +1,25 @@
 # Staged release queue for .github/workflows/release.yml
 #
-# One "<version> <commit>" per line, oldest first. The scheduled job releases
-# the FIRST entry that is not on npm yet, so the queue advances itself and never
-# needs writing back to. Keyed on the registry rather than on tags, because a
-# version can be tagged and released on GitHub while its npm publish is still
-# pending — a tag-based check would skip it forever.
+# One "<version> <full-40-char-commit-sha>" per line, oldest first. The
+# scheduled job releases the FIRST entry that is not on npm yet, so the queue
+# advances itself and never needs writing back to. Keyed on the registry rather
+# than on tags, because a version can be tagged and released on GitHub while its
+# npm publish is still pending — a tag-based check would skip it forever.
+#
+# The SHA must be the full 40 characters. An abbreviation can become ambiguous
+# as the repo grows, and a branch or tag name is mutable, so "release the queued
+# commit" would quietly mean "release whatever that ref points at this morning".
+# scripts/verify-release.sh and the workflow both refuse anything else.
+#
+# 0.4.0-0.17.0 were staged here and are NOT released. They were development
+# milestones with release notes, authored across three days, never independently
+# validated and never installed by anyone. Publishing them in sequence would
+# have left npm's `latest` on 0.3.0 — which drops the DDS event backlog on
+# subscribe, the exact failure this tool exists to catch — for another month,
+# and would have put 0.17.0's since-retracted Bloc claim on `latest` en route.
+# Their history stays in CHANGELOG.md, which is where it belongs.
 #
 # To pause releases: comment out the remaining lines, or disable the workflow.
 # To reorder or skip: edit this file. Nothing else reads it.
 
-0.2.0   0a1eb4f
-0.3.0   d16398f
-0.4.0   cc92a06
-0.5.0   0442ace
-0.6.0   76f98e6
-0.7.0   3a838d3
-0.8.0   ac787ef
-0.9.0   7a4eba0
-0.10.0  8e7f9c5
-0.11.0  8543322
-0.12.0  2316d83
-0.13.0  9c8764f
-0.14.0  8651161
-0.15.0  43a8a18
-0.16.0  286f926
-0.17.0  7eb6a03
-0.18.0  7018ae1
+0.18.0  bb731c3e2bddfd1e9724e68f504e7ddd4caf1ffa
