@@ -132,7 +132,14 @@ interface Hypothesis {
  * docs/Rules.md ("If confidence <70% say Unknown", "Never hallucinate").
  */
 export function diagnose(store: RuntimeStore): Diagnosis {
-  const all = store.query({ limit: 2_000 }); // most-recent-first, current session
+  // No limit, deliberately. A flat cap across all categories lets a chatty
+  // category starve a rare one: measured on a real device, a probe app pushed
+  // 2,000 provider events in 30 seconds, which pushed the session's only
+  // exception to 2,436th newest — outside a 2,000 cap — and the diagnosis
+  // reported that no exceptions were found while the store held one. That is a
+  // confident false negative, the failure mode this engine exists to avoid.
+  // Retention is the only truncation now, and `coverage.evicted` reports it.
+  const all = store.query({}); // most-recent-first, current session
   const limitations = describeLimitations(store, all);
   const coverage = coverageOf(store, all);
 

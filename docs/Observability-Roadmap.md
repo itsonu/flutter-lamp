@@ -148,10 +148,12 @@ today only network carries one, so there is nothing to join.
 Done, in `eval/` and `src/eval/`:
 
 - **Golden incidents** — recorded sessions with expected cause, evidence ids and
-  a confidence band, including a negative where `unknown` is correct. Two so
-  far, deliberately straddling the jank threshold (19.4% must stay unknown,
+  a confidence band, including a negative where `unknown` is correct. Three so
+  far. Two deliberately straddle the jank threshold (19.4% must stay unknown,
   20.0% must be diagnosed) so they pin the boundary rather than two unrelated
-  points.
+  points. The third is an uncaught `StateError` thrown inside `build`: 24.3% of
+  its frames are janky, so the jank hypothesis fires and must still lose,
+  because the session's worst frame is the event *after* the exception.
 - **Replay harness** over `export_session` output. Needed `RuntimeStore.hydrate`,
   because `add()` mints fresh ids and replaying through it would renumber every
   event and invalidate every cited `exc_00042`.
@@ -160,7 +162,9 @@ Done, in `eval/` and `src/eval/`:
 - **A CI gate**, asymmetric on purpose: accuracy has a floor, false confidence
   has a ceiling of zero. Verified by mutation in both directions rather than
   assumed — loosening the jank threshold trips false confidence, tightening it
-  trips only accuracy.
+  trips only accuracy; blinding the exception detector trips false confidence,
+  removing only its stack-trace confidence bonus trips the band and not the
+  ceiling.
 
 The enabler was not the harness. `Diagnosis.rootCause` is prose containing live
 numbers ("worst was 85ms"), so nothing could be scored against it; the engine now
@@ -168,15 +172,27 @@ emits `cause` as a stable `CauseKind` label beside it. Additive.
 
 Still open:
 
-- Incidents for exception, network and memory causes. No probe currently
-  produces an uncaught Flutter error — `bloc_probe`'s handler failures are
-  absorbed by `BlocObserver.onError`, `riverpod_probe`'s become an `AsyncError`
-  inside a provider — so an exception incident needs a probe that throws
-  uncaught.
+- Incidents for network and memory causes. Both probes are offline, and memory
+  needs a session long enough to show sustained growth.
 - Tool calls and tokens per diagnosis. Not measured; needs instrumentation at
   the MCP layer rather than in replay.
 - Enough incidents for top-1 accuracy to be a measurement rather than a
-  regression guard. Two is a floor.
+  regression guard. Three is a floor.
+
+The exception incident needed a probe change, not an engine change:
+`bloc_probe`'s handler failures are absorbed by `BlocObserver.onError` and
+`riverpod_probe`'s become an `AsyncError`, so neither ever reached
+`FlutterError.reportError`. A widget that throws inside `build` does, and the
+inspector posts it as `Flutter.Error` — `isStructuredErrorsEnabled()` defaults
+to true in debug off the web, which is why the event exists at all
+(`widget_inspector.dart:1028`).
+
+Capturing it surfaced a real defect ahead of the golden: `diagnose()` read a
+flat most-recent-2,000-event window, and the probe's 2,000 provider events in 30
+seconds pushed the session's only exception to 2,436th newest. The engine
+reported that no exceptions were found while the store held one. Fixed by
+removing the cap — retention is the only truncation, and `coverage.evicted`
+already reports it.
 
 ## Phase E — Advanced
 

@@ -10,8 +10,9 @@ confidently wrong is worse than one that is missing.
 | `riverpod_probe` | `flutter_riverpod` | Riverpod posts `riverpod:new_event` on the `Extension` stream, payload `{offset: N}`, no `ext.riverpod.*` RPC |
 | `bloc_probe` | `flutter_bloc` | Stock `bloc` posts nothing itself — no events, no `ext.bloc.*` RPC. A flutter_bloc app is still visible through `provider`, which it depends on transitively, but those events count notified dependents rather than transitions. See [EVIDENCE.md](EVIDENCE.md). |
 
-Neither app needs to be tapped. Each runs a five-phase workload on a 20-second
-loop (idle → state churn → rebuild storm → error → navigate) and prints
+Neither app needs to be tapped. Each runs a phased workload on a 20-second loop
+(idle → state churn → rebuild storm → error → navigate; `bloc_probe` adds a
+`crash` phase that throws inside `build`) and prints
 `PROBE_PHASE <name>` before each phase, so an observed event can be attributed
 to the thing that caused it. `bloc_probe` also prints `PROBE_TRANSITION` from a
 `BlocObserver`, which is how "the transitions really happened and the VM Service

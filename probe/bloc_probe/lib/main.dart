@@ -12,7 +12,8 @@
 //   2. events x20  — fast state transitions through a Bloc
 //   3. cubit       — the same through a Cubit, to see if the two differ
 //   4. error       — an event handler that throws (onError / addError)
-//   5. navigate    — push /detail, pop back
+//   5. crash       — a widget that throws during build (uncaught by the app)
+//   6. navigate    — push /detail, pop back
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -145,6 +146,12 @@ class _HomeScreenState extends State<HomeScreen> {
       cubit.boom();
     });
 
+    await _phase('crash', const Duration(seconds: 2), () async {
+      _CrashCell.armed = true;
+      // Arming alone does nothing; the cell only rebuilds when the bloc emits.
+      bloc.add(const Increment());
+    });
+
     await _phase('navigate', const Duration(seconds: 2), () async {
       await Navigator.of(context).pushNamed('/detail');
     });
@@ -171,6 +178,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 builder: (_, value) => Text('cubit: $value'),
               ),
             ),
+            // Bounded on purpose: the framework substitutes an ErrorWidget for
+            // the failed subtree, and an ErrorWidget in an unbounded Column
+            // overflows and reports a *second*, unrelated framework error.
+            const SizedBox(height: 24, child: _CrashCell()),
             ElevatedButton(onPressed: _runCycle, child: const Text('run cycle now')),
             Expanded(
               child: GridView.count(
@@ -180,6 +191,34 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+      );
+}
+
+/// The one genuinely *uncaught* failure in this probe.
+///
+/// The bloc and cubit failures in the `error` phase are handed to
+/// `BlocObserver.onError`, which is bloc catching its own error: nothing
+/// reaches `FlutterError.onError`, so the VM Service never sees it. A throw
+/// inside `build` is caught by the framework and reported through
+/// `FlutterError.reportError`, which in debug posts a `Flutter.Error`
+/// extension event — the shape of a real "this screen crashes" bug.
+class _CrashCell extends StatelessWidget {
+  const _CrashCell();
+
+  /// Armed for exactly one build. The next transition rebuilds this subtree
+  /// cleanly, so the app keeps producing its normal workload instead of
+  /// sitting on a permanently broken screen.
+  static bool armed = false;
+
+  @override
+  Widget build(BuildContext context) => BlocBuilder<CounterBloc, int>(
+        builder: (_, value) {
+          if (armed) {
+            armed = false;
+            throw StateError('bloc_probe: deliberate uncaught build failure');
+          }
+          return Text('crash cell ok ($value)', style: const TextStyle(fontSize: 10));
+        },
       );
 }
 

@@ -16,10 +16,14 @@ misbehaved.
 
 - **`eval/incidents/*.json`** - golden incidents: a real session captured from a
   device with `export_session` in `full` mode, plus what the right answer is.
-  Two so far, deliberately straddling the jank threshold: 74/381 frames (19.4%)
-  must stay `unknown`, 48/240 (20.0%) must be diagnosed as `jank`. The pairing
-  is the point - together they pin the *boundary*, which is the part of a
-  heuristic that drifts. Two unrelated incidents would not.
+  Three so far. Two deliberately straddle the jank threshold: 74/381 frames
+  (19.4%) must stay `unknown`, 48/240 (20.0%) must be diagnosed as `jank`. The
+  pairing is the point - together they pin the *boundary*, which is the part of a
+  heuristic that drifts. Two unrelated incidents would not. The third is an
+  uncaught `StateError` thrown inside `build`, where the correct answer is
+  `exception` even though the session's jank ratio (24.3%) also clears the jank
+  bar - because the worst frame of the session is the event *after* the
+  exception, so the jank hypothesis' own anchor is downstream of the cause.
 - **`src/eval/replay.ts`** - hydrates a recorded session and re-runs the
   diagnosers. Nothing new had to be invented to record an incident:
   `export_session` was already versioned, carried every event and diagnosis, and
@@ -42,7 +46,10 @@ is decoration. Loosening the jank threshold to 15% makes the 19.4% session get a
 confident jank verdict and trips three tests including false confidence.
 Tightening it to 25% makes the 20.0% session abstain and trips two - notably
 *not* false confidence, because abstaining when jank was real is wrong, not
-confidently wrong.
+confidently wrong. On the exception path: blinding the exception detector, or
+letting jank outrank it, trips false confidence both times; removing only the
+stack-trace confidence bonus trips the band and leaves false confidence at zero.
+Same asymmetry, from the other side.
 
 ### Changed
 
@@ -58,6 +65,15 @@ confidently wrong.
 
 ### Fixed
 
+- **A chatty app could starve the exception out of its own diagnosis.**
+  `diagnose()` read a flat most-recent-2,000-event window across all categories,
+  so a category that bursts could crowd out a rare one. Measured, not
+  hypothesised: `bloc_probe` pushed 2,000 provider events in 30 seconds, which
+  put the session's only exception 2,436th newest. The engine never saw it and
+  reported that no exceptions were found - a confident false negative
+  contradicted by the store it was reading, which is the exact failure this
+  engine exists to avoid. The cap is gone; retention is the only truncation, and
+  `coverage.evicted` already reports that.
 - `dist/eval/` was shipping in the npm tarball (79 -> 83 files). Development
   tooling in a runtime package. Excluded, and `verify-release.sh` now refuses
   `/eval/` so it cannot come back silently.

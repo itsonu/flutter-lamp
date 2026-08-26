@@ -62,3 +62,35 @@ test("severity + category filtering in store query", () => {
   assert.equal(errorsOnly.length, 1);
   assert.equal(errorsOnly[0].message, "boom");
 });
+
+test("a chatty category does not starve the exception", () => {
+  // Regression guard, measured on a real device: bloc_probe pushed 2,000
+  // provider events in 30 seconds, which put the session's only exception
+  // 2,436th newest. The engine read a flat most-recent-2,000 window, never saw
+  // it, and reported that no exceptions were found — a confident false
+  // negative contradicted by the store it was reading.
+  const store = new RuntimeStore();
+  const now = 2_000_000;
+  store.add({
+    timestamp: now,
+    source: "Flutter.Error",
+    severity: "error",
+    category: "exception",
+    message: "Bad state: starved by volume",
+    data: { stackTrace: "#0 ..." },
+  });
+  for (let i = 0; i < 2_500; i++) {
+    store.add({
+      timestamp: now + i,
+      source: "provider:provider_changed",
+      severity: "debug",
+      category: "state",
+      message: `notified ${i}`,
+      data: {},
+    });
+  }
+
+  const d = diagnose(store);
+  assert.equal(d.cause, "exception");
+  assert.equal(d.rootCause, "Bad state: starved by volume");
+});

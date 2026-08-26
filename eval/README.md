@@ -52,10 +52,20 @@ of **zero**. Both are verified to fail, not assumed to — see below.
 | --- | --- | --- |
 | `jank-20pct-build-bound` | `jank`, diagnosed, ~0.8 | 48/240 frames (20.0%) over budget, worst 64.5ms, build-bound. Nothing competes: no exceptions, no network, only info logs |
 | `unknown-jank-just-under-threshold` | `unknown` | 74/381 frames (19.4%) — real jank, below the 20% the hypothesis requires, and no other fault. The honest answer is "nothing I can name" |
+| `exception-uncaught-build-failure` | `exception`, diagnosed, ~0.8 | An uncaught `StateError` thrown inside `build`, twice, with a stack. 24.3% of frames are janky too — so the jank hypothesis fires and must still lose |
 
-The two are a deliberate pair, and the pairing is the point: 19.4% must stay
-unknown, 20.0% must be diagnosed. Together they pin the **boundary**, which is
-the part of a heuristic that actually drifts. Two unrelated incidents would not.
+The first two are a deliberate pair, and the pairing is the point: 19.4% must
+stay unknown, 20.0% must be diagnosed. Together they pin the **boundary**, which
+is the part of a heuristic that actually drifts. Two unrelated incidents would
+not.
+
+The exception incident is a **ranking** case rather than a boundary one, and it
+is not decided by the priority ordering in the code. The worst frame of that
+session, `frm_00062` at 274.68ms with 186.94ms of build, is the event
+immediately *after* `exc_00061` — reporting a structured error and rebuilding the
+failed subtree as an ErrorWidget is what made it the worst frame. The jank
+hypothesis' own anchor is downstream of the exception, so answering `jank` there
+would hand a reader the symptom and call it the cause.
 
 Verified by mutation — the gate is not decoration:
 
@@ -63,25 +73,30 @@ Verified by mutation — the gate is not decoration:
 | --- | --- |
 | jank threshold 20% → 15% | 3 tests fail, **including false confidence**: the 19.4% session gets a confident jank verdict it has not earned |
 | jank threshold 20% → 25% | 2 tests fail on accuracy and evidence, and **false confidence does not fire** — abstaining when jank was real is wrong, not confidently wrong |
+| exception detector blinded | 3 tests fail, **including false confidence**: the crash session is answered `jank`, confidently and wrongly |
+| jank priority raised above exception | same 3 failures — the ranking is load-bearing, not cosmetic |
+| stack-trace confidence bonus removed | 1 test fails on the band (0.7 against [0.75, 0.85]); **false confidence stays 0%** — less sure about the right cause is not confidently wrong |
 
 Too eager trips the ceiling. Too cautious trips the floor. Different failures,
 which is what the scoring is for.
 
 ## Not covered yet
 
-- **No exception incident.** Neither probe surfaces an uncaught Flutter error:
-  `bloc_probe`'s deliberate handler failures are absorbed by `BlocObserver.onError`
-  and never reach `FlutterError.onError`, and `riverpod_probe`'s throw phase
-  becomes an `AsyncError` inside a provider. Producing one needs a probe that
-  actually throws uncaught, which is the next incident to add.
 - **No network incident.** Both probes are offline.
+- **No memory incident.** Needs a session long enough to show sustained growth.
+- **No incident where the exception is starved by volume.** The regression that
+  motivated it — a flat 2,000-event diagnosis window letting a bursty category
+  crowd out the session's only exception — is guarded by a unit test in
+  `src/diagnosis/engine.test.ts` instead. A capture large enough to reproduce it
+  is ~1 MB of mostly repeated provider events, which buys a fixture no sharper
+  than 30 deterministic lines.
 - **No memory incident.** Needs a session long enough to show sustained growth.
 - **Confidence bands are policy, not calibration.** They say "the engine should
   be about this sure", chosen to leave room for tuning. They are not evidence
   that 0.8 means 80%.
-- **Two incidents is a floor, not a suite.** Top-1 accuracy over two cases is a
-  regression guard, not a measurement of the engine's accuracy. Do not quote it
-  as one.
+- **Three incidents is a floor, not a suite.** Top-1 accuracy over three cases
+  is a regression guard, not a measurement of the engine's accuracy. Do not
+  quote it as one.
 
 ## Adding an incident
 
