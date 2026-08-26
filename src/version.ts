@@ -5,4 +5,4 @@
  * from dist/, where package.json sits outside rootDir and would need a runtime
  * file read on every start. Bumped by the release commit alongside package.json.
  */
-export const VERSION = "0.18.0";
+export const VERSION = "0.18.1";
