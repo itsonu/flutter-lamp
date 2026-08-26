@@ -7,6 +7,7 @@ import { NavigationCollector } from "../collectors/navigationCollector.js";
 import { NetworkCollector } from "../collectors/networkCollector.js";
 import { RebuildCollector } from "../collectors/rebuildCollector.js";
 import { RuntimeStore } from "./runtimeStore.js";
+import { redactVmServiceUri } from "./redaction.js";
 import { StateCollector } from "../collectors/stateCollector.js";
 import { VmService } from "../vm/vmService.js";
 import { diagnoseUnreachable } from "../vm/adb.js";
@@ -141,16 +142,23 @@ class ConnectionManager {
 
     this.vm = vm;
     this.isolateId_ = isolateId;
+    // Redacted before it is stored, and before it is returned. The path
+    // segment of a VM Service URI authorises `evaluate` — arbitrary Dart
+    // execution in the app — so it must not enter the event store, where
+    // what_changed, the dashboard and the session export all read from, and it
+    // must not go back to the caller either. The raw URI stays in `lastUri`
+    // for reconnect and in VmService for the socket; nothing else needs it.
+    const safeUri = redactVmServiceUri(vm.wsUri) ?? "";
     this.store.add({
       timestamp: Date.now(),
       source: "system",
       severity: "info",
       category: "system",
-      message: `${verb} to VM Service at ${vm.wsUri}`,
-      data: { wsUri: vm.wsUri, isolateId, sessionId },
+      message: `${verb} to VM Service at ${safeUri}`,
+      data: { wsUri: safeUri, isolateId, sessionId },
     });
 
-    return { wsUri: vm.wsUri, isolateId, collectors: this.collectors.map((c) => c.name), sessionId };
+    return { wsUri: safeUri, isolateId, collectors: this.collectors.map((c) => c.name), sessionId };
   }
 
   /**
@@ -308,7 +316,7 @@ class ConnectionManager {
     return {
       connected: this.connected,
       isolateId: this.isolateId_ ?? null,
-      wsUri: this.vm?.wsUri ?? null,
+      wsUri: redactVmServiceUri(this.vm?.wsUri ?? null),
       sessionId: this.store.currentSession(),
       reconnecting: this.reconnectTimer !== undefined,
       reconnectAttempt: this.reconnectAttempt,

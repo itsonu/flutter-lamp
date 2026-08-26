@@ -135,9 +135,20 @@ function escapeRegExp(s: string): string {
  * arbitrary Dart execution in the app. The host and port are useful context and
  * are kept; the token is not, and an exported session is meant to be shared.
  */
+/**
+ * The path segment of a VM Service URI is an auth token, and it authorises
+ * `evaluate` — arbitrary Dart execution in the app.
+ *
+ * Deliberately NOT gated on `config.enabled`. `FLUTTER_LAMP_REDACT=off` exists
+ * so a developer can see their own app's raw headers and log text; it is a
+ * choice about *observed evidence*. This is not evidence, it is our own
+ * connection credential, and nobody asking to see their own request headers has
+ * asked to have a remote-code-execution token written into every export and
+ * broadcast to every browser on the dashboard. Host and port survive, which is
+ * all a reader needs to know which app was attached.
+ */
 export function redactVmServiceUri(uri: string | null): string | null {
   if (!uri) return uri;
-  if (!config.enabled) return uri;
   // ws://host:port/<token>/ws  ->  ws://host:port/[REDACTED]/ws
   return uri.replace(/^(wss?:\/\/[^/]+\/)([^/]+)(\/.*)?$/i, (_m, head, _token, tail) =>
     `${head}${REDACTED}${tail ?? ""}`,

@@ -324,7 +324,11 @@ export function registerTools(server: McpServer): void {
         const res = await withInspectorGroup(isolateCall, (groupName) =>
           connection.isolateCall<{ result?: unknown }>(
             "ext.flutter.inspector.getRootWidgetSummaryTree",
-            { groupName },
+            // `objectGroup`, not `groupName`. Flutter registers this through
+            // _registerObjectGroupServiceExtension, which reads
+            // parameters['objectGroup']! — a missing key throws inside the
+            // observed app rather than returning an error here.
+            { objectGroup: groupName },
           ),
         );
         return json({ tree: simplifyNode(res?.result ?? res, maxDepth) });
@@ -349,7 +353,12 @@ export function registerTools(server: McpServer): void {
         const res = await withInspectorGroup(isolateCall, (groupName) =>
           connection.isolateCall<{ result?: unknown }>(
             "ext.flutter.inspector.getSelectedSummaryWidget",
-            { previousSelectionId: null, groupName },
+            // Same required key. The previous selection id, if one were passed,
+            // would go in `arg` — this extension is registered through
+            // _registerServiceExtensionWithArg, which asserts on `objectGroup`
+            // and reads the id from `arg`. Omitting it means "no previous
+            // selection", which is what we want.
+            { objectGroup: groupName },
           ),
         );
         return json({ selected: simplifyNode(res?.result ?? res, 6) });

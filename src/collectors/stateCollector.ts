@@ -13,8 +13,9 @@ import type { VmService } from "../vm/vmService.js";
  * `probe/riverpod_probe` on flutter_riverpod 3.4.2: 98 events over 70 seconds,
  * all inside the workload phases (tick, invalidate, throw) and none in the idle
  * or navigate phases — so the count tracked real provider work in that run.
- * That is one observation, not a repeated invariant; `probe/EVIDENCE.md` labels
- * it as such and `probe/measure.mjs` re-runs it.
+ * Reproduced: a second independent 70s run gave 100 events with the same phase
+ * attribution, so the phases are an invariant even though the count is just the
+ * probe's workload rate. `probe/measure.mjs` re-runs it.
  *
  * The payload is `{offset: N}` and nothing else: a pointer into a buffer inside
  * the app, with no `ext.riverpod.*` service extension registered to read it.
@@ -31,14 +32,20 @@ import type { VmService } from "../vm/vmService.js";
  * A flutter_bloc app is still not silent, for an indirect reason: `flutter_bloc`
  * depends transitively on `provider` (`probe/bloc_probe/pubspec.lock`), and
  * `provider` posts `provider:provider_changed` when dependents are notified.
- * Measured on `probe/bloc_probe`: 20 printed transitions alongside ~1,220
- * provider events.
+ * Measured on `probe/bloc_probe`, three runs: 60.6, 61.6 and 61.0 provider
+ * events per transition, with every one of 80 transitions followed by a burst
+ * inside a second.
  *
  * That ratio is the important part. The probe has `stormWatchers = 60`, each a
  * `BlocBuilder`, so ~60 notifications per transition — which means the event
  * count measures **how many widgets were notified, not how many state changes
  * happened**. Bloc transition counts cannot be recovered from it, and an app
  * whose lookup avoided provider would produce nothing at all.
+ *
+ * Nor is the signal Bloc-specific even here: ~20 provider events per run had no
+ * transition at all, because a `Cubit` fires `onChange` rather than
+ * `onTransition`. A provider event means "dependents were notified", full
+ * stop.
  *
  * See `probe/EVIDENCE.md` for the measurements and what each does not
  * establish.

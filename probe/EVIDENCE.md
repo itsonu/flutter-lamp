@@ -16,7 +16,7 @@ Every row is one of four kinds:
 
 | Measurement | Observation | Interpretation | Limitation |
 | --- | --- | --- | --- |
-| `riverpod_probe`, flutter_riverpod 3.4.2, one 70s run | 98 `riverpod:new_event` on the `Extension` stream, all inside the tick/invalidate/throw phases, none in idle or navigate | **observed.** Riverpod announces provider activity, and the count tracks phases that touch providers | Single run. Phase attribution has not been repeated, so treat the exact figure as one example rather than an invariant |
+| `riverpod_probe`, flutter_riverpod 3.4.2, two independent 70s runs | 98 then 100 `riverpod:new_event` on the `Extension` stream. Both runs: all events inside the tick/invalidate/throw phases, **none** in idle or navigate | **observed, reproduced.** Riverpod announces provider activity, and the count tracks the phases that touch providers | The count is workload-dependent, so 98/100 is the probe's rate, not Riverpod's. The *phase attribution* is what reproduced |
 | Payload inspection | `{offset: N}` and nothing else | **observed.** The event carries a buffer index, not state | The buffer lives in the app; the offset cannot be dereferenced from outside |
 | `getIsolate.extensionRPCs` | 0 of 74 registered RPCs match `ext.riverpod.*` | **observed.** No service extension exists to resolve the offset | Provider names and values are therefore unavailable |
 
@@ -26,7 +26,10 @@ Every row is one of four kinds:
 | --- | --- | --- | --- |
 | `bloc_probe`, flutter_bloc 9.1.1 | Zero `bloc:`-prefixed extension events; zero `ext.bloc.*` RPCs | **observed.** Stock `bloc` posts nothing of its own to the VM Service | Its observability runs through `BlocObserver`, in-process, unreachable from outside |
 | `probe/bloc_probe/pubspec.lock` | `provider` present as a transitive dependency of `flutter_bloc` | **documented.** flutter_bloc's lookup is provider-backed | A Bloc app that avoided provider-backed lookup would be silent here |
-| `bloc_probe` run, Stdout + Extension on one socket | 20 `PROBE_TRANSITION` markers; ~1,220 `provider:provider_changed`; each burst follows a transition marker | **observed.** A flutter_bloc app is *not* silent on the VM Service | Ordering was read from one interleaved stream; a formal per-transition attribution has not been run |
+| `bloc_probe`, 3 runs of 25s, Stdout + Extension on one socket (`measure-bloc.mjs`) | 35/25/20 transitions against 2,120/1,540/1,220 provider events | **observed, reproduced.** A flutter_bloc app is *not* silent on the VM Service | Read from one interleaved stream, so ordering is a property of one clock |
+| Per-transition attribution, same 3 runs | **80 of 80 transitions** had a provider burst within 1s: 35/35, 25/25, 20/20 | **observed.** Every Bloc transition does produce provider notifications | A 1s window cannot show the transition came *first*; it shows they co-occur |
+| Events per transition, same 3 runs | 60.6, 61.6, 61.0 | **observed, reproduced.** Stable across runs, and it matches `stormWatchers = 60` | Confirms the count is a function of watcher count, not of state changes |
+| Provider events with no Bloc transition, same 3 runs | 20 per run, in all three | **observed.** The probe's `BlocObserver` overrides `onTransition` (Bloc) and `onError`, **not** `onChange` — so `CounterCubit` changes notify provider dependents while printing no `PROBE_TRANSITION` | Provider events are not Bloc-transition events even inside a flutter_bloc app: a Cubit produces them too |
 | `probe/bloc_probe/lib/main.dart` | `stormWatchers = 60`, each a `BlocBuilder<CounterBloc, int>` | **documented.** 60 widgets depend on the bloc | — |
 | 20 transitions × 60 watchers ≈ 1,200 vs ~1,220 observed | Ratio ≈ 61 events per transition | **inferred.** `provider:provider_changed` fires once per *dependent notified*, not once per transition | **Bloc transition counts cannot be derived from provider event counts.** The event volume is a function of how many widgets watch |
 
@@ -46,16 +49,28 @@ Every row is one of four kinds:
 - That provider event counts measure Bloc activity. They measure notified
   dependents, and the two differ by the number of watching widgets.
 
-## Not yet measured
+## Measured since (2026-08-26, device A015, Android 16, Flutter 3.44.1)
 
-- Whether every transition produces a provider burst, formally, with
-  timestamps and per-transition attribution.
-- Whether provider events also occur with no transition (e.g. from route
-  changes or unrelated `ChangeNotifier`s).
-- Whether the relationship is stable across repeated runs.
+The three open questions have been answered by running `measure-bloc.mjs`, and
+the Riverpod phase attribution has a second independent run. All four rows above
+are marked *reproduced* accordingly.
 
-`probe/measure-bloc.mjs` exists to answer exactly these; see below. Until it has
-been run, the ordering claim above rests on one observation.
+- **Does every transition produce a burst?** Yes. 80 of 80 across three runs.
+- **Do provider events occur with no transition?** Yes, ~20 per run — and the
+  cause is identifiable rather than mysterious: `Cubit` fires `onChange`, not
+  `onTransition`, so the probe never prints a marker for it while provider still
+  notifies. This *strengthens* the limitation: even within a flutter_bloc app,
+  provider events are not a Bloc-transition signal.
+- **Is the relationship stable?** Yes. 60.6 / 61.6 / 61.0 events per transition.
+- **Native bloc events?** Still zero, and `ext.bloc.*` RPCs still absent — a
+  third independent confirmation, now on Flutter 3.44.1.
+
+## Still not measured
+
+- Whether the ratio holds at a different `stormWatchers` count. It should, by
+  the mechanism, but the prediction has not been tested by varying it.
+- Any framework other than Riverpod, Provider and Bloc.
+- Behaviour in profile or release mode. Everything here is debug.
 
 ## Reproducing
 

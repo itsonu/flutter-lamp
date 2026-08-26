@@ -132,6 +132,42 @@ auth token included, to logcat at startup - so `flutter run` is not the only
 source of a connectable URI, contrary to the limitation recorded in 0.15.0.
 Automatic discovery from logcat is a follow-up, not in this release.
 
+### Fixed - found by running against a real app
+
+Two defects that 168 passing tests did not catch, found within minutes of
+pointing the server at a live Flutter app (device A015, Android 16, Flutter
+3.44.1). Both were mock-shaped blind spots: a mock does not care what a
+parameter is called, and a unit test does not read a whole tool response.
+
+- **The Widget Inspector calls used the wrong parameter name, and the failure
+  landed inside the app being observed.** `get_widget_tree` and
+  `get_selected_widget` passed `groupName`; Flutter requires `objectGroup`.
+  `getRootWidgetSummaryTree` is registered through
+  `_registerObjectGroupServiceExtension`, which does `parameters['objectGroup']!`,
+  and `getSelectedSummaryWidget` through `_registerServiceExtensionWithArg`,
+  which asserts the key is present. So the tool did not merely fail to read the
+  tree — it **threw an exception inside the app**, which then surfaced in
+  `get_exceptions` and anchored `what_changed`. A diagnosis tool contaminating
+  its own evidence is worse than one that returns an error. `disposeGroup` had
+  the name right all along, which is why the group lifecycle tests passed.
+- **`what_changed` leaked the VM Service auth token.** The 0.18.0 audit fixed
+  `export_session` and asserted, in this changelog, that redaction at capture
+  meant credentials never enter the store. That was wrong, and this is where:
+  `ConnectionManager.open()` wrote the raw URI into a `system` event's message
+  and `data.wsUri`, and returned it from `connect_vm`. Found live at
+  `$.system[0].message`. The path segment of a VM Service URI authorises
+  `evaluate` — arbitrary Dart execution in the app. Fixed where the value
+  enters rather than at each consumer; host and port survive.
+- **Token redaction no longer honours `FLUTTER_LAMP_REDACT=off`.** That flag is
+  a choice about *observed evidence* — headers, log text. Nobody asking to see
+  their own request headers asked for a remote-code-execution credential in
+  every export and on every dashboard. Evidence redaction still opts out.
+
+Regression guards for both, each verified to fail when the bug is reintroduced.
+They assert at the source boundary, because neither faulty call is reachable
+from a unit test: `registerTools` holds a connection singleton, and
+`ConnectionManager` needs a live `VmService`.
+
 ### Fixed - release pipeline
 
 The release automation could publish a tree nobody meant to publish. Its only
