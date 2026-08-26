@@ -245,7 +245,20 @@ function exceptionHypothesis(all: RuntimeEvent[]): Hypothesis | null {
 
   return {
     kind: "exception",
-    priority: 3,
+    // A stack trace is what separates "your code threw" from "the framework is
+    // telling you something". With one, the exception names a line to go and
+    // fix and it outranks any performance pattern. Without one, it is a
+    // framework diagnostic reported through the very same channel -- measured:
+    // `A RenderFlex overflowed by 390 pixels on the bottom.` arrives as a
+    // `Flutter.Error` with severity "error" and no stack, indistinguishable
+    // from a crash by category alone -- and it does not get to outrank an
+    // explanation the evidence supports more strongly.
+    //
+    // Demoting rather than discarding, in that direction on purpose: a
+    // stackless exception is still the primary hypothesis when nothing else
+    // fires, and it always remains in `alternativeCauses`. Nothing is hidden;
+    // it just stops winning by fiat.
+    priority: anchor.data.stackTrace ? 3 : 1,
     anchor,
     summary: `${exceptions.length} exception(s) captured; most recent${onRoute}: "${anchor.message}".`,
     rootCause: anchor.message,
@@ -272,7 +285,10 @@ function jankHypothesis(all: RuntimeEvent[]): Hypothesis | null {
     summary: `Frame jank detected: ${janky.length}/${frames.length} frames (${pct}%) exceeded the 16.7ms budget.`,
     rootCause: `Dropped frames — worst was ${worst.data.elapsedMs}ms (build ${worst.data.buildMs}ms, raster ${worst.data.rasterMs}ms).`,
     strength: Math.min(0.7 + (janky.length >= 10 ? 0.1 : 0), 0.85),
-    evidence: janky.slice(0, 8),
+    // Worst frame first. `janky` is most-recent-first, so slicing alone can cite
+    // eight frames from the tail of a burst and omit the one the verdict is
+    // built on, which leaves the reader unable to check the claim.
+    evidence: [worst, ...janky.filter((e) => e !== worst)].slice(0, 8),
     fixes: [
       Number(worst.data.buildMs) > Number(worst.data.rasterMs)
         ? "Build-phase heavy: move expensive work out of build(), use const widgets, and narrow rebuild scope."

@@ -151,9 +151,11 @@ Done, in `eval/` and `src/eval/`:
   a confidence band, including a negative where `unknown` is correct. Three so
   far. Two deliberately straddle the jank threshold (19.4% must stay unknown,
   20.0% must be diagnosed) so they pin the boundary rather than two unrelated
-  points. The third is an uncaught `StateError` thrown inside `build`: 24.3% of
-  its frames are janky, so the jank hypothesis fires and must still lose,
-  because the session's worst frame is the event *after* the exception.
+  points. The other two are a ranking pair: an uncaught `StateError` with a stack
+  where `exception` is right, and a `RenderFlex overflowed` alongside build-bound
+  jank where `jank` is right. Both contain an exception and jank over threshold,
+  so no fixed ordering of the two hypotheses satisfies both — which is how the
+  unconditional `exception` priority was found to be wrong.
 - **Replay harness** over `export_session` output. Needed `RuntimeStore.hydrate`,
   because `add()` mints fresh ids and replaying through it would renumber every
   event and invalidate every cited `exc_00042`.
@@ -174,6 +176,8 @@ Still open:
 
 - Incidents for network and memory causes. Both probes are offline, and memory
   needs a session long enough to show sustained growth.
+- A recorded incident for the demotion itself — an incidental exception with no
+  competing hypothesis. Unit-tested, not recorded.
 - Tool calls and tokens per diagnosis. Not measured; needs instrumentation at
   the MCP layer rather than in replay.
 - Enough incidents for top-1 accuracy to be a measurement rather than a
@@ -187,7 +191,18 @@ inspector posts it as `Flutter.Error` — `isStructuredErrorsEnabled()` defaults
 to true in debug off the web, which is why the event exists at all
 (`widget_inspector.dart:1028`).
 
-Capturing it surfaced a real defect ahead of the golden: `diagnose()` read a
+Recording the ranking pair surfaced the transport limit that any timing argument
+has to respect. Events are stamped when the server receives them, and over
+adb/WiFi delivery stalls for seconds and then flushes — 111 frame events inside
+one second, above any refresh rate. The DDS backlog drained during connect has
+the same property: within it, receipt order is drain order. An incident arguing
+from ordering therefore has to be recorded live, over a transport that does not
+batch. Carrying app-side frame time (`Flutter.Frame` reports `startTime`) would
+remove the constraint, and is deliberately *not* done here — it changes
+production instrumentation and the correlation window's meaning, which is a
+separate decision from adding an incident.
+
+Capturing the exception incident surfaced a real defect ahead of the golden: `diagnose()` read a
 flat most-recent-2,000-event window, and the probe's 2,000 provider events in 30
 seconds pushed the session's only exception to 2,436th newest. The engine
 reported that no exceptions were found while the store held one. Fixed by

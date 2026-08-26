@@ -53,19 +53,30 @@ of **zero**. Both are verified to fail, not assumed to — see below.
 | `jank-20pct-build-bound` | `jank`, diagnosed, ~0.8 | 48/240 frames (20.0%) over budget, worst 64.5ms, build-bound. Nothing competes: no exceptions, no network, only info logs |
 | `unknown-jank-just-under-threshold` | `unknown` | 74/381 frames (19.4%) — real jank, below the 20% the hypothesis requires, and no other fault. The honest answer is "nothing I can name" |
 | `exception-uncaught-build-failure` | `exception`, diagnosed, ~0.8 | An uncaught `StateError` thrown inside `build`, twice, with a stack. 24.3% of frames are janky too — so the jank hypothesis fires and must still lose |
+| `jank-with-incidental-framework-error` | `jank`, diagnosed, ~0.8 | A `RenderFlex overflowed` error *and* real jank. The exception must lose: in the 3s either side of it not one of 50 frames missed budget |
 
 The first two are a deliberate pair, and the pairing is the point: 19.4% must
 stay unknown, 20.0% must be diagnosed. Together they pin the **boundary**, which
 is the part of a heuristic that actually drifts. Two unrelated incidents would
 not.
 
-The exception incident is a **ranking** case rather than a boundary one, and it
-is not decided by the priority ordering in the code. The worst frame of that
-session, `frm_00062` at 274.68ms with 186.94ms of build, is the event
-immediately *after* `exc_00061` — reporting a structured error and rebuilding the
-failed subtree as an ErrorWidget is what made it the worst frame. The jank
-hypothesis' own anchor is downstream of the exception, so answering `jank` there
-would hand a reader the symptom and call it the cause.
+The last two are a **ranking** pair, and between them they say that
+`exception present` is not `exception is the root cause`. One session's
+exception is an uncaught `StateError` with a stack pointing at a line of
+application code; the other's is `A RenderFlex overflowed by 390 pixels`, which
+arrives in the same category, at the same severity, on the same stream — and
+carries no stack, because no application code threw. Both sessions also contain
+jank that clears the hypothesis' threshold. The right answers are opposite, so
+no fixed ordering of `exception` against `jank` can satisfy both, which is how
+the unconditional priority that used to exist was found to be wrong.
+
+A note on what a golden here may lean on. Events are stamped when the server
+receives them, and over adb/WiFi delivery stalls and then flushes — 111 frame
+events inside one second, above any refresh rate. Anything argued from
+fine-grained ordering has to be recorded over a transport that does not batch,
+and has to be delivered live rather than in the backlog that DDS drains during
+connect, where receipt order is drain order. Both are stated in each incident's
+`capturedFrom`.
 
 Verified by mutation — the gate is not decoration:
 
@@ -76,6 +87,9 @@ Verified by mutation — the gate is not decoration:
 | exception detector blinded | 3 tests fail, **including false confidence**: the crash session is answered `jank`, confidently and wrongly |
 | jank priority raised above exception | same 3 failures — the ranking is load-bearing, not cosmetic |
 | stack-trace confidence bonus removed | 1 test fails on the band (0.7 against [0.75, 0.85]); **false confidence stays 0%** — less sure about the right cause is not confidently wrong |
+| exception priority made unconditional again | 3 tests fail, false confidence **25%** — the overflow is named as the cause of a build-bound stall |
+| jank strength dropped below the 0.7 threshold | 1 test fails on status and band; **false confidence stays 0%** — the engine abstains rather than answering wrongly |
+| worst-frame-first evidence ordering removed | 1 test fails on evidence recall alone — the verdict stops citing the frame it rests on |
 
 Too eager trips the ceiling. Too cautious trips the floor. Different failures,
 which is what the scoring is for.
@@ -94,9 +108,12 @@ which is what the scoring is for.
 - **Confidence bands are policy, not calibration.** They say "the engine should
   be about this sure", chosen to leave room for tuning. They are not evidence
   that 0.8 means 80%.
-- **Three incidents is a floor, not a suite.** Top-1 accuracy over three cases
-  is a regression guard, not a measurement of the engine's accuracy. Do not
-  quote it as one.
+- **Four incidents is a floor, not a suite.** Top-1 accuracy over four cases is
+  a regression guard, not a measurement of the engine's accuracy. Do not quote
+  it as one.
+- **No incident where an exception is incidental and nothing else fires.** The
+  demotion is guarded by unit tests in `src/diagnosis/engine.test.ts`, not by a
+  recording.
 
 ## Adding an incident
 

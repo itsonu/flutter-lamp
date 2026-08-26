@@ -94,3 +94,83 @@ test("a chatty category does not starve the exception", () => {
   assert.equal(d.cause, "exception");
   assert.equal(d.rootCause, "Bad state: starved by volume");
 });
+
+/** A framework error with no stack: what `A RenderFlex overflowed` looks like. */
+function frameworkNote(store: RuntimeStore, at: number) {
+  store.add({
+    timestamp: at,
+    source: "Flutter.Error",
+    severity: "error",
+    category: "exception",
+    message: "A RenderFlex overflowed by 390 pixels on the bottom.",
+    data: { type: "_FlutterErrorDetailsNode", hasStack: false },
+  });
+}
+
+function jankyRun(store: RuntimeStore, at: number, janky: number, clean: number) {
+  for (let i = 0; i < clean; i++) {
+    store.add({
+      timestamp: at + i * 100, source: "Flutter.Frame", severity: "debug", category: "frame",
+      message: `Frame #${i}`, data: { elapsedMs: 8, buildMs: 4, rasterMs: 1, janky: false },
+    });
+  }
+  for (let i = 0; i < janky; i++) {
+    store.add({
+      timestamp: at + (clean + i) * 100, source: "Flutter.Frame", severity: "error", category: "frame",
+      message: `Frame #${clean + i}`,
+      data: { elapsedMs: 50 + i, buildMs: 48 + i, rasterMs: 1, janky: true },
+    });
+  }
+}
+
+test("a stackless framework error does not outrank evidenced jank", () => {
+  // Measured on a real session: an overflow error and a 45ms build arrive in the
+  // same category at the same severity, and the exception used to win on
+  // priority alone — naming a layout box as the cause of a build-bound stall.
+  const store = new RuntimeStore();
+  frameworkNote(store, 1_000_000);
+  jankyRun(store, 1_010_000, 12, 20);
+
+  const d = diagnose(store);
+  assert.equal(d.cause, "jank");
+  assert.equal(d.status, "diagnosed");
+  // Demoted, not hidden: the error is still offered as an explanation.
+  assert.ok(d.alternativeCauses.some((a) => a.cause === "exception"));
+});
+
+test("an exception with a stack still outranks jank", () => {
+  const store = new RuntimeStore();
+  store.add({
+    timestamp: 1_000_000, source: "Flutter.Error", severity: "error", category: "exception",
+    message: "Null check operator used on a null value",
+    data: { stackTrace: "#0 MyWidget.build (package:app/main.dart:42:9)" },
+  });
+  jankyRun(store, 1_010_000, 12, 20);
+
+  const d = diagnose(store);
+  assert.equal(d.cause, "exception");
+});
+
+test("a stackless framework error is still the answer when nothing else fires", () => {
+  // The demotion must not become suppression. With no competing hypothesis the
+  // overflow is the only fault observed, and saying so is correct.
+  const store = new RuntimeStore();
+  frameworkNote(store, 1_000_000);
+  jankyRun(store, 1_010_000, 0, 20);
+
+  const d = diagnose(store);
+  assert.equal(d.cause, "exception");
+  assert.equal(d.status, "diagnosed");
+});
+
+test("a jank verdict cites its own worst frame", () => {
+  const store = new RuntimeStore();
+  jankyRun(store, 1_000_000, 12, 20);
+
+  const d = diagnose(store);
+  const worst = d.evidence
+    .map((e) => e.eventId)
+    .includes(store.query({ category: "frame" }).filter((e) => e.data.janky === true)
+      .sort((a, b) => Number(b.data.elapsedMs) - Number(a.data.elapsedMs))[0].eventId);
+  assert.ok(worst, "worst janky frame must be in the cited evidence");
+});

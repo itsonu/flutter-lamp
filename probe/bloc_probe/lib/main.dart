@@ -14,6 +14,15 @@
 //   4. error       — an event handler that throws (onError / addError)
 //   5. crash       — a widget that throws during build (uncaught by the app)
 //   6. navigate    — push /detail, pop back
+//
+// Or, with `--dart-define=scenario=incidental`, a second workload built to
+// separate "an exception happened" from "the exception is the fault":
+//   1. idle        — baseline
+//   2. overflow    — a RenderFlex overflow: a real framework-reported error
+//                    that breaks nothing
+//   3. gap         — nothing at all, so the error cannot be correlated forward
+//   4. slow        — expensive work inside build(), the actual fault
+//   5. idle        — baseline again
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -21,6 +30,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 /// Marker printed to stdout so the probe can correlate stream events to phases.
 void phase(String name) => debugPrint('PROBE_PHASE $name');
+
+/// Which workload this build runs: `crash` or `incidental`.
+///
+/// Selected at compile time rather than by a runtime toggle so that one probe
+/// reproduces two recorded incidents without either contaminating the other —
+/// an uncaught build failure in the same session as an incidental error would
+/// make it impossible to argue which one the diagnosis should have picked.
+const scenario = String.fromEnvironment('scenario', defaultValue: 'crash');
 
 sealed class CounterEvent {
   const CounterEvent();
@@ -56,6 +73,12 @@ class ProbeObserver extends BlocObserver {
   @override
   void onTransition(Bloc<dynamic, dynamic> bloc, Transition<dynamic, dynamic> transition) {
     super.onTransition(bloc, transition);
+    // Silent in the incidental scenario. `measure-bloc.mjs` counts these
+    // markers, so they have to stay for the default scenario — but that
+    // scenario emits on a slow cycle, while this one ticks ten times a second
+    // and the markers become the bulk of anything recorded, with nothing read
+    // from them.
+    if (scenario == 'incidental') return;
     debugPrint('PROBE_TRANSITION ${bloc.runtimeType} ${transition.event.runtimeType} '
         '${transition.currentState} -> ${transition.nextState}');
   }
@@ -95,6 +118,13 @@ class ProbeApp extends StatelessWidget {
 /// single frame — the rebuild-storm shape to correlate against.
 const stormWatchers = 60;
 
+/// The incidental scenario keeps none. Its jank has to be attributable to one
+/// identified place (an expensive `build`), and every extra watcher both muddies
+/// that and multiplies the provider events in the recording — `provider` posts
+/// one per notified dependent, so 60 watchers is 60x the fixture for no extra
+/// evidence. The scenario's own cells provide the rebuild the ticks need.
+int get watcherCount => scenario == 'incidental' ? 0 : stormWatchers;
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -105,6 +135,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Timer? _cycle;
   String _current = 'starting';
+  bool _overflowing = false;
+  bool _slow = false;
+  int _cycleCount = 0;
 
   @override
   void initState() {
@@ -121,6 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _runCycle() async {
     if (!mounted) return;
+    if (scenario == 'incidental') return _runIncidentalCycle();
     final bloc = context.read<CounterBloc>();
     final cubit = context.read<CounterCubit>();
 
@@ -157,6 +191,71 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  /// The workload that separates "an exception occurred" from "the exception is
+  /// the fault".
+  ///
+  /// Every phase drives a cheap rebuild every 100ms. That is not decoration:
+  /// Flutter renders nothing when nothing changes, so without it the only
+  /// frames in the session are the expensive ones and the jank ratio is 100% by
+  /// construction — a number that measures the workload's shape rather than the
+  /// app's health. Ticking throughout means the session contains on-budget
+  /// frames to compare against, including frames at the moment of the error.
+  Future<void> _runIncidentalCycle() async {
+    if (!mounted) return;
+    final bloc = context.read<CounterBloc>();
+    setState(() => _cycleCount++);
+
+    // The whole cycle is deliberately short. Event delivery over an adb/WiFi
+    // link is reliable for the first several seconds of a connection and then
+    // starts stalling and flushing in bursts, which destroys the receipt-time
+    // locality this scenario's evidence depends on. Everything worth recording
+    // therefore has to fit in one short window.
+    await _ticking('idle', 20, bloc);
+
+    // A RenderFlex overflow is reported through `FlutterError.reportError` and
+    // reaches the VM Service like any other framework error. It breaks nothing:
+    // no ErrorWidget is substituted, the subtree keeps painting, and the app
+    // keeps working. The cell is keyed by cycle because the overflow indicator
+    // reports once per RenderObject lifetime — without a fresh key, only the
+    // first cycle of a run ever produces the error.
+    phase('overflow');
+    setState(() {
+      _current = 'overflow';
+      _overflowing = true;
+    });
+    await _tick(8, bloc);
+    if (mounted) setState(() => _overflowing = false);
+    await _tick(7, bloc);
+
+    // Three seconds of ordinary work between the error and the fault: wider
+    // than the engine's 3s correlation window, so nothing can associate the two
+    // by proximity alone.
+    await _ticking('gap', 20, bloc);
+
+    // The actual fault: real work on the UI thread inside build().
+    setState(() => _slow = true);
+    await _ticking('slow', 30, bloc);
+    if (mounted) setState(() => _slow = false);
+
+    await _ticking('idle', 10, bloc);
+  }
+
+  Future<void> _ticking(String name, int ticks, CounterBloc bloc) async {
+    if (!mounted) return;
+    phase(name);
+    setState(() => _current = name);
+    await _tick(ticks, bloc);
+  }
+
+  /// One cheap rebuild every 100ms. Each emit dirties the watching builders, so
+  /// each tick costs a frame the frame timings can see.
+  Future<void> _tick(int ticks, CounterBloc bloc) async {
+    for (var i = 0; i < ticks && mounted; i++) {
+      bloc.add(const Increment());
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+  }
+
   Future<void> _phase(String name, Duration budget, Future<void> Function() body) async {
     if (!mounted) return;
     phase(name);
@@ -181,12 +280,19 @@ class _HomeScreenState extends State<HomeScreen> {
             // Bounded on purpose: the framework substitutes an ErrorWidget for
             // the failed subtree, and an ErrorWidget in an unbounded Column
             // overflows and reports a *second*, unrelated framework error.
-            const SizedBox(height: 24, child: _CrashCell()),
+            if (scenario == 'crash') const SizedBox(height: 24, child: _CrashCell()),
+            if (scenario == 'incidental') ...[
+              SizedBox(
+                height: 24,
+                child: _OverflowCell(key: ValueKey(_cycleCount), overflowing: _overflowing),
+              ),
+              _SlowCell(spin: _slow),
+            ],
             ElevatedButton(onPressed: _runCycle, child: const Text('run cycle now')),
             Expanded(
               child: GridView.count(
                 crossAxisCount: 6,
-                children: List.generate(stormWatchers, (i) => _StormCell(index: i)),
+                children: List.generate(watcherCount, (i) => _StormCell(index: i)),
               ),
             ),
           ],
@@ -218,6 +324,56 @@ class _CrashCell extends StatelessWidget {
             throw StateError('bloc_probe: deliberate uncaught build failure');
           }
           return Text('crash cell ok ($value)', style: const TextStyle(fontSize: 10));
+        },
+      );
+}
+
+/// Overflows its 24px parent by ~400px while [overflowing], which makes the
+/// rendering library report a `RenderFlex overflowed` error.
+///
+/// Deliberately the most boring framework error there is: it is a layout
+/// complaint about a box that did not fit, it names no application code, and
+/// the app carries on. Nothing here is expensive, so it cannot be the cause of
+/// a frame budget miss.
+class _OverflowCell extends StatelessWidget {
+  const _OverflowCell({super.key, required this.overflowing});
+
+  final bool overflowing;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        children: [
+          const Text('layout', style: TextStyle(fontSize: 10)),
+          if (overflowing) const SizedBox(height: 400, width: 10),
+        ],
+      );
+}
+
+/// Burns real UI-thread time inside `build` while [spin] is set.
+///
+/// A `Future.delayed` would not do: it yields, so the frame finishes on time
+/// and the frame timings show nothing. This has to be synchronous work that
+/// lands in the build phase, which is what `Flutter.Frame` measures.
+class _SlowCell extends StatelessWidget {
+  const _SlowCell({required this.spin});
+
+  final bool spin;
+
+  @override
+  Widget build(BuildContext context) => BlocBuilder<CounterBloc, int>(
+        builder: (_, value) {
+          if (spin) {
+            final until = DateTime.now().add(const Duration(milliseconds: 45));
+            var acc = 0.0;
+            var i = 0;
+            while (DateTime.now().isBefore(until)) {
+              acc += 1 / (++i);
+            }
+            // Consumed so the loop cannot be optimised away.
+            return Text('slow $value (${acc.toStringAsFixed(2)})',
+                style: const TextStyle(fontSize: 10));
+          }
+          return Text('fast $value', style: const TextStyle(fontSize: 10));
         },
       );
 }

@@ -16,14 +16,13 @@ misbehaved.
 
 - **`eval/incidents/*.json`** - golden incidents: a real session captured from a
   device with `export_session` in `full` mode, plus what the right answer is.
-  Three so far. Two deliberately straddle the jank threshold: 74/381 frames
+  Four so far. Two deliberately straddle the jank threshold: 74/381 frames
   (19.4%) must stay `unknown`, 48/240 (20.0%) must be diagnosed as `jank`. The
   pairing is the point - together they pin the *boundary*, which is the part of a
-  heuristic that drifts. Two unrelated incidents would not. The third is an
-  uncaught `StateError` thrown inside `build`, where the correct answer is
-  `exception` even though the session's jank ratio (24.3%) also clears the jank
-  bar - because the worst frame of the session is the event *after* the
-  exception, so the jank hypothesis' own anchor is downstream of the cause.
+  heuristic that drifts. Two unrelated incidents would not. The other two are a
+  ranking pair: both contain an exception *and* jank over threshold, and their
+  right answers are opposite, so no fixed ordering of the two hypotheses can
+  satisfy both.
 - **`src/eval/replay.ts`** - hydrates a recorded session and re-runs the
   diagnosers. Nothing new had to be invented to record an incident:
   `export_session` was already versioned, carried every event and diagnosis, and
@@ -49,10 +48,32 @@ Tightening it to 25% makes the 20.0% session abstain and trips two - notably
 confidently wrong. On the exception path: blinding the exception detector, or
 letting jank outrank it, trips false confidence both times; removing only the
 stack-trace confidence bonus trips the band and leaves false confidence at zero.
-Same asymmetry, from the other side.
+Same asymmetry, from the other side. On the ranking: restoring the unconditional
+exception priority trips false confidence at 25%, while dropping jank's strength
+below the confidence threshold trips status and band with false confidence still
+at 0% - abstention and confident wrongness scored apart, which is the whole
+point of the metric.
 
 ### Changed
 
+- **An exception no longer outranks a performance pattern unconditionally.**
+  `exceptionHypothesis` carried priority 3 whatever it was made of, so any
+  exception beat any jank evidence. Measured against a real session, that is a
+  confident wrong answer: `A RenderFlex overflowed by 390 pixels on the bottom.`
+  arrives as a `Flutter.Error`, in the `exception` category, at severity
+  `error` - indistinguishable from a crash by category - and it was named as the
+  root cause of a session whose actual fault was 45ms of work inside `build`.
+
+  The ranking now turns on whether the exception carries a stack trace, which is
+  the one discriminator actually present in the captured payload (`library` and
+  `type` are identical between the two). With a stack it names a line to go and
+  fix and still outranks jank; without one it is a framework diagnostic and does
+  not outrank an explanation the evidence supports more strongly. Demoted, never
+  discarded: it stays in `alternativeCauses`, and when nothing else fires it is
+  still the primary hypothesis.
+- **A jank verdict now cites its own worst frame.** Evidence was sliced from a
+  most-recent-first list, so it could cite eight frames from the tail of a burst
+  and omit the frame the verdict was built on.
 - **`Diagnosis` gains `cause`**, a stable `CauseKind` (`exception` | `jank` |
   `network` | `memory` | `unknown`), and `AlternativeCause` gains the same.
   Additive - nothing renamed or reshaped.

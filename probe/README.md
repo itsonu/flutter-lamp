@@ -12,7 +12,11 @@ confidently wrong is worse than one that is missing.
 
 Neither app needs to be tapped. Each runs a phased workload on a 20-second loop
 (idle → state churn → rebuild storm → error → navigate; `bloc_probe` adds a
-`crash` phase that throws inside `build`) and prints
+`crash` phase that throws inside `build`). `bloc_probe` also carries a second
+workload, `flutter run --dart-define=scenario=incidental`, which produces a
+harmless `RenderFlex overflowed` error and, three seconds later and from
+different code, real build-bound jank — the two separated so a diagnosis can be
+held to telling them apart. Each prints
 `PROBE_PHASE <name>` before each phase, so an observed event can be attributed
 to the thing that caused it. `bloc_probe` also prints `PROBE_TRANSITION` from a
 `BlocObserver`, which is how "the transitions really happened and the VM Service
