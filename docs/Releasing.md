@@ -87,6 +87,42 @@ Requirements the workflow already satisfies: `id-token: write` permission, and
 npm ≥ 11.5.1 (it upgrades npm before publishing, since Node 22 ships an older
 one).
 
+### What trusted publishing does not cover
+
+Measured on 2026-08-26 (run 32986404363): a trusted-publisher credential is
+scoped to `npm publish`. `npm deprecate` under the same OIDC exchange is
+refused, and npm reports it as
+
+```
+npm error 404 Not Found - PUT https://registry.npmjs.org/flutter-lamp
+npm error 404  The requested resource 'flutter-lamp@0.18.0' could not be
+found or you do not have permission to access it.
+```
+
+Read that 404 as a 403. The package plainly exists — the workflow's own guard
+step confirmed it with `npm view` seconds earlier.
+
+The consequence is worth stating plainly, because it is a real asymmetry: **this
+pipeline can publish a bad version with no human involved, and cannot withdraw
+one without a human.** 0.18.0 demonstrated the first half. Withdrawing it needs
+an interactive login:
+
+```bash
+npm login
+npm deprecate flutter-lamp@X.Y.Z "why"
+```
+
+[`deprecate.yml`](../.github/workflows/deprecate.yml) automates this and stays
+inert until an `NPM_TOKEN` exists or npm broadens the scope. Its guards are
+worth having regardless: it refuses a version that is not published, and
+refuses the current `latest` — deprecating what everyone installs by default is
+an outage, and the way to withdraw `latest` is to publish a replacement first,
+which is what 0.18.1 was.
+
+Keeping no long-lived token remains the right trade. An occasional manual
+cleanup is cheaper than a credential sitting in repository secrets — but that
+should be a considered choice, not a surprise discovered mid-incident.
+
 ### Fallback: NPM_TOKEN
 
 If trusted publishing is not an option, an **automation** token (npmjs.com →

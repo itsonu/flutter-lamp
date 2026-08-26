@@ -11,6 +11,19 @@ name: Deprecate a published version
 #
 # Deprecation is reversible: an empty message un-deprecates. Nothing is
 # unpublished, so anyone who already depends on the version keeps working.
+#
+# **Requires NPM_TOKEN. Measured, not assumed:** run 32986404363 tried this with
+# trusted publishing alone and npm answered
+# `404 Not Found - PUT https://registry.npmjs.org/flutter-lamp`, which is its
+# auth-masking 404 — the guard step below had just proved the package exists via
+# `npm view`. A trusted-publisher credential is scoped to `npm publish` and does
+# not extend to deprecate, so this workflow is inert until npm broadens that
+# scope or an automation token is added. Until then, withdrawing a version means
+# `npm login` and running it by hand — which is the right trade anyway: an
+# occasional cleanup is cheaper than a long-lived credential in repo secrets.
+#
+# Worth naming, because it is a real asymmetry: this pipeline can publish a bad
+# version with no human involved, and cannot withdraw one without a human.
 
 on:
   workflow_dispatch:
@@ -78,7 +91,7 @@ jobs:
             # Trusted publishing grants a credential scoped to `npm publish`.
             # If npm does not extend it to deprecate, say so plainly rather
             # than leaving a green run that changed nothing.
-            echo "::error::npm rejected the deprecate. The trusted publisher's allowed action is 'npm publish', which may not cover this. Run it locally after 'npm login', or add an automation token as NPM_TOKEN."
+            echo "::error::npm rejected the deprecate. Expected without NPM_TOKEN: a trusted-publisher credential covers 'npm publish' only, and npm reports the refusal as a 404 on PUT. Add an automation token as NPM_TOKEN, or run 'npm login && npm deprecate' locally."
             exit 1
           fi
 
