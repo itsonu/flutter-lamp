@@ -49,6 +49,8 @@ export interface EvidenceCoverage {
 }
 
 export interface AlternativeCause {
+  /** Stable label, so a ranked list is comparable and not just readable. */
+  cause: CauseKind;
   rootCause: string;
   strength: number;
   evidence: string[];
@@ -59,6 +61,12 @@ export interface Diagnosis {
   status: "diagnosed" | "unknown";
   summary: string;
   rootCause: string;
+  /**
+   * The kind of cause, as a stable label. `rootCause` above is prose for a
+   * human and carries live numbers; this is what code and evaluation compare.
+   * "unknown" whenever `status` is "unknown".
+   */
+  cause: CauseKind;
   evidence: EvidenceItem[];
   /** Chronological events around the root cause, oldest first. */
   timeline: TimelineEntry[];
@@ -92,10 +100,21 @@ const BASIS =
   `Below ${CONFIDENCE_THRESHOLD} the status is "unknown" rather than a guess.`;
 
 /**
+ * The kind of explanation, as a stable label rather than prose.
+ *
+ * `rootCause` is written for a human and contains live numbers — an exception
+ * message, "worst was 85ms". Two runs over the same fault produce different
+ * strings, so nothing can be scored against it. This label is what evaluation
+ * compares, and what a caller should branch on.
+ */
+export type CauseKind = "exception" | "jank" | "network" | "memory" | "unknown";
+
+/**
  * A candidate explanation. Every hypothesis anchors to a real captured event —
  * there is no path here that invents a cause the evidence does not contain.
  */
 interface Hypothesis {
+  kind: Exclude<CauseKind, "unknown">;
   /** Decides ties: an actionable exception beats a performance pattern. */
   priority: number;
   anchor: RuntimeEvent;
@@ -154,9 +173,15 @@ export function diagnose(store: RuntimeStore): Diagnosis {
     status: primary.strength >= CONFIDENCE_THRESHOLD ? "diagnosed" : "unknown",
     summary: primary.summary,
     rootCause: primary.rootCause,
+    // The label follows the hypothesis even when confidence keeps the status
+    // at "unknown": a caller that wants to know what was suspected can read
+    // it, and evaluation can tell "suspected jank but was not sure" apart from
+    // "saw nothing at all".
+    cause: primary.kind,
     evidence: primary.evidence.slice(0, 10).map(toEvidence),
     timeline: timelineAround(all, primary.anchor, CORRELATION_WINDOW_MS),
     alternativeCauses: rest.map((h) => ({
+      cause: h.kind,
       rootCause: h.rootCause,
       strength: round2(h.strength),
       evidence: h.evidence.slice(0, 5).map((e) => e.eventId),
@@ -212,6 +237,7 @@ function exceptionHypothesis(all: RuntimeEvent[]): Hypothesis | null {
   const onRoute = route ? ` on route ${route}` : "";
 
   return {
+    kind: "exception",
     priority: 3,
     anchor,
     summary: `${exceptions.length} exception(s) captured; most recent${onRoute}: "${anchor.message}".`,
@@ -233,6 +259,7 @@ function jankHypothesis(all: RuntimeEvent[]): Hypothesis | null {
   const pct = Math.round((janky.length / frames.length) * 100);
 
   return {
+    kind: "jank",
     priority: 2,
     anchor: worst,
     summary: `Frame jank detected: ${janky.length}/${frames.length} frames (${pct}%) exceeded the 16.7ms budget.`,
@@ -256,6 +283,7 @@ function networkHypothesis(all: RuntimeEvent[]): Hypothesis | null {
 
   const anchor = failures[0];
   return {
+    kind: "network",
     priority: 1,
     anchor,
     summary: `${failures.length} failing/slow network request(s) detected.`,
@@ -290,6 +318,7 @@ function memoryHypothesis(all: RuntimeEvent[]): Hypothesis | null {
   if (growth < 0.5) return null;
 
   return {
+    kind: "memory",
     priority: 0,
     anchor: samples[samples.length - 1],
     summary: `Dart heap grew from ${first}MB to ${last}MB (${Math.round(growth * 100)}%) across ${samples.length} samples.`,
@@ -387,6 +416,7 @@ function unknown(
     status: "unknown",
     summary: `Unknown — insufficient runtime evidence. ${reason}`,
     rootCause: "Unknown (confidence below 70%).",
+    cause: "unknown",
     evidence: [],
     timeline: [],
     alternativeCauses: [],

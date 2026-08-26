@@ -143,15 +143,40 @@ today only network carries one, so there is nothing to join.
   (`byEventId`), timeline must be internally consistent, contradictory evidence
   listed per hypothesis.
 
-## Phase D — Evaluation
+## Phase D — Evaluation — STARTED (0.19.0)
 
-- Golden incidents: recorded sessions with expected hypothesis, expected
-  evidence ids, acceptable confidence band — including negatives where the
-  correct answer is `unknown`.
-- Replay harness over exported sessions (session export lands here; schema
-  versioned).
-- Metrics: top-1 accuracy, evidence precision, false-confidence rate, unknown
-  precision, tool calls and tokens per diagnosis.
+Done, in `eval/` and `src/eval/`:
+
+- **Golden incidents** — recorded sessions with expected cause, evidence ids and
+  a confidence band, including a negative where `unknown` is correct. Two so
+  far, deliberately straddling the jank threshold (19.4% must stay unknown,
+  20.0% must be diagnosed) so they pin the boundary rather than two unrelated
+  points.
+- **Replay harness** over `export_session` output. Needed `RuntimeStore.hydrate`,
+  because `add()` mints fresh ids and replaying through it would renumber every
+  event and invalidate every cited `exc_00042`.
+- **Metrics**: top-1 accuracy, evidence recall, false-confidence rate, unknown
+  precision, dangling-evidence count.
+- **A CI gate**, asymmetric on purpose: accuracy has a floor, false confidence
+  has a ceiling of zero. Verified by mutation in both directions rather than
+  assumed — loosening the jank threshold trips false confidence, tightening it
+  trips only accuracy.
+
+The enabler was not the harness. `Diagnosis.rootCause` is prose containing live
+numbers ("worst was 85ms"), so nothing could be scored against it; the engine now
+emits `cause` as a stable `CauseKind` label beside it. Additive.
+
+Still open:
+
+- Incidents for exception, network and memory causes. No probe currently
+  produces an uncaught Flutter error — `bloc_probe`'s handler failures are
+  absorbed by `BlocObserver.onError`, `riverpod_probe`'s become an `AsyncError`
+  inside a provider — so an exception incident needs a probe that throws
+  uncaught.
+- Tool calls and tokens per diagnosis. Not measured; needs instrumentation at
+  the MCP layer rather than in replay.
+- Enough incidents for top-1 accuracy to be a measurement rather than a
+  regression guard. Two is a floor.
 
 ## Phase E — Advanced
 

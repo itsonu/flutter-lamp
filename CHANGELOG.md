@@ -4,6 +4,64 @@ All notable changes to Flutter Lamp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added - Phase D, evaluation
+
+The diagnosis engine is now measured against recorded sessions instead of only
+against its own unit tests. Every other test here builds a store by hand and
+checks what the engine does with it; that measures the code against its author's
+expectations, which is not the same as measuring it against an app that actually
+misbehaved.
+
+- **`eval/incidents/*.json`** - golden incidents: a real session captured from a
+  device with `export_session` in `full` mode, plus what the right answer is.
+  Two so far, deliberately straddling the jank threshold: 74/381 frames (19.4%)
+  must stay `unknown`, 48/240 (20.0%) must be diagnosed as `jank`. The pairing
+  is the point - together they pin the *boundary*, which is the part of a
+  heuristic that drifts. Two unrelated incidents would not.
+- **`src/eval/replay.ts`** - hydrates a recorded session and re-runs the
+  diagnosers. Nothing new had to be invented to record an incident:
+  `export_session` was already versioned, carried every event and diagnosis, and
+  had its shape pinned by a test.
+- **`src/eval/score.ts`** - top-1 accuracy, evidence recall, false-confidence
+  rate, unknown precision, dangling-evidence count.
+- **A CI gate**, asymmetric on purpose. Accuracy has a floor; **false confidence
+  has a ceiling of zero**. A tool that says "unknown" when it cannot tell costs a
+  developer nothing - they go and look themselves, which is what they were doing
+  anyway. One that says "the network call caused your jank" at 85% confidence
+  when it did not sends them where the bug is not, and spends the credibility
+  that makes the correct answers worth reading.
+- **`RuntimeStore.hydrate`** - loads already-stamped events back in unchanged.
+  Not `add()`, which mints fresh ids from a counter: replaying through it would
+  renumber everything, so every `exc_00042` a diagnosis cited would point
+  somewhere else and evidence precision would be meaningless.
+
+Verified by mutation rather than assumed, because a gate that only ever passes
+is decoration. Loosening the jank threshold to 15% makes the 19.4% session get a
+confident jank verdict and trips three tests including false confidence.
+Tightening it to 25% makes the 20.0% session abstain and trips two - notably
+*not* false confidence, because abstaining when jank was real is wrong, not
+confidently wrong.
+
+### Changed
+
+- **`Diagnosis` gains `cause`**, a stable `CauseKind` (`exception` | `jank` |
+  `network` | `memory` | `unknown`), and `AlternativeCause` gains the same.
+  Additive - nothing renamed or reshaped.
+
+  This was the actual blocker for Phase D. `rootCause` is prose written for a
+  human and carries live numbers - an exception message, "worst was 85ms" - so
+  two runs over the same fault produce different strings and nothing can be
+  scored against it. Callers that were branching on `rootCause` text should
+  branch on `cause` instead.
+
+### Fixed
+
+- `dist/eval/` was shipping in the npm tarball (79 -> 83 files). Development
+  tooling in a runtime package. Excluded, and `verify-release.sh` now refuses
+  `/eval/` so it cannot come back silently.
+
 ## [0.18.1] - 2026-08-26
 
 A security and correctness fix over 0.18.0, which shipped before either defect

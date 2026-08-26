@@ -171,7 +171,7 @@ files="$(echo "$listing" | grep -c . )"
 size="$(wc -c < "$tmp/$tarball" | tr -d ' ')"
 
 # Anything here is either private, useless to a consumer, or both.
-forbidden='probe/|\.apk$|\.test\.|\.map$|^package/\.github/|^package/\.env|node_modules/|EVIDENCE\.md|\.claude/worktrees'
+forbidden='probe/|\.apk$|\.test\.|\.map$|^package/\.github/|^package/\.env|node_modules/|EVIDENCE\.md|\.claude/worktrees|/eval/'
 if echo "$listing" | grep -qE "$forbidden"; then
   echo "$listing" | grep -E "$forbidden" >&2
   fail "tarball contains files that must not ship"

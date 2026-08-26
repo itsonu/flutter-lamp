@@ -168,6 +168,37 @@ export class RuntimeStore extends EventEmitter {
     return this.sessionId;
   }
 
+  /**
+   * Load already-stamped events back in, exactly as they were.
+   *
+   * For replaying an exported session — a golden incident under `eval/`, or a
+   * session a user attached to a bug report. Deliberately not `add()`: `add()`
+   * mints a fresh `id` and `eventId` from a counter, so replaying through it
+   * would renumber everything and every `exc_00042` a diagnosis cited would
+   * point somewhere else. An evaluation that cannot cite stable evidence ids
+   * cannot measure evidence precision, which is most of the point.
+   *
+   * `sessionId` is taken from the events rather than minted, because `query()`
+   * filters on the store's current session: hydrating without it leaves every
+   * query returning nothing while the rings are full.
+   *
+   * Retention still applies. If an export holds more events of a category than
+   * this store's capacity, the oldest are dropped and `retention()` says so —
+   * the same truncation a live session would have had.
+   */
+  hydrate(events: readonly RuntimeEvent[], startedAt: number | null = null): void {
+    const ordered = [...events].sort((a, b) => a.id - b.id);
+    for (const event of ordered) {
+      this.rings[event.category].push(event);
+      // Keep minting above anything restored, so an event added after a replay
+      // cannot collide with one that came from the export.
+      if (event.id >= this.nextId) this.nextId = event.id + 1;
+    }
+    const last = ordered[ordered.length - 1];
+    this.sessionId = last?.sessionId ?? null;
+    this.sessionStartedAt = startedAt ?? ordered[0]?.timestamp ?? null;
+  }
+
   add(event: Omit<RuntimeEvent, "id" | "eventId" | "sessionId">): RuntimeEvent {
     const id = this.nextId++;
     const stored: RuntimeEvent = {
