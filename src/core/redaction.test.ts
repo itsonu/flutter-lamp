@@ -148,9 +148,12 @@ test("redaction of the token ignores FLUTTER_LAMP_REDACT=off", () => {
 test("the connection layer never reads the raw URI without redacting it", () => {
   const source = readFileSync("src/core/connection.ts", "utf8");
 
-  // Remove every legitimate use, then look for what is left.
+  // Remove every legitimate use, then look for what is left. `setSessionToken`
+  // is one: it takes the raw credential precisely so `redactText` can scrub it
+  // out of captured text, and it never returns or stores it anywhere readable.
   const remaining = source
     .replace(/redactVmServiceUri\([^)]*\)/g, "REDACTED_CALL")
+    .replace(/setSessionToken\([^)]*\)/g, "SUPPRESSOR_CALL")
     .replace(/^\s*(\/\/|\*).*$/gm, ""); // comments discuss wsUri freely
 
   const bare = remaining.match(/\b(vm|this\.vm)\??\.wsUri\b/g) ?? [];

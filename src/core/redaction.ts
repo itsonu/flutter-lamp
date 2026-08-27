@@ -83,10 +83,61 @@ export function redactHeaders(
   return { headers: out, redacted: hit };
 }
 
+/**
+ * The path segment of the VM Service URI this session connected with.
+ *
+ * That segment authorises `evaluate` — arbitrary Dart execution inside the app —
+ * so it is a credential, and unlike a header in the app's own traffic it is
+ * *ours*. Kept so it can be scrubbed out of captured text wherever it turns up.
+ */
+let sessionToken: string | null = null;
+
+/**
+ * Register (or clear) the current session's VM Service credential.
+ *
+ * Called on connect, before any collector runs, because the very first thing a
+ * web target prints to its console is its own debug-service URI.
+ */
+export function setSessionToken(wsUri: string | null): void {
+  const segment = wsUri?.match(/^wss?:\/\/[^/]+\/([^/]+)/i)?.[1];
+  // A short segment is not a token — masking it globally would gut the logs.
+  sessionToken = segment && segment.length >= 8 ? segment : null;
+}
+
+/** `ws://host/<credential>/ws` — the VM Service endpoint's exact shape. */
+const VM_SERVICE_WS = /(wss?:\/\/[^\/\s]+\/)([^\/\s]+)(\/ws)(?![\w-])/gi;
+
+/**
+ * Scrub VM Service credentials out of text, whether or not redaction is enabled.
+ *
+ * Found on a web target, where the app itself logs
+ * `This app is linked to the debug service: ws://127.0.0.1:60106/<token>=/ws`.
+ * That line was stored verbatim and travelled into `get_logs`, into
+ * `export_session`, and into any artifact a developer pasted somewhere. 0.18.1
+ * fixed this server leaking the token in its own output; this is the same
+ * credential arriving through the observed app's output instead.
+ *
+ * Deliberately not gated on `config.enabled`. `FLUTTER_LAMP_REDACT=off` exists
+ * so a developer can read their own app's headers and log text — it is a choice
+ * about *their* data. This is the key to the app being debugged, and no switch
+ * should hand it out.
+ */
+function scrubVmServiceCredential(text: string): string {
+  let out = text;
+  if (sessionToken && out.includes(sessionToken)) out = out.split(sessionToken).join(REDACTED);
+  return out.replace(VM_SERVICE_WS, (_m, head: string, _token: string, tail: string) =>
+    `${head}${REDACTED}${tail}`,
+  );
+}
+
 /** Strip credential-shaped substrings (JWTs, `Bearer …`) out of free text. */
 export function redactText(text: string): string {
-  if (!config.enabled || !text) return text;
-  return text.replace(JWT, REDACTED).replace(SCHEME_TOKEN, (_m, scheme) => `${scheme} ${REDACTED}`);
+  if (!text) return text;
+  const scrubbed = scrubVmServiceCredential(text);
+  if (!config.enabled) return scrubbed;
+  return scrubbed
+    .replace(JWT, REDACTED)
+    .replace(SCHEME_TOKEN, (_m, scheme) => `${scheme} ${REDACTED}`);
 }
 
 /**

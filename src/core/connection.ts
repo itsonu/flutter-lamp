@@ -1,5 +1,5 @@
 import type { Collector, CollectorStatus } from "../collectors/collector.js";
-import type { Category } from "./events.js";
+import { CATEGORIES, type Category } from "./events.js";
 import { ExceptionCollector } from "../collectors/exceptionCollector.js";
 import { FrameCollector } from "../collectors/frameCollector.js";
 import { LogCollector } from "../collectors/logCollector.js";
@@ -7,7 +7,7 @@ import { NavigationCollector } from "../collectors/navigationCollector.js";
 import { NetworkCollector } from "../collectors/networkCollector.js";
 import { RebuildCollector } from "../collectors/rebuildCollector.js";
 import { RuntimeStore } from "./runtimeStore.js";
-import { redactVmServiceUri } from "./redaction.js";
+import { redactVmServiceUri, setSessionToken } from "./redaction.js";
 import { costMeter } from "./costMeter.js";
 import { StateCollector } from "../collectors/stateCollector.js";
 import { VmService } from "../vm/vmService.js";
@@ -32,7 +32,7 @@ export interface CollectorReport {
 }
 
 /** Which store category each collector writes, for liveness reporting. */
-const COLLECTOR_CATEGORY: Record<string, Category> = {
+export const COLLECTOR_CATEGORY: Record<string, Category> = {
   logs: "log",
   exceptions: "exception",
   frames: "frame",
@@ -41,6 +41,25 @@ const COLLECTOR_CATEGORY: Record<string, Category> = {
   rebuilds: "rebuild",
   state: "state",
 };
+
+/**
+ * Categories that are empty because nothing could see them, as opposed to empty
+ * because nothing happened.
+ *
+ * Measured on a web target: `network` is `unavailable` (no `dart:io` HTTP
+ * profiling) and `exceptions` is `degraded` (structured error reporting is off
+ * on the web, so `Flutter.Error` never posts). Both categories come back empty,
+ * and an empty list read as "nothing went wrong" is the wrong conclusion.
+ */
+export function unobservableCategories(reports: readonly CollectorReport[]): Category[] {
+  const out = new Set<Category>();
+  for (const r of reports) {
+    if (r.status === "active") continue;
+    const category = COLLECTOR_CATEGORY[r.name];
+    if (category) out.add(category);
+  }
+  return CATEGORIES.filter((c) => out.has(c));
+}
 
 export interface ConnectionStatus {
   connected: boolean;
@@ -142,6 +161,11 @@ class ConnectionManager {
   ): Promise<{ wsUri: string; isolateId: string; collectors: string[]; sessionId: string }> {
     const vm = await VmService.connect(uri);
     vm.on("close", () => this.onClose(vm));
+
+    // Before any collector subscribes. A web target's first console line is its
+    // own debug-service URI, complete with the token that authorises `evaluate`,
+    // and the log collector would otherwise store it verbatim.
+    setSessionToken(vm.wsUri);
 
     const isolateId = await vm.mainIsolateId();
 
