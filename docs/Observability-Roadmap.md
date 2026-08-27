@@ -200,6 +200,10 @@ Still open:
   cause and which is symptom is genuinely arguable.
 - A recorded incident for the demotion itself — an incidental exception with no
   competing hypothesis. Unit-tested, not recorded.
+- Re-recording `jank-with-incidental-framework-error` on a device. It was
+  captured over loopback because receipt-time stamping made adb ordering
+  unusable; that cause is fixed, so the caveat in its `capturedFrom` is now
+  removable by re-recording rather than by editing the file.
 - ~~Tool calls and tokens per diagnosis.~~ DONE. `costMeter` counts calls and
   response bytes per session, surfaced on `runtime_status`; the measured
   per-tool figures are in `docs/AI-Agent-Integration.md`. Bytes are counted and
@@ -209,7 +213,13 @@ Still open:
   tokens, a third of a 200k window, against ~2,000 for `diagnose_runtime`. Ask
   the question; do not dump the session.
 - Enough incidents for top-1 accuracy to be a measurement rather than a
-  regression guard. Three is a floor.
+  regression guard. Eight is still a floor. Note the trap in "add more": both
+  probes are already represented and every `CauseKind` has a recording, so the
+  cheap additions left are near-duplicates, which raise the count without
+  raising the coverage. What would actually help is a case whose right answer is
+  currently arguable — a session that both stutters and grows, or one where a
+  failing request and dropped frames compete — and those need the answer settled
+  first, not another capture.
 
 The exception incident needed a probe change, not an engine change:
 `bloc_probe`'s handler failures are absorbed by `BlocObserver.onError` and

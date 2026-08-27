@@ -15,8 +15,10 @@ expectations, which is not the same as measuring it against an app that actually
 misbehaved.
 
 - **`eval/incidents/*.json`** - golden incidents: a real session captured from a
-  device with `export_session` in `full` mode, plus what the right answer is.
-  Seven so far. Two deliberately straddle the jank threshold: 74/381 frames
+  running app with `export_session` in `full` mode, plus what the right answer
+  is. Eight so far, across three targets — an Android device over adb, a Windows
+  desktop build, and Chrome — because a target is part of what a diagnosis has to
+  cope with, not an implementation detail. Two deliberately straddle the jank threshold: 74/381 frames
   (19.4%) must stay `unknown`, 48/240 (20.0%) must be diagnosed as `jank`. The
   pairing is the point - together they pin the *boundary*, which is the part of a
   heuristic that drifts. Two unrelated incidents would not. The other two are a
