@@ -90,7 +90,7 @@ test("ExceptionCollector captures exceptions thrown before the session began", a
     Debug: [],
   });
 
-  await new ExceptionCollector().start(vm, store);
+  await new ExceptionCollector().start(vm, store, "iso-1");
 
   assert.equal(store.counts().exception, 1, "an exception is the evidence most worth not losing");
 });

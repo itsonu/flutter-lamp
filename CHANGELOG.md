@@ -145,6 +145,30 @@ point of the metric.
 
 ### Fixed
 
+- **An empty exception list could mean blind, and said `active`.**
+  `ExceptionCollector` was the one collector with no `health()`. Subscribing to a
+  stream always succeeds, so it reported healthy on targets where
+  `Flutter.Error` can never fire — the widget inspector posts it only while
+  `FlutterError.presentError` is its structured reporter, and the framework
+  leaves that off in profile mode and on the web
+  (`isStructuredErrorsEnabled` defaults to `!kIsWeb`). An agent reading "no
+  exceptions" there was reading blindness as health, which is exactly the
+  confusion `CollectorHealth` was introduced to prevent.
+
+  It now asks the app via `ext.flutter.inspector.structuredErrors` and reports
+  `degraded` with a detail naming what is lost and what still works. A failed
+  check claims nothing either way — a false alarm on a healthy app would be as
+  misleading as silence on a blind one.
+
+  One measured detail this turns on: that extension replies `{enabled: "true"}`
+  with a **string**, while `ext.dart.io.httpEnableTimelineLogging` returns a real
+  boolean from the same protocol. Comparing against `true` would have reported
+  every healthy app as blind, and a mutation test pins it. Verified end to end by
+  flipping the extension off on a running app (`degraded`, with the detail) and
+  back on (`active`).
+
+  `docs/Implementation-Notes.md` claimed "`Flutter.Error` (framework) is always
+  captured". That was wrong; it now says when it is not.
 - **Events are stamped with the app's clock, not with ours.** Every collector
   used `Date.now()` at the moment of receipt. A VM Service `Event` carries the
   time the VM posted it, and the difference is not cosmetic: DDS hands over a

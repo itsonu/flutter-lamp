@@ -147,11 +147,17 @@ which is what the scoring is for.
 - **Seven incidents is a floor, not a suite.** Top-1 accuracy over seven cases
   is a regression guard, not a measurement of the engine's accuracy. Do not
   quote it as one.
-- **No incident where empty means blind.** `unknown-too-little-evidence` has six
-  empty categories with all seven collectors reporting `active`, so emptiness
-  there is real quiet. The opposite case — a collector that failed, so empty
-  means unobserved — has the same shape and the opposite collector health, and
-  is not recorded. `collectorHealth.test.ts` covers the mechanism.
+- **No *recorded* incident where empty means blind.** `unknown-too-little-evidence`
+  has six empty categories with all seven collectors reporting `active`, so
+  emptiness there is real quiet. The opposite case — empty because a collector
+  cannot see its domain — is now *detectable* for exceptions, which it was not
+  when this note was first written: the collector asks the app whether framework
+  error reporting is on and reports `degraded` when it is not
+  (`exceptionHealth.test.ts`, and verified live by flipping the extension off on
+  a running app). Recording it still needs a target where a collector genuinely
+  cannot start — the web, where `dart:io` HTTP profiling is absent and
+  `isStructuredErrorsEnabled` is false — and whether this server can drive a web
+  target's VM Service at all is unverified.
 - **No incident where an exception is incidental and nothing else fires.** The
   demotion is guarded by unit tests in `src/diagnosis/engine.test.ts`, not by a
   recording.

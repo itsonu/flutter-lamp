@@ -30,5 +30,5 @@ Widget tree, selected widget, memory, and timeline are fetched on demand via `co
 ## Known issues
 
 - Network is pull-on-demand (no push stream exists for dart:io HTTP); refreshed when `get_network`/`diagnose_runtime` is called. This respects the "no polling" rule (fetch only on request).
-- Exception capture via `Debug.PauseException` only fires if the app is set to pause on exceptions; `Flutter.Error` (framework) is always captured.
+- Exception capture via `Debug.PauseException` only fires if the app is set to pause on exceptions. `Flutter.Error` is **not** always available, which this file previously claimed: the widget inspector posts it only while `FlutterError.presentError` is its structured reporter, and the framework leaves that off in profile mode and on the web (`isStructuredErrorsEnabled` defaults to `!kIsWeb`). The collector now asks the app (`ext.flutter.inspector.structuredErrors`) and reports `degraded` when the answer is no, so an empty exception list is not mistaken for a quiet one. Verified against a running app by flipping the extension off and back on.
 - There is no automated test against a real Flutter VM. Coverage is the diagnosis engine, the store, the `Flutter.Error` parser, a mock-VM WebSocket integration test, and a dashboard HTTP/WebSocket test. Live behaviour is verified by hand.
