@@ -7,6 +7,7 @@ import { diagnosePerformance, type PerformanceDiagnosis } from "../diagnosis/per
 import { routeHistory, type NavigationReport } from "../diagnosis/navigation.js";
 import { rebuildReport, type RebuildReport } from "../diagnosis/rebuilds.js";
 import { VERSION } from "../version.js";
+import { unobservableCategories } from "../core/connection.js";
 
 /**
  * A whole debugging session as one versioned, machine-readable artifact
@@ -97,7 +98,7 @@ export function exportSession(
   const now = opts.now ?? Date.now;
 
   const diagnoses = {
-    runtime: diagnose(store),
+    runtime: diagnose(store, unobservableCategories(meta.collectors)),
     performance: diagnosePerformance(store),
     navigation: routeHistory(store),
     rebuilds: rebuildReport(store),

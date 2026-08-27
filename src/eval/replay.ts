@@ -4,6 +4,8 @@ import type { RuntimeEvent } from "../core/events.js";
 import { diagnose, type CauseKind, type Diagnosis } from "../diagnosis/engine.js";
 import { diagnosePerformance, type PerformanceDiagnosis } from "../diagnosis/performance.js";
 import { SCHEMA_VERSION, type SessionExport } from "../export/session.js";
+import { unobservableCategories } from "../core/connection.js";
+import type { Category } from "../core/events.js";
 
 /**
  * Replays a recorded session and re-runs the diagnosis over it.
@@ -65,6 +67,16 @@ export interface Expectation {
   evidenceIncludes?: string[];
   /** Performance findings expected by category, if this incident covers them. */
   performanceFindings?: string[];
+  /**
+   * Categories the diagnosis must report as unobservable — empty because
+   * nothing could see them, not because nothing happened.
+   *
+   * This is the one expectation about what the engine *cannot* see, and it is
+   * the difference between "your app made no failing requests" and "requests
+   * are invisible on this target". Getting that wrong is not a wrong answer, it
+   * is a wrong answer delivered as reassurance.
+   */
+  unobservable?: Category[];
 }
 
 export interface ReplayResult {
@@ -110,9 +122,14 @@ export function replay(incident: GoldenIncident): ReplayResult {
   const events = incident.session.events as RuntimeEvent[];
   store.hydrate(events, incident.session.session.startedAt);
 
+  // The recorded collector health goes back in with the events. Without it the
+  // replayed diagnosis would look at the same empty categories and call them
+  // quiet, which is exactly the distinction some incidents exist to pin.
+  const blind = unobservableCategories(incident.session.collectors ?? []);
+
   return {
     incident,
-    runtime: diagnose(store),
+    runtime: diagnose(store, blind),
     performance: diagnosePerformance(store),
     restored: store.size(),
   };

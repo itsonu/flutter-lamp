@@ -41,6 +41,17 @@ export interface EvidenceCoverage {
   present: Category[];
   /** Categories with none — absence of evidence, not evidence of absence. */
   empty: Category[];
+  /**
+   * Of the empty ones, those nothing could have seen: the collector responsible
+   * is degraded or unavailable on this target. Measured on a web target,
+   * `network` and `exception` land here — no `dart:io` HTTP profiling, and
+   * structured error reporting is off, so `Flutter.Error` never posts.
+   *
+   * `empty` still lists them, so nothing about its meaning changed. The point of
+   * the split is that an empty category in `empty` alone means the app was quiet,
+   * while one that also appears here means the question was never asked.
+   */
+  unobservable: Category[];
   /** Events dropped by retention, per category. */
   evicted: Record<Category, number>;
   /** The observed window: oldest and newest retained event, epoch ms. */
@@ -131,7 +142,7 @@ interface Hypothesis {
  * nothing corroborates, confidence stays low and the status says so, satisfying
  * docs/Rules.md ("If confidence <70% say Unknown", "Never hallucinate").
  */
-export function diagnose(store: RuntimeStore): Diagnosis {
+export function diagnose(store: RuntimeStore, unobservable: readonly Category[] = []): Diagnosis {
   // No limit, deliberately. A flat cap across all categories lets a chatty
   // category starve a rare one: measured on a real device, a probe app pushed
   // 2,000 provider events in 30 seconds, which pushed the session's only
@@ -141,7 +152,7 @@ export function diagnose(store: RuntimeStore): Diagnosis {
   // Retention is the only truncation now, and `coverage.evicted` reports it.
   const all = store.query({}); // most-recent-first, current session
   const limitations = describeLimitations(store, all);
-  const coverage = coverageOf(store, all);
+  const coverage = coverageOf(store, all, unobservable);
 
   if (all.length === 0) {
     return unknown(
@@ -369,12 +380,20 @@ function dataCompleteness(store: RuntimeStore, all: RuntimeEvent[]): number {
   return Math.max(0, present / CATEGORIES.length - (anyEvicted ? 0.1 : 0));
 }
 
-function coverageOf(store: RuntimeStore, all: RuntimeEvent[]): EvidenceCoverage {
+function coverageOf(
+  store: RuntimeStore,
+  all: RuntimeEvent[],
+  unobservable: readonly Category[],
+): EvidenceCoverage {
   const seen = new Set(all.map((e) => e.category));
   const retention = store.retention();
+  const blind = new Set(unobservable);
   return {
     present: CATEGORIES.filter((c) => seen.has(c)),
     empty: CATEGORIES.filter((c) => !seen.has(c)),
+    // Only the empty ones. A category that is blind but has retained events
+    // from before the collector degraded is not a hole in the evidence.
+    unobservable: CATEGORIES.filter((c) => blind.has(c) && !seen.has(c)),
     evicted: retention.evicted,
     oldestEventMs: retention.oldestEventMs,
     newestEventMs: retention.newestEventMs,

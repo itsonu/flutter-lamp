@@ -27,6 +27,8 @@ export interface IncidentScore {
   evidenceRecall: number | null;
   /** Cited an id that resolves to no restored event. */
   danglingEvidence: string[];
+  /** Categories the incident requires be reported unobservable, but were not. */
+  missingUnobservable: string[];
   /** Committed to a cause, and it was the wrong one. The expensive failure. */
   falseConfidence: boolean;
   /** Correctly declined to answer. */
@@ -87,6 +89,18 @@ export function scoreIncident(result: ReplayResult): IncidentScore {
     notes.push(`cites events not in the session: ${danglingEvidence.join(", ")}`);
   }
 
+  // Empty because unseen, or empty because quiet? An incident that pins the
+  // difference fails here when the engine stops making it.
+  const missingUnobservable = (want.unobservable ?? []).filter(
+    (c) => !runtime.coverage.unobservable.includes(c),
+  );
+  if (missingUnobservable.length > 0) {
+    notes.push(
+      `not reported as unobservable: ${missingUnobservable.join(", ")} — ` +
+        "an empty category read as quiet when nothing could see it",
+    );
+  }
+
   // Committed to an answer, and the answer was wrong. Note that expecting
   // "unknown" and getting a confident cause counts here too — that is the
   // guess this tool exists not to make.
@@ -100,6 +114,7 @@ export function scoreIncident(result: ReplayResult): IncidentScore {
     confidenceInBand,
     evidenceRecall,
     danglingEvidence,
+    missingUnobservable,
     falseConfidence,
     honestUnknown,
     notes,

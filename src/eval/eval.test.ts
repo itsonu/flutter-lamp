@@ -73,7 +73,12 @@ test("the engine answers each recorded incident correctly", () => {
   const m = score(results);
 
   const failing = m.scores.filter(
-    (s) => !s.causeCorrect || !s.statusCorrect || !s.confidenceInBand || s.danglingEvidence.length,
+    (s) =>
+      !s.causeCorrect ||
+      !s.statusCorrect ||
+      !s.confidenceInBand ||
+      s.danglingEvidence.length ||
+      s.missingUnobservable.length,
   );
   assert.deepEqual(failing.map((s) => s.name), [], "\n" + report(m));
 
@@ -95,6 +100,19 @@ test("an incident expecting unknown is not answered with a guess", () => {
       "unknown",
       `${incident.name}: answered "${runtime.cause}" where the honest answer is unknown`,
     );
+  }
+});
+
+test("a blind category is never reported as a quiet one", () => {
+  // The failure this guards is not a wrong cause. It is an empty list delivered
+  // as reassurance: "no failing requests" on a target where requests cannot be
+  // seen at all.
+  const wanted = incidents().filter((i) => (i.expect.unobservable ?? []).length > 0);
+  assert.ok(wanted.length >= 1, "the set must include a case where evidence is unobservable");
+
+  for (const incident of wanted) {
+    const s = scoreIncident(replay(incident));
+    assert.deepEqual(s.missingUnobservable, [], `${incident.name}: ${s.notes.join("; ")}`);
   }
 });
 

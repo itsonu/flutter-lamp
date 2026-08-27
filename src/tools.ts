@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { connection } from "./core/connection.js";
+import { connection, unobservableCategories } from "./core/connection.js";
 import { diagnose } from "./diagnosis/engine.js";
 import { exportSession } from "./export/session.js";
 import { getDashboardInfo } from "./dashboard/server.js";
@@ -319,7 +319,7 @@ export function registerTools(server: McpServer): void {
     async () => {
       connection.requireConnectedOrThrow();
       await connection.refreshPullCollectors(); // ensure latest network is in evidence
-      return json(diagnose(connection.store));
+      return json(diagnose(connection.store, unobservableCategories(connection.collectorHealth())));
     },
   );
 
@@ -572,7 +572,10 @@ export function registerTools(server: McpServer): void {
     async () => {
       connection.requireConnectedOrThrow();
       await connection.refreshPullCollectors();
-      const diagnosis = diagnose(connection.store);
+      const diagnosis = diagnose(
+        connection.store,
+        unobservableCategories(connection.collectorHealth()),
+      );
       return json({
         claim: diagnosis.rootCause,
         status: diagnosis.status,

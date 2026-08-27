@@ -186,6 +186,14 @@ emits `cause` as a stable `CauseKind` label beside it. Additive.
 
 Still open:
 
+- ~~An incident where empty means blind rather than quiet.~~ DONE. Recorded on
+  Chrome, where `dart:io` is absent and structured error reporting is off, so
+  `network` and `exception` are genuinely unobservable. It needed
+  `coverage.unobservable` on the diagnosis first: the information existed in
+  collector health but never reached the diagnosis, so an empty category read as
+  quiet no matter why it was empty. Capturing it also caught a credential leak —
+  a web target logs its own debug-service URI, token included, and the log
+  collector stored it verbatim.
 - Ranking edges that no recording constrains. Found by mutation: promoting
   `memory` above `jank` passes the whole eval suite. Pinned by unit test for
   now; a recording needs a session that both stutters and grows, where which is

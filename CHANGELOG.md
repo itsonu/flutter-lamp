@@ -40,6 +40,14 @@ misbehaved.
   most embarrassing false positive available: technically accurate, useless, and
   true of every app that has ever started. Neither negative catches the other's
   bound.
+
+  The eighth is the first recorded on a non-native target: the same workload on
+  Chrome, where two collectors genuinely cannot see their domain. `jank` is still
+  the right answer (30 of 52 frames, build-bound at 48.1ms against 5.4ms), and
+  the diagnosis must *also* report `exception` and `network` as unobservable
+  rather than merely empty. `Expectation` gains an optional `unobservable` field
+  and replay feeds the recorded collector health back in, so that is scored
+  behaviour rather than a claim in prose.
 - **Two ranking policies pinned by unit test**, both found by mutation rather
   than by reading the code. Sustained heap growth must not outrank an evidenced
   jank pattern — promoting `memory` above `jank` passed the entire eval suite
@@ -89,6 +97,23 @@ exception priority trips false confidence at 25%, while dropping jank's strength
 below the confidence threshold trips status and band with false confidence still
 at 0% - abstention and confident wrongness scored apart, which is the whole
 point of the metric.
+
+### Added - coverage
+
+- **`coverage.unobservable`** on every diagnosis: of the empty categories, those
+  nothing could have seen, because the collector responsible is degraded or
+  unavailable on this target. `empty` is unchanged, so nothing about its meaning
+  moved — the split is the point. An agent reading `empty: [exception, network]`
+  on a web target would conclude the app threw nothing and made no failing
+  requests; both are unfounded there, and the second is reassurance drawn from a
+  question that was never asked.
+
+  Measured rather than reasoned about: on Chrome `network` is `unavailable` (no
+  `dart:io`) and `exception` is `degraded` (structured error reporting is off off
+  native), while `navigation` is empty simply because the app did not navigate.
+  Three empty categories, two different reasons, and the diagnosis now says
+  which is which. A category that is blind but still holds events is not counted
+  as a hole.
 
 ### Added - cost
 
@@ -145,6 +170,28 @@ point of the metric.
 
 ### Fixed
 
+- **The VM Service credential could leak through the observed app's own logs.**
+  On a web target the app prints `This app is linked to the debug service:
+  ws://127.0.0.1:60106/<token>=/ws` to its console, and the log collector stored
+  that line verbatim — from where it travelled into `get_logs`, into
+  `export_session`, and into any artifact a developer pasted somewhere. The path
+  segment authorises `evaluate`: arbitrary Dart execution inside the app. 0.18.1
+  stopped this server leaking the token in its *own* output; this is the same
+  credential arriving through the app's output instead, and it was found by
+  inspecting a candidate fixture before committing it.
+
+  `redactText` now scrubs it two ways: the session's own token wherever it
+  appears (registered on connect, before any collector subscribes, because that
+  log line is among the first things a web target prints), and the VM Service
+  endpoint shape `ws://host/<segment>/ws` for tokens from anywhere else. Ordinary
+  websocket URLs keep their paths, because over-redaction destroys evidence.
+
+  Deliberately **not** gated on `config.enabled`. `FLUTTER_LAMP_REDACT=off`
+  exists so a developer can read their own app's headers and log text — a choice
+  about their data. This is the key to the app being debugged, and no switch
+  hands it out. The test for that was itself false-passing at first: the config
+  is read once at import, so setting the variable without
+  `reloadRedactionConfig()` exercised the enabled path and proved nothing.
 - **An empty exception list could mean blind, and said `active`.**
   `ExceptionCollector` was the one collector with no `health()`. Subscribing to a
   stream always succeeds, so it reported healthy on targets where

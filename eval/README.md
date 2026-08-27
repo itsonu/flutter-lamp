@@ -57,6 +57,7 @@ of **zero**. Both are verified to fail, not assumed to — see below.
 | `network-endpoint-failing` | `network`, diagnosed, 0.7 | One endpoint 500s four times while another returns 200 four times. Connectivity works; one endpoint refuses |
 | `memory-sustained-heap-growth` | `memory`, diagnosed, 0.75 | Twelve heap samples rising monotonically, 89MB to 217MB, no drop. A sawtooth would fall back; this does not |
 | `unknown-too-little-evidence` | `unknown` | Two events. The one frame is janky — a 100% ratio — and the answer is still `unknown`, because one slow startup frame is not a pattern |
+| `jank-on-a-target-with-blind-spots` | `jank`, diagnosed, ~0.8, plus `exception`+`network` unobservable | The same workload on Chrome. The right cause *and* an honest declaration of what could not be seen |
 
 The first two are a deliberate pair, and the pairing is the point: 19.4% must
 stay unknown, 20.0% must be diagnosed. Together they pin the **boundary**, which
@@ -116,6 +117,9 @@ Verified by mutation — the gate is not decoration:
 | **memory promoted above jank** | **all 6 passed** — no recorded incident constrains memory's ranking; now pinned by a unit test instead (see below) |
 | jank minimum-sample floor dropped from 3 to 1 | 3 tests fail, **false confidence 14%** — one 90.4ms startup frame becomes a confident jank verdict at 0.7 |
 | same floor dropped only to 2 | all 7 pass, correctly: the thin session holds one janky frame, so this incident pins "at least 2", not "at least 3" |
+| `coverage.unobservable` collapsed to empty | 2 tests fail — a blind category read as a quiet one |
+| blindness claimed for categories that *have* events | all 8 pass; the web incident cannot catch it (both blind categories are also empty there), so a unit test pins it |
+| VM Service token scrub gated on `FLUTTER_LAMP_REDACT` | 1 test fails — the off switch must not release the credential |
 
 Too eager trips the ceiling. Too cautious trips the floor. Different failures,
 which is what the scoring is for.
@@ -144,10 +148,10 @@ which is what the scoring is for.
 - **Confidence bands are policy, not calibration.** They say "the engine should
   be about this sure", chosen to leave room for tuning. They are not evidence
   that 0.8 means 80%.
-- **Seven incidents is a floor, not a suite.** Top-1 accuracy over seven cases
+- **Eight incidents is a floor, not a suite.** Top-1 accuracy over eight cases
   is a regression guard, not a measurement of the engine's accuracy. Do not
   quote it as one.
-- **No *recorded* incident where empty means blind.** `unknown-too-little-evidence`
+- ~~No *recorded* incident where empty means blind.~~ Now covered by `jank-on-a-target-with-blind-spots`; the reasoning is kept because it explains the shape: `unknown-too-little-evidence`
   has six empty categories with all seven collectors reporting `active`, so
   emptiness there is real quiet. The opposite case — empty because a collector
   cannot see its domain — is now *detectable* for exceptions, which it was not

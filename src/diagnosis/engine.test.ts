@@ -224,3 +224,24 @@ test("heap growth alone is diagnosed, and never called a leak", () => {
   const text = [d.summary, d.rootCause, ...d.recommendedFixes].join(" ").toLowerCase();
   assert.ok(!/\bis a leak\b|\bleaking\b/.test(text), `overclaimed: ${text}`);
 });
+
+test("a blind category with events is not called unobservable", () => {
+  // Found by mutation: the recorded web incident cannot catch this, because
+  // there both blind categories are also empty. A collector that degraded
+  // part-way through a session still left real evidence behind, and calling
+  // that a hole would understate what is known.
+  const store = new RuntimeStore();
+  store.add({
+    timestamp: 4_000_000,
+    source: "HttpProfile",
+    severity: "error",
+    category: "network",
+    message: "GET /api/orders → 500",
+    data: { uri: "/api/orders", statusCode: 500 },
+  });
+
+  const d = diagnose(store, ["network", "exception"]);
+  assert.ok(!d.coverage.unobservable.includes("network"), "network has events; it is not a hole");
+  assert.ok(d.coverage.unobservable.includes("exception"), "exception is blind and empty");
+  assert.ok(!d.coverage.empty.includes("network"), "and it is not empty either");
+});
