@@ -29,6 +29,11 @@
 //   1. idle        — baseline
 //   2. requests    — alternating 200s and 500s, no other fault in the session
 //   3. idle        — baseline again
+//
+// Or, with `--dart-define=scenario=memory`, retention the heap cannot reclaim:
+//   1. idle        — baseline
+//   2. retain      — allocate and keep referencing, in small steady steps
+//   3. idle        — baseline again, still holding everything
 import 'dart:async';
 import 'dart:io';
 
@@ -80,12 +85,11 @@ class ProbeObserver extends BlocObserver {
   @override
   void onTransition(Bloc<dynamic, dynamic> bloc, Transition<dynamic, dynamic> transition) {
     super.onTransition(bloc, transition);
-    // Silent in the incidental scenario. `measure-bloc.mjs` counts these
-    // markers, so they have to stay for the default scenario — but that
-    // scenario emits on a slow cycle, while this one ticks ten times a second
-    // and the markers become the bulk of anything recorded, with nothing read
-    // from them.
-    if (scenario == 'incidental') return;
+    // Only the default scenario prints these. `measure-bloc.mjs` counts the
+    // markers, so they have to stay there — but it emits on a slow cycle, while
+    // every other scenario ticks ten times a second and the markers become the
+    // bulk of anything recorded, with nothing reading them.
+    if (scenario != 'crash') return;
     debugPrint('PROBE_TRANSITION ${bloc.runtimeType} ${transition.event.runtimeType} '
         '${transition.currentState} -> ${transition.nextState}');
   }
@@ -132,6 +136,14 @@ const stormWatchers = 60;
 /// evidence. The scenario's own cells provide the rebuild the ticks need.
 int get watcherCount => scenario == 'crash' ? stormWatchers : 0;
 
+/// Held for the lifetime of the `memory` scenario, so nothing here is garbage.
+///
+/// Strings and lists on purpose, not `Uint8List`: large typed data can be
+/// accounted as *external* memory rather than Dart heap, and the diagnosis
+/// reads `heapUsage`. Growth that lands in the wrong counter would prove
+/// nothing.
+final List<String> retained = <String>[];
+
 /// Where the `network` scenario points. `probe/flaky-server.mjs` serves it.
 const flakyServer = 'http://127.0.0.1:8477';
 
@@ -166,6 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     if (scenario == 'incidental') return _runIncidentalCycle();
     if (scenario == 'network') return _runNetworkCycle();
+    if (scenario == 'memory') return _runMemoryCycle();
     final bloc = context.read<CounterBloc>();
     final cubit = context.read<CounterCubit>();
 
@@ -249,6 +262,35 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _slow = false);
 
     await _ticking('idle', 10, bloc);
+  }
+
+  /// Steady, genuinely unreclaimable growth, and nothing else wrong.
+  ///
+  /// Allocated in small steps once per tick rather than in a few large bursts.
+  /// A burst provokes a collection, and a collection shows up as a janky frame;
+  /// the jank hypothesis outranks memory, so a session that stutters while
+  /// growing would be answered `jank` and prove nothing about the heap.
+  Future<void> _runMemoryCycle() async {
+    if (!mounted) return;
+    final bloc = context.read<CounterBloc>();
+
+    await _ticking('idle', 20, bloc);
+
+    phase('retain');
+    if (mounted) setState(() => _current = 'retain');
+    for (var step = 0; step < 300; step++) {
+      // ~4k strings of ~60 bytes per tick: enough that the heap climbs
+      // steadily, small enough that no single step is a visible pause.
+      for (var i = 0; i < 4000; i++) {
+        retained.add('retained-$step-$i-${'x' * 40}');
+      }
+      bloc.add(const Increment());
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+
+    // Still holding every string. A heap that dropped back here would mean the
+    // growth was collectable and the recording would be worthless.
+    await _ticking('idle', 30, bloc);
   }
 
   /// HTTP traffic and nothing else wrong, so the only fault in the session is

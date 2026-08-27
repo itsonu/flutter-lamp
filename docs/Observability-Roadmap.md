@@ -158,7 +158,16 @@ Done, in `eval/` and `src/eval/`:
   unconditional `exception` priority was found to be wrong. A fifth covers
   `network` against a local server that fails one endpoint, and doubles as the
   first proof that header redaction runs at capture rather than only in a unit
-  test.
+  test. A sixth covers `memory` — twelve monotonically rising heap samples, no
+  drop, with `externalUsageMB` flat at 0 and capacity climbing alongside usage.
+  Every `CauseKind` now has a recording.
+
+Measured while recording it, on a real device over adb TCP: `clockOffsetMs` is
+**-839ms**. The phone's clock runs most of a second behind the recorder's. That
+is the first real reading of the skew the previous commit made observable, and
+it is nearly a third of the 3s correlation window — which is why our own notes
+and the app's events must not be compared naively, and why the offset is
+reported rather than silently corrected.
 - **Replay harness** over `export_session` output. Needed `RuntimeStore.hydrate`,
   because `add()` mints fresh ids and replaying through it would renumber every
   event and invalidate every cited `exc_00042`.
@@ -177,8 +186,10 @@ emits `cause` as a stable `CauseKind` label beside it. Additive.
 
 Still open:
 
-- A memory incident — the last `CauseKind` with no recording. Needs a session
-  long enough to show sustained growth.
+- Ranking edges that no recording constrains. Found by mutation: promoting
+  `memory` above `jank` passes the whole eval suite. Pinned by unit test for
+  now; a recording needs a session that both stutters and grows, where which is
+  cause and which is symptom is genuinely arguable.
 - A recorded incident for the demotion itself — an incidental exception with no
   competing hypothesis. Unit-tested, not recorded.
 - Tool calls and tokens per diagnosis. Not measured; needs instrumentation at

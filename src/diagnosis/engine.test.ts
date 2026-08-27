@@ -174,3 +174,53 @@ test("a jank verdict cites its own worst frame", () => {
       .sort((a, b) => Number(b.data.elapsedMs) - Number(a.data.elapsedMs))[0].eventId);
   assert.ok(worst, "worst janky frame must be in the cited evidence");
 });
+
+test("sustained heap growth does not outrank evidenced jank", () => {
+  // Memory is the lowest-priority hypothesis on purpose: a growing heap is not
+  // a leak, and Dart's heap grows between collections. No recorded incident
+  // constrains this — one would need a session that both stutters and grows,
+  // where which of the two is the root cause is genuinely arguable — so the
+  // policy is pinned here instead. Found by mutation: promoting memory above
+  // jank passed the whole eval suite unnoticed.
+  const store = new RuntimeStore();
+  const now = 3_000_000;
+  for (let i = 0; i < 5; i++) {
+    store.add({
+      timestamp: now + i * 1_000,
+      source: "getMemoryUsage",
+      severity: "info",
+      category: "system",
+      message: `Heap ${50 + i * 30}MB`,
+      data: { heapUsageMB: 50 + i * 30, heapCapacityMB: 60 + i * 30, externalUsageMB: 0 },
+    });
+  }
+  jankyRun(store, now + 10_000, 12, 20);
+
+  const d = diagnose(store);
+  assert.equal(d.cause, "jank");
+  // Offered as a competing explanation rather than hidden.
+  assert.ok(d.alternativeCauses.some((a) => a.cause === "memory"));
+});
+
+test("heap growth alone is diagnosed, and never called a leak", () => {
+  const store = new RuntimeStore();
+  const now = 3_000_000;
+  for (let i = 0; i < 5; i++) {
+    store.add({
+      timestamp: now + i * 1_000,
+      source: "getMemoryUsage",
+      severity: "info",
+      category: "system",
+      message: `Heap ${50 + i * 30}MB`,
+      data: { heapUsageMB: 50 + i * 30, heapCapacityMB: 60 + i * 30, externalUsageMB: 0 },
+    });
+  }
+
+  const d = diagnose(store);
+  assert.equal(d.cause, "memory");
+  assert.equal(d.status, "diagnosed");
+  // The restraint is part of the contract, not a wording accident: growth is
+  // evidence of retention at most, and the tool must not upgrade it.
+  const text = [d.summary, d.rootCause, ...d.recommendedFixes].join(" ").toLowerCase();
+  assert.ok(!/\bis a leak\b|\bleaking\b/.test(text), `overclaimed: ${text}`);
+});

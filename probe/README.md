@@ -19,7 +19,8 @@ real build-bound jank — the two separated so a diagnosis can be held to tellin
 them apart. `--dart-define=scenario=network` makes HTTP requests against
 `probe/flaky-server.mjs` (`node probe/flaky-server.mjs`, start it first), half
 of them to an endpoint that returns 500, with nothing else wrong in the session.
-Each prints
+`--dart-define=scenario=memory` appends to a list it never releases, in steps
+small enough that no collection pause registers as jank. Each prints
 `PROBE_PHASE <name>` before each phase, so an observed event can be attributed
 to the thing that caused it. `bloc_probe` also prints `PROBE_TRANSITION` from a
 `BlocObserver`, which is how "the transitions really happened and the VM Service

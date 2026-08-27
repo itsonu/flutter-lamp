@@ -55,6 +55,7 @@ of **zero**. Both are verified to fail, not assumed to — see below.
 | `exception-uncaught-build-failure` | `exception`, diagnosed, ~0.8 | An uncaught `StateError` thrown inside `build`, twice, with a stack. 24.3% of frames are janky too — so the jank hypothesis fires and must still lose |
 | `jank-with-incidental-framework-error` | `jank`, diagnosed, ~0.8 | A `RenderFlex overflowed` error *and* real jank. The exception must lose: in the 3s either side of it not one of 50 frames missed budget |
 | `network-endpoint-failing` | `network`, diagnosed, 0.7 | One endpoint 500s four times while another returns 200 four times. Connectivity works; one endpoint refuses |
+| `memory-sustained-heap-growth` | `memory`, diagnosed, 0.75 | Twelve heap samples rising monotonically, 89MB to 217MB, no drop. A sawtooth would fall back; this does not |
 
 The first two are a deliberate pair, and the pairing is the point: 19.4% must
 stay unknown, 20.0% must be diagnosed. Together they pin the **boundary**, which
@@ -101,14 +102,23 @@ Verified by mutation — the gate is not decoration:
 | worst-frame-first evidence ordering removed | 1 test fails on evidence recall alone — the verdict stops citing the frame it rests on |
 | network detector blinded to 5xx | 2 tests fail — the answer becomes `unknown`, and **false confidence does not fire**: going blind is an honest abstention |
 | network strength dropped to 0.65 | 1 test fails on status; false confidence stays 0% |
+| memory growth threshold raised past the session | 2 tests fail — answer becomes `unknown`, abstention again |
+| memory growth measured against a wider base | same 2 failures |
+| **memory promoted above jank** | **all 6 passed** — no recorded incident constrains memory's ranking; now pinned by a unit test instead (see below) |
 
 Too eager trips the ceiling. Too cautious trips the floor. Different failures,
 which is what the scoring is for.
 
 ## Not covered yet
 
-- **No memory incident.** Needs a session long enough to show sustained growth,
-  and it is the last `CauseKind` with no recording.
+- **Nothing recorded constrains memory's *ranking*.** Found by mutation:
+  promoting `memory` above `jank` passes every eval test. A recording that would
+  catch it needs a session that both stutters and grows, and there the ground
+  truth is genuinely arguable — if allocation pressure caused the collection
+  pauses that caused the jank, memory is the cause and jank the symptom. Rather
+  than invent an answer to that, the policy is pinned in
+  `src/diagnosis/engine.test.ts`, which does fail under the mutation. Every
+  `CauseKind` now has a recording; not every ranking edge does.
 - **The network incident cannot fail as *confidently wrong*.** Nothing else is
   wrong in that session, so there is no competing cause for the engine to pick
   by mistake; both its mutations produce abstention. It guards against the
@@ -123,12 +133,17 @@ which is what the scoring is for.
 - **Confidence bands are policy, not calibration.** They say "the engine should
   be about this sure", chosen to leave room for tuning. They are not evidence
   that 0.8 means 80%.
-- **Five incidents is a floor, not a suite.** Top-1 accuracy over five cases is
-  a regression guard, not a measurement of the engine's accuracy. Do not quote
-  it as one.
+- **Six incidents is a floor, not a suite.** Top-1 accuracy over six cases is a
+  regression guard, not a measurement of the engine's accuracy. Do not quote it
+  as one.
 - **No incident where an exception is incidental and nothing else fires.** The
   demotion is guarded by unit tests in `src/diagnosis/engine.test.ts`, not by a
   recording.
+
+One recording property is worth knowing before adding another: memory samples
+enter the store only when something calls `get_memory` — the server never polls
+in the background. A connect-and-wait capture records none of them, and the
+memory hypothesis cannot fire. `capture-mem.mjs`-style drivers have to ask.
 
 ## What a recording proves that a unit test does not
 

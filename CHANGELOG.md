@@ -16,7 +16,7 @@ misbehaved.
 
 - **`eval/incidents/*.json`** - golden incidents: a real session captured from a
   device with `export_session` in `full` mode, plus what the right answer is.
-  Five so far. Two deliberately straddle the jank threshold: 74/381 frames
+  Six so far. Two deliberately straddle the jank threshold: 74/381 frames
   (19.4%) must stay `unknown`, 48/240 (20.0%) must be diagnosed as `jank`. The
   pairing is the point - together they pin the *boundary*, which is the part of a
   heuristic that drifts. Two unrelated incidents would not. The other two are a
@@ -24,8 +24,22 @@ misbehaved.
   right answers are opposite, so no fixed ordering of the two hypotheses can
   satisfy both. The fifth covers `network`: one endpoint returns 500 four times
   while another returns 200 four times, so connectivity demonstrably works and
-  the finding is specific to an endpoint. `memory` is now the only `CauseKind`
-  with no recording.
+  the finding is specific to an endpoint. The sixth covers `memory`: twelve heap
+  samples rising monotonically from 89MB to 217MB with no drop anywhere, which
+  is the argument — a healthy app under load produces a sawtooth, and twelve
+  consecutive rises is not one. `externalUsageMB` is 0 throughout, so the growth
+  is Dart heap rather than external allocation accounted elsewhere, and
+  `heapCapacityMB` climbs with it, so the VM was expanding for live data rather
+  than sitting on uncollected garbage. Every `CauseKind` now has a recording.
+- **Two ranking policies pinned by unit test**, both found by mutation rather
+  than by reading the code. Sustained heap growth must not outrank an evidenced
+  jank pattern — promoting `memory` above `jank` passed the entire eval suite
+  unnoticed, because no recording constrains that edge and a recording that
+  would needs a session where the ground truth is genuinely arguable (if
+  allocation pressure caused the collection pauses that caused the jank, memory
+  is the cause and jank the symptom). And heap growth is never described as a
+  leak: the restraint in `Growth is not proof of a leak` is part of the
+  contract, not a wording accident.
 - **`probe/flaky-server.mjs`** and a `network` scenario in `bloc_probe`. Offline
   and deterministic — an incident that depends on someone else's server is not
   reproducible, and a probe should not make outbound requests to record a
