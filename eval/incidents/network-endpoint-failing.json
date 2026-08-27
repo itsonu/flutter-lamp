@@ -1,0 +1,5534 @@
+{
+  "name": "network-endpoint-failing",
+  "capturedFrom": "probe/bloc_probe with `--dart-define=scenario=network`, Windows desktop target, 2026-08-27, against `probe/flaky-server.mjs` on 127.0.0.1:8477. 14-second window: idle, then eight alternating requests \u2014 `/api/health` returning 200 and `/api/orders` returning 500 \u2014 then idle. Offline and deterministic on purpose; an incident that depends on someone else's server is not reproducible.\n\nFirst incident recorded with events stamped from the VM's clock rather than on receipt; `session.clockOffsetMs` is -1ms, so the app's clock and the recorder's agree and the ordering here can be read at face value.",
+  "why": "The right answer is `network`, and this is the first recording of that cause.\n\nFour requests failed and four succeeded, which is what makes the evidence say something specific. `/api/orders` returned 500 on all four attempts; `/api/health` returned 200 on all four, interleaved with them. So the finding is not 'the network is down' or 'the device is offline' \u2014 connectivity demonstrably works. One endpoint is refusing, consistently, and that is a claim a reader can act on.\n\nIt is also not slowness. The failing requests completed in 3.00-3.97ms, in the same range as the successful ones (3.07-4.95ms). Nothing here is timing out; the server answered promptly and answered 500.\n\nNothing competes. Zero exceptions. One frame of 65 missed budget (1.5%), far below the 20% the jank hypothesis requires, so it correctly does not fire and the diagnosis has no alternative causes at all. That is the cleanest possible setting for the weakest hypothesis in the engine, which is exactly why it is worth pinning: if `network` cannot be reached here, it cannot be reached anywhere.\n\nConfidence 0.7 is right, and it sits exactly on the threshold where the status flips from `unknown` to `diagnosed` \u2014 the least confident answer the engine is willing to commit to. That is the honest level. An HTTP 500 says the server refused; it does not say why, and nothing observable from inside the client can. The diagnosis names the endpoint and hands back the request ids, which is as far as the evidence goes.\n\nOne thing this band pins deliberately: `networkHypothesis` scores a flat 0.7 no matter how many requests failed \u2014 one failure and forty score alike. This incident records that as current behaviour rather than endorsing it. If that is ever made to scale with the failure count, the band here should be widened as part of that change, not treated as a regression.",
+  "session": {
+    "schemaVersion": 1,
+    "tool": {
+      "name": "flutter-lamp",
+      "version": "0.18.1"
+    },
+    "mode": "full",
+    "session": {
+      "id": "s1",
+      "startedAt": 1787801464347,
+      "exportedAt": 1787801478547,
+      "connected": true,
+      "wsUri": "ws://127.0.0.1:8181/[REDACTED]/ws",
+      "clockOffsetMs": -1
+    },
+    "collectors": [
+      {
+        "name": "logs",
+        "status": "active",
+        "eventsRetained": 150,
+        "lastEventMs": 1787801472897
+      },
+      {
+        "name": "exceptions",
+        "status": "active",
+        "eventsRetained": 0,
+        "lastEventMs": null
+      },
+      {
+        "name": "frames",
+        "status": "active",
+        "eventsRetained": 65,
+        "lastEventMs": 1787801473016
+      },
+      {
+        "name": "network",
+        "status": "active",
+        "eventsRetained": 8,
+        "lastEventMs": 1787801470660
+      },
+      {
+        "name": "navigation",
+        "status": "active",
+        "eventsRetained": 0,
+        "lastEventMs": null
+      },
+      {
+        "name": "rebuilds",
+        "status": "active",
+        "eventsRetained": 64,
+        "lastEventMs": 1787801472913
+      },
+      {
+        "name": "state",
+        "status": "active",
+        "detail": "No state-management activity observed yet. Riverpod posts riverpod:new_event and provider posts provider:provider_changed when dependents are notified (which is the only way a flutter_bloc app shows up, since bloc itself posts nothing). An app using none of them, and one that simply has not changed state yet, look the same from here, so an empty result never proves an app has no blocs.",
+        "eventsRetained": 0,
+        "lastEventMs": null
+      }
+    ],
+    "counts": {
+      "log": 150,
+      "exception": 0,
+      "frame": 65,
+      "rebuild": 64,
+      "network": 8,
+      "navigation": 0,
+      "state": 0,
+      "system": 1
+    },
+    "retention": {
+      "capacity": {
+        "log": 3000,
+        "exception": 1000,
+        "frame": 1000,
+        "rebuild": 1000,
+        "network": 1000,
+        "navigation": 500,
+        "state": 2000,
+        "system": 500
+      },
+      "retained": {
+        "log": 150,
+        "exception": 0,
+        "frame": 65,
+        "rebuild": 64,
+        "network": 8,
+        "navigation": 0,
+        "state": 0,
+        "system": 1
+      },
+      "evicted": {
+        "log": 0,
+        "exception": 0,
+        "frame": 0,
+        "rebuild": 0,
+        "network": 0,
+        "navigation": 0,
+        "state": 0,
+        "system": 0
+      },
+      "oldestEventMs": 1787801449434,
+      "newestEventMs": 1787801473016
+    },
+    "events": [
+      {
+        "timestamp": 1787801449434,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_PHASE idle",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_PHASE idle"
+        },
+        "id": 1,
+        "eventId": "log_00001",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801449440,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 0 -> 1",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 0 -> 1"
+        },
+        "id": 2,
+        "eventId": "log_00002",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801449543,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 1 -> 2",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 1 -> 2"
+        },
+        "id": 3,
+        "eventId": "log_00003",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801449643,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 2 -> 3",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 2 -> 3"
+        },
+        "id": 4,
+        "eventId": "log_00004",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801449744,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 3 -> 4",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 3 -> 4"
+        },
+        "id": 5,
+        "eventId": "log_00005",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801449845,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 4 -> 5",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 4 -> 5"
+        },
+        "id": 6,
+        "eventId": "log_00006",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801449947,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 5 -> 6",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 5 -> 6"
+        },
+        "id": 7,
+        "eventId": "log_00007",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801450049,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 6 -> 7",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 6 -> 7"
+        },
+        "id": 8,
+        "eventId": "log_00008",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801450150,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 7 -> 8",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 7 -> 8"
+        },
+        "id": 9,
+        "eventId": "log_00009",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801450251,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 8 -> 9",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 8 -> 9"
+        },
+        "id": 10,
+        "eventId": "log_00010",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801450353,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 9 -> 10",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 9 -> 10"
+        },
+        "id": 11,
+        "eventId": "log_00011",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801450455,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 10 -> 11",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 10 -> 11"
+        },
+        "id": 12,
+        "eventId": "log_00012",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801450556,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 11 -> 12",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 11 -> 12"
+        },
+        "id": 13,
+        "eventId": "log_00013",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801450658,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 12 -> 13",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 12 -> 13"
+        },
+        "id": 14,
+        "eventId": "log_00014",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801450759,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 13 -> 14",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 13 -> 14"
+        },
+        "id": 15,
+        "eventId": "log_00015",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801450860,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 14 -> 15",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 14 -> 15"
+        },
+        "id": 16,
+        "eventId": "log_00016",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801450961,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 15 -> 16",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 15 -> 16"
+        },
+        "id": 17,
+        "eventId": "log_00017",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801451063,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 16 -> 17",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 16 -> 17"
+        },
+        "id": 18,
+        "eventId": "log_00018",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801451165,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 17 -> 18",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 17 -> 18"
+        },
+        "id": 19,
+        "eventId": "log_00019",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801451268,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 18 -> 19",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 18 -> 19"
+        },
+        "id": 20,
+        "eventId": "log_00020",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801451368,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 19 -> 20",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 19 -> 20"
+        },
+        "id": 21,
+        "eventId": "log_00021",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801451469,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_PHASE requests",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_PHASE requests"
+        },
+        "id": 22,
+        "eventId": "log_00022",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801451591,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health"
+        },
+        "id": 23,
+        "eventId": "log_00023",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801451597,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 20 -> 21",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 20 -> 21"
+        },
+        "id": 24,
+        "eventId": "log_00024",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801451695,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 21 -> 22",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 21 -> 22"
+        },
+        "id": 25,
+        "eventId": "log_00025",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801451796,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 22 -> 23",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 22 -> 23"
+        },
+        "id": 26,
+        "eventId": "log_00026",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801451899,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders"
+        },
+        "id": 27,
+        "eventId": "log_00027",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801451900,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 23 -> 24",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 23 -> 24"
+        },
+        "id": 28,
+        "eventId": "log_00028",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452001,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 24 -> 25",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 24 -> 25"
+        },
+        "id": 29,
+        "eventId": "log_00029",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452103,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 25 -> 26",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 25 -> 26"
+        },
+        "id": 30,
+        "eventId": "log_00030",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452208,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health"
+        },
+        "id": 31,
+        "eventId": "log_00031",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452208,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 26 -> 27",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 26 -> 27"
+        },
+        "id": 32,
+        "eventId": "log_00032",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452311,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 27 -> 28",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 27 -> 28"
+        },
+        "id": 33,
+        "eventId": "log_00033",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452413,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 28 -> 29",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 28 -> 29"
+        },
+        "id": 34,
+        "eventId": "log_00034",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452517,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders"
+        },
+        "id": 35,
+        "eventId": "log_00035",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452517,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 29 -> 30",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 29 -> 30"
+        },
+        "id": 36,
+        "eventId": "log_00036",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452618,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 30 -> 31",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 30 -> 31"
+        },
+        "id": 37,
+        "eventId": "log_00037",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452719,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 31 -> 32",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 31 -> 32"
+        },
+        "id": 38,
+        "eventId": "log_00038",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452824,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health"
+        },
+        "id": 39,
+        "eventId": "log_00039",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452825,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 32 -> 33",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 32 -> 33"
+        },
+        "id": 40,
+        "eventId": "log_00040",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801452925,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 33 -> 34",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 33 -> 34"
+        },
+        "id": 41,
+        "eventId": "log_00041",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453026,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 34 -> 35",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 34 -> 35"
+        },
+        "id": 42,
+        "eventId": "log_00042",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453133,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders"
+        },
+        "id": 43,
+        "eventId": "log_00043",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453134,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 35 -> 36",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 35 -> 36"
+        },
+        "id": 44,
+        "eventId": "log_00044",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453234,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 36 -> 37",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 36 -> 37"
+        },
+        "id": 45,
+        "eventId": "log_00045",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453336,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 37 -> 38",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 37 -> 38"
+        },
+        "id": 46,
+        "eventId": "log_00046",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453444,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health"
+        },
+        "id": 47,
+        "eventId": "log_00047",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453444,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 38 -> 39",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 38 -> 39"
+        },
+        "id": 48,
+        "eventId": "log_00048",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453546,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 39 -> 40",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 39 -> 40"
+        },
+        "id": 49,
+        "eventId": "log_00049",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453646,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 40 -> 41",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 40 -> 41"
+        },
+        "id": 50,
+        "eventId": "log_00050",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453753,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders"
+        },
+        "id": 51,
+        "eventId": "log_00051",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453754,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 41 -> 42",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 41 -> 42"
+        },
+        "id": 52,
+        "eventId": "log_00052",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453855,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 42 -> 43",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 42 -> 43"
+        },
+        "id": 53,
+        "eventId": "log_00053",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801453957,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 43 -> 44",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 43 -> 44"
+        },
+        "id": 54,
+        "eventId": "log_00054",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801454058,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_PHASE idle",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_PHASE idle"
+        },
+        "id": 55,
+        "eventId": "log_00055",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801454059,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 44 -> 45",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 44 -> 45"
+        },
+        "id": 56,
+        "eventId": "log_00056",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801454161,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 45 -> 46",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 45 -> 46"
+        },
+        "id": 57,
+        "eventId": "log_00057",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801454262,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 46 -> 47",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 46 -> 47"
+        },
+        "id": 58,
+        "eventId": "log_00058",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801454362,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 47 -> 48",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 47 -> 48"
+        },
+        "id": 59,
+        "eventId": "log_00059",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801454465,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 48 -> 49",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 48 -> 49"
+        },
+        "id": 60,
+        "eventId": "log_00060",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801454566,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 49 -> 50",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 49 -> 50"
+        },
+        "id": 61,
+        "eventId": "log_00061",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801454668,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 50 -> 51",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 50 -> 51"
+        },
+        "id": 62,
+        "eventId": "log_00062",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801454769,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 51 -> 52",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 51 -> 52"
+        },
+        "id": 63,
+        "eventId": "log_00063",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801454870,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 52 -> 53",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 52 -> 53"
+        },
+        "id": 64,
+        "eventId": "log_00064",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801454972,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 53 -> 54",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 53 -> 54"
+        },
+        "id": 65,
+        "eventId": "log_00065",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801455073,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 54 -> 55",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 54 -> 55"
+        },
+        "id": 66,
+        "eventId": "log_00066",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801455174,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 55 -> 56",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 55 -> 56"
+        },
+        "id": 67,
+        "eventId": "log_00067",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801455275,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 56 -> 57",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 56 -> 57"
+        },
+        "id": 68,
+        "eventId": "log_00068",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801455377,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 57 -> 58",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 57 -> 58"
+        },
+        "id": 69,
+        "eventId": "log_00069",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801455478,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 58 -> 59",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 58 -> 59"
+        },
+        "id": 70,
+        "eventId": "log_00070",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801455580,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 59 -> 60",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 59 -> 60"
+        },
+        "id": 71,
+        "eventId": "log_00071",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801455682,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 60 -> 61",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 60 -> 61"
+        },
+        "id": 72,
+        "eventId": "log_00072",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801455784,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 61 -> 62",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 61 -> 62"
+        },
+        "id": 73,
+        "eventId": "log_00073",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801455886,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 62 -> 63",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 62 -> 63"
+        },
+        "id": 74,
+        "eventId": "log_00074",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801455987,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 63 -> 64",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 63 -> 64"
+        },
+        "id": 75,
+        "eventId": "log_00075",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801464496,
+        "source": "system",
+        "severity": "info",
+        "category": "system",
+        "message": "Connected to VM Service at ws://127.0.0.1:8181/[REDACTED]/ws",
+        "data": {
+          "wsUri": "ws://127.0.0.1:8181/[REDACTED]/ws",
+          "isolateId": "isolates/2532745839604387",
+          "sessionId": "s1"
+        },
+        "id": 76,
+        "eventId": "sys_00076",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801464592,
+        "source": "Flutter.Frame",
+        "severity": "warning",
+        "category": "frame",
+        "message": "Frame #69 30.4ms (jank)",
+        "data": {
+          "number": 69,
+          "elapsedMs": 30.37,
+          "buildMs": 28.04,
+          "rasterMs": 0.78,
+          "janky": true
+        },
+        "id": 77,
+        "eventId": "frm_00077",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466415,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_PHASE idle",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_PHASE idle"
+        },
+        "id": 78,
+        "eventId": "log_00078",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466416,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 64 -> 65",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 64 -> 65"
+        },
+        "id": 79,
+        "eventId": "log_00079",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466439,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #70: 11 widget rebuild(s)",
+        "data": {
+          "frameNumber": 70,
+          "totalRebuilds": 11,
+          "distinctLocations": 11,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 80,
+        "eventId": "rbd_00080",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466519,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 65 -> 66",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 65 -> 66"
+        },
+        "id": 81,
+        "eventId": "log_00081",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466530,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #71: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 71,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 82,
+        "eventId": "rbd_00082",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466539,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #70 10.3ms",
+        "data": {
+          "number": 70,
+          "elapsedMs": 10.3,
+          "buildMs": 8.32,
+          "rasterMs": 0.94,
+          "janky": false
+        },
+        "id": 83,
+        "eventId": "frm_00083",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466539,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #71 3.8ms",
+        "data": {
+          "number": 71,
+          "elapsedMs": 3.81,
+          "buildMs": 0.86,
+          "rasterMs": 1.44,
+          "janky": false
+        },
+        "id": 84,
+        "eventId": "frm_00084",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466620,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 66 -> 67",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 66 -> 67"
+        },
+        "id": 85,
+        "eventId": "log_00085",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466630,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #72: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 72,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 86,
+        "eventId": "rbd_00086",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466722,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 67 -> 68",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 67 -> 68"
+        },
+        "id": 87,
+        "eventId": "log_00087",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466732,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #72 3.6ms",
+        "data": {
+          "number": 72,
+          "elapsedMs": 3.62,
+          "buildMs": 1.05,
+          "rasterMs": 1.61,
+          "janky": false
+        },
+        "id": 88,
+        "eventId": "frm_00088",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466735,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #73: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 73,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 89,
+        "eventId": "rbd_00089",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466824,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 68 -> 69",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 68 -> 69"
+        },
+        "id": 90,
+        "eventId": "log_00090",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466830,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #74: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 74,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 91,
+        "eventId": "rbd_00091",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466837,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #73 3.7ms",
+        "data": {
+          "number": 73,
+          "elapsedMs": 3.72,
+          "buildMs": 0.72,
+          "rasterMs": 1.48,
+          "janky": false
+        },
+        "id": 92,
+        "eventId": "frm_00092",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466837,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #74 3.5ms",
+        "data": {
+          "number": 74,
+          "elapsedMs": 3.53,
+          "buildMs": 0.86,
+          "rasterMs": 1.5,
+          "janky": false
+        },
+        "id": 93,
+        "eventId": "frm_00093",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466926,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 69 -> 70",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 69 -> 70"
+        },
+        "id": 94,
+        "eventId": "log_00094",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801466929,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #75: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 75,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 95,
+        "eventId": "rbd_00095",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467029,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 70 -> 71",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 70 -> 71"
+        },
+        "id": 96,
+        "eventId": "log_00096",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467031,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #75 2.4ms",
+        "data": {
+          "number": 75,
+          "elapsedMs": 2.41,
+          "buildMs": 0.68,
+          "rasterMs": 1.41,
+          "janky": false
+        },
+        "id": 97,
+        "eventId": "frm_00097",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467047,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #76: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 76,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 98,
+        "eventId": "rbd_00098",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467130,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 71 -> 72",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 71 -> 72"
+        },
+        "id": 99,
+        "eventId": "log_00099",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467146,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #77: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 77,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 100,
+        "eventId": "rbd_00100",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467149,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #76 4.0ms",
+        "data": {
+          "number": 76,
+          "elapsedMs": 4.04,
+          "buildMs": 0.96,
+          "rasterMs": 1.46,
+          "janky": false
+        },
+        "id": 101,
+        "eventId": "frm_00101",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467149,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #77 3.4ms",
+        "data": {
+          "number": 77,
+          "elapsedMs": 3.41,
+          "buildMs": 1.08,
+          "rasterMs": 1.51,
+          "janky": false
+        },
+        "id": 102,
+        "eventId": "frm_00102",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467231,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 72 -> 73",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 72 -> 73"
+        },
+        "id": 103,
+        "eventId": "log_00103",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467248,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #78: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 78,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 104,
+        "eventId": "rbd_00104",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467334,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 73 -> 74",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 73 -> 74"
+        },
+        "id": 105,
+        "eventId": "log_00105",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467346,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #79: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 79,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 106,
+        "eventId": "rbd_00106",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467350,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #78 5.0ms",
+        "data": {
+          "number": 78,
+          "elapsedMs": 5.04,
+          "buildMs": 0.98,
+          "rasterMs": 1.52,
+          "janky": false
+        },
+        "id": 107,
+        "eventId": "frm_00107",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467350,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #79 3.3ms",
+        "data": {
+          "number": 79,
+          "elapsedMs": 3.32,
+          "buildMs": 1,
+          "rasterMs": 1.52,
+          "janky": false
+        },
+        "id": 108,
+        "eventId": "frm_00108",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467434,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 74 -> 75",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 74 -> 75"
+        },
+        "id": 109,
+        "eventId": "log_00109",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467446,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #80: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 80,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 110,
+        "eventId": "rbd_00110",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467536,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 75 -> 76",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 75 -> 76"
+        },
+        "id": 111,
+        "eventId": "log_00111",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467546,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #81: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 81,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 112,
+        "eventId": "rbd_00112",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467548,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #80 2.9ms",
+        "data": {
+          "number": 80,
+          "elapsedMs": 2.94,
+          "buildMs": 1.01,
+          "rasterMs": 1.5,
+          "janky": false
+        },
+        "id": 113,
+        "eventId": "frm_00113",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467548,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #81 2.6ms",
+        "data": {
+          "number": 81,
+          "elapsedMs": 2.64,
+          "buildMs": 0.71,
+          "rasterMs": 1.08,
+          "janky": false
+        },
+        "id": 114,
+        "eventId": "frm_00114",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467638,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 76 -> 77",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 76 -> 77"
+        },
+        "id": 115,
+        "eventId": "log_00115",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467646,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #82: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 82,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 116,
+        "eventId": "rbd_00116",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467741,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 77 -> 78",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 77 -> 78"
+        },
+        "id": 117,
+        "eventId": "log_00117",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467746,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #83: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 83,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 118,
+        "eventId": "rbd_00118",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467748,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #82 3.2ms",
+        "data": {
+          "number": 82,
+          "elapsedMs": 3.2,
+          "buildMs": 0.81,
+          "rasterMs": 1.59,
+          "janky": false
+        },
+        "id": 119,
+        "eventId": "frm_00119",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467748,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #83 2.6ms",
+        "data": {
+          "number": 83,
+          "elapsedMs": 2.65,
+          "buildMs": 0.74,
+          "rasterMs": 1.21,
+          "janky": false
+        },
+        "id": 120,
+        "eventId": "frm_00120",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467842,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 78 -> 79",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 78 -> 79"
+        },
+        "id": 121,
+        "eventId": "log_00121",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467846,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #84: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 84,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 122,
+        "eventId": "rbd_00122",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467943,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 79 -> 80",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 79 -> 80"
+        },
+        "id": 123,
+        "eventId": "log_00123",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467946,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #85: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 85,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 124,
+        "eventId": "rbd_00124",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467947,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #84 2.4ms",
+        "data": {
+          "number": 84,
+          "elapsedMs": 2.35,
+          "buildMs": 0.42,
+          "rasterMs": 0.76,
+          "janky": false
+        },
+        "id": 125,
+        "eventId": "frm_00125",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801467947,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #85 2.6ms",
+        "data": {
+          "number": 85,
+          "elapsedMs": 2.58,
+          "buildMs": 0.42,
+          "rasterMs": 0.82,
+          "janky": false
+        },
+        "id": 126,
+        "eventId": "frm_00126",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468043,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 80 -> 81",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 80 -> 81"
+        },
+        "id": 127,
+        "eventId": "log_00127",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468047,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #86: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 86,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 128,
+        "eventId": "rbd_00128",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468145,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 81 -> 82",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 81 -> 82"
+        },
+        "id": 129,
+        "eventId": "log_00129",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468148,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #86 3.5ms",
+        "data": {
+          "number": 86,
+          "elapsedMs": 3.48,
+          "buildMs": 0.64,
+          "rasterMs": 0.97,
+          "janky": false
+        },
+        "id": 130,
+        "eventId": "frm_00130",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468162,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #87: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 87,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 131,
+        "eventId": "rbd_00131",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468247,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 82 -> 83",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 82 -> 83"
+        },
+        "id": 132,
+        "eventId": "log_00132",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468263,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #88: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 88,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 133,
+        "eventId": "rbd_00133",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468265,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #87 2.6ms",
+        "data": {
+          "number": 87,
+          "elapsedMs": 2.62,
+          "buildMs": 0.8,
+          "rasterMs": 1.28,
+          "janky": false
+        },
+        "id": 134,
+        "eventId": "frm_00134",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468265,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #88 2.8ms",
+        "data": {
+          "number": 88,
+          "elapsedMs": 2.83,
+          "buildMs": 0.53,
+          "rasterMs": 1.61,
+          "janky": false
+        },
+        "id": 135,
+        "eventId": "frm_00135",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468347,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 83 -> 84",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 83 -> 84"
+        },
+        "id": 136,
+        "eventId": "log_00136",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468363,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #89: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 89,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 137,
+        "eventId": "rbd_00137",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468450,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_PHASE requests",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_PHASE requests"
+        },
+        "id": 138,
+        "eventId": "log_00138",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468479,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #89 3.7ms",
+        "data": {
+          "number": 89,
+          "elapsedMs": 3.71,
+          "buildMs": 0.84,
+          "rasterMs": 1.5,
+          "janky": false
+        },
+        "id": 139,
+        "eventId": "frm_00139",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468499,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health"
+        },
+        "id": 140,
+        "eventId": "log_00140",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468499,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 84 -> 85",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 84 -> 85"
+        },
+        "id": 141,
+        "eventId": "log_00141",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468507,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #90: 11 widget rebuild(s)",
+        "data": {
+          "frameNumber": 90,
+          "totalRebuilds": 11,
+          "distinctLocations": 11,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 142,
+        "eventId": "rbd_00142",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468601,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 85 -> 86",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 85 -> 86"
+        },
+        "id": 143,
+        "eventId": "log_00143",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468607,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #90 12.1ms",
+        "data": {
+          "number": 90,
+          "elapsedMs": 12.13,
+          "buildMs": 5.58,
+          "rasterMs": 0.77,
+          "janky": false
+        },
+        "id": 144,
+        "eventId": "frm_00144",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468612,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #91: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 91,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 145,
+        "eventId": "rbd_00145",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468703,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 86 -> 87",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 86 -> 87"
+        },
+        "id": 146,
+        "eventId": "log_00146",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468714,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #92: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 92,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 147,
+        "eventId": "rbd_00147",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468714,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #91 2.1ms",
+        "data": {
+          "number": 91,
+          "elapsedMs": 2.14,
+          "buildMs": 0.66,
+          "rasterMs": 1.1,
+          "janky": false
+        },
+        "id": 148,
+        "eventId": "frm_00148",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468809,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders"
+        },
+        "id": 149,
+        "eventId": "log_00149",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468809,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 87 -> 88",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 87 -> 88"
+        },
+        "id": 150,
+        "eventId": "log_00150",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468812,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #93: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 93,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 151,
+        "eventId": "rbd_00151",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468815,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #92 4.2ms",
+        "data": {
+          "number": 92,
+          "elapsedMs": 4.18,
+          "buildMs": 0.92,
+          "rasterMs": 1.05,
+          "janky": false
+        },
+        "id": 152,
+        "eventId": "frm_00152",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468815,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #93 1.9ms",
+        "data": {
+          "number": 93,
+          "elapsedMs": 1.93,
+          "buildMs": 0.62,
+          "rasterMs": 0.89,
+          "janky": false
+        },
+        "id": 153,
+        "eventId": "frm_00153",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468909,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 88 -> 89",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 88 -> 89"
+        },
+        "id": 154,
+        "eventId": "log_00154",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468913,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #94: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 94,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 155,
+        "eventId": "rbd_00155",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469012,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 89 -> 90",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 89 -> 90"
+        },
+        "id": 156,
+        "eventId": "log_00156",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469015,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #94 3.5ms",
+        "data": {
+          "number": 94,
+          "elapsedMs": 3.49,
+          "buildMs": 0.76,
+          "rasterMs": 2.09,
+          "janky": false
+        },
+        "id": 157,
+        "eventId": "frm_00157",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469029,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #95: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 95,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 158,
+        "eventId": "rbd_00158",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469116,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health"
+        },
+        "id": 159,
+        "eventId": "log_00159",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469117,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 90 -> 91",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 90 -> 91"
+        },
+        "id": 160,
+        "eventId": "log_00160",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469130,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #96: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 96,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 161,
+        "eventId": "rbd_00161",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469132,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #95 2.9ms",
+        "data": {
+          "number": 95,
+          "elapsedMs": 2.85,
+          "buildMs": 0.86,
+          "rasterMs": 1.48,
+          "janky": false
+        },
+        "id": 162,
+        "eventId": "frm_00162",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469132,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #96 4.1ms",
+        "data": {
+          "number": 96,
+          "elapsedMs": 4.06,
+          "buildMs": 0.73,
+          "rasterMs": 1.67,
+          "janky": false
+        },
+        "id": 163,
+        "eventId": "frm_00163",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469217,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 91 -> 92",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 91 -> 92"
+        },
+        "id": 164,
+        "eventId": "log_00164",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469230,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #97: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 97,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 165,
+        "eventId": "rbd_00165",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469318,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 92 -> 93",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 92 -> 93"
+        },
+        "id": 166,
+        "eventId": "log_00166",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469330,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #98: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 98,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 167,
+        "eventId": "rbd_00167",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469332,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #97 3.7ms",
+        "data": {
+          "number": 97,
+          "elapsedMs": 3.71,
+          "buildMs": 0.98,
+          "rasterMs": 1.48,
+          "janky": false
+        },
+        "id": 168,
+        "eventId": "frm_00168",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469332,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #98 3.8ms",
+        "data": {
+          "number": 98,
+          "elapsedMs": 3.83,
+          "buildMs": 0.89,
+          "rasterMs": 1.44,
+          "janky": false
+        },
+        "id": 169,
+        "eventId": "frm_00169",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469424,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders"
+        },
+        "id": 170,
+        "eventId": "log_00170",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469424,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 93 -> 94",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 93 -> 94"
+        },
+        "id": 171,
+        "eventId": "log_00171",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469429,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #99: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 99,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 172,
+        "eventId": "rbd_00172",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469527,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 94 -> 95",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 94 -> 95"
+        },
+        "id": 173,
+        "eventId": "log_00173",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469531,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #100: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 100,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 174,
+        "eventId": "rbd_00174",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469531,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #99 1.8ms",
+        "data": {
+          "number": 99,
+          "elapsedMs": 1.84,
+          "buildMs": 0.69,
+          "rasterMs": 0.75,
+          "janky": false
+        },
+        "id": 175,
+        "eventId": "frm_00175",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469627,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 95 -> 96",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 95 -> 96"
+        },
+        "id": 176,
+        "eventId": "log_00176",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469633,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #100 4.3ms",
+        "data": {
+          "number": 100,
+          "elapsedMs": 4.3,
+          "buildMs": 0.73,
+          "rasterMs": 1.4,
+          "janky": false
+        },
+        "id": 177,
+        "eventId": "frm_00177",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469646,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #101: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 101,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 178,
+        "eventId": "rbd_00178",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469734,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health"
+        },
+        "id": 179,
+        "eventId": "log_00179",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469735,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 96 -> 97",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 96 -> 97"
+        },
+        "id": 180,
+        "eventId": "log_00180",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469746,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #102: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 102,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 181,
+        "eventId": "rbd_00181",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469748,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #101 2.3ms",
+        "data": {
+          "number": 101,
+          "elapsedMs": 2.3,
+          "buildMs": 0.76,
+          "rasterMs": 1.07,
+          "janky": false
+        },
+        "id": 182,
+        "eventId": "frm_00182",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469748,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #102 3.5ms",
+        "data": {
+          "number": 102,
+          "elapsedMs": 3.47,
+          "buildMs": 0.84,
+          "rasterMs": 1.55,
+          "janky": false
+        },
+        "id": 183,
+        "eventId": "frm_00183",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469836,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 97 -> 98",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 97 -> 98"
+        },
+        "id": 184,
+        "eventId": "log_00184",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469846,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #103: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 103,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 185,
+        "eventId": "rbd_00185",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469938,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 98 -> 99",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 98 -> 99"
+        },
+        "id": 186,
+        "eventId": "log_00186",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469945,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #104: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 104,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 187,
+        "eventId": "rbd_00187",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469948,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #103 2.9ms",
+        "data": {
+          "number": 103,
+          "elapsedMs": 2.91,
+          "buildMs": 0.46,
+          "rasterMs": 0.86,
+          "janky": false
+        },
+        "id": 188,
+        "eventId": "frm_00188",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469948,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #104 1.8ms",
+        "data": {
+          "number": 104,
+          "elapsedMs": 1.75,
+          "buildMs": 0.45,
+          "rasterMs": 0.86,
+          "janky": false
+        },
+        "id": 189,
+        "eventId": "frm_00189",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470044,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders"
+        },
+        "id": 190,
+        "eventId": "log_00190",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470044,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 99 -> 100",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 99 -> 100"
+        },
+        "id": 191,
+        "eventId": "log_00191",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470063,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #105: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 105,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 192,
+        "eventId": "rbd_00192",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470146,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 100 -> 101",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 100 -> 101"
+        },
+        "id": 193,
+        "eventId": "log_00193",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470163,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #106: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 106,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 194,
+        "eventId": "rbd_00194",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470165,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #105 3.0ms",
+        "data": {
+          "number": 105,
+          "elapsedMs": 3.05,
+          "buildMs": 0.79,
+          "rasterMs": 1.4,
+          "janky": false
+        },
+        "id": 195,
+        "eventId": "frm_00195",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470165,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #106 2.9ms",
+        "data": {
+          "number": 106,
+          "elapsedMs": 2.87,
+          "buildMs": 0.43,
+          "rasterMs": 0.71,
+          "janky": false
+        },
+        "id": 196,
+        "eventId": "frm_00196",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470247,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 101 -> 102",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 101 -> 102"
+        },
+        "id": 197,
+        "eventId": "log_00197",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470263,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #107: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 107,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 198,
+        "eventId": "rbd_00198",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470354,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 200 http://127.0.0.1:8477/api/health"
+        },
+        "id": 199,
+        "eventId": "log_00199",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470354,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 102 -> 103",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 102 -> 103"
+        },
+        "id": 200,
+        "eventId": "log_00200",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470363,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #108: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 108,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 201,
+        "eventId": "rbd_00201",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470365,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #107 3.0ms",
+        "data": {
+          "number": 107,
+          "elapsedMs": 3.04,
+          "buildMs": 0.79,
+          "rasterMs": 1.28,
+          "janky": false
+        },
+        "id": 202,
+        "eventId": "frm_00202",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470365,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #108 2.9ms",
+        "data": {
+          "number": 108,
+          "elapsedMs": 2.86,
+          "buildMs": 0.59,
+          "rasterMs": 0.89,
+          "janky": false
+        },
+        "id": 203,
+        "eventId": "frm_00203",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470455,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 103 -> 104",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 103 -> 104"
+        },
+        "id": 204,
+        "eventId": "log_00204",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470463,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #109: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 109,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 205,
+        "eventId": "rbd_00205",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470557,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 104 -> 105",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 104 -> 105"
+        },
+        "id": 206,
+        "eventId": "log_00206",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470563,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #110: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 110,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 207,
+        "eventId": "rbd_00207",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470564,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #109 3.2ms",
+        "data": {
+          "number": 109,
+          "elapsedMs": 3.18,
+          "buildMs": 0.99,
+          "rasterMs": 1.68,
+          "janky": false
+        },
+        "id": 208,
+        "eventId": "frm_00208",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470564,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #110 3.1ms",
+        "data": {
+          "number": 110,
+          "elapsedMs": 3.12,
+          "buildMs": 0.76,
+          "rasterMs": 1.18,
+          "janky": false
+        },
+        "id": 209,
+        "eventId": "frm_00209",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470665,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders"
+        },
+        "id": 210,
+        "eventId": "log_00210",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470665,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 105 -> 106",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 105 -> 106"
+        },
+        "id": 211,
+        "eventId": "log_00211",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470680,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #111: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 111,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 212,
+        "eventId": "rbd_00212",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470767,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 106 -> 107",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 106 -> 107"
+        },
+        "id": 213,
+        "eventId": "log_00213",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470780,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #112: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 112,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 214,
+        "eventId": "rbd_00214",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470781,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #111 3.1ms",
+        "data": {
+          "number": 111,
+          "elapsedMs": 3.12,
+          "buildMs": 0.58,
+          "rasterMs": 0.79,
+          "janky": false
+        },
+        "id": 215,
+        "eventId": "frm_00215",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470781,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #112 3.5ms",
+        "data": {
+          "number": 112,
+          "elapsedMs": 3.5,
+          "buildMs": 0.84,
+          "rasterMs": 1.19,
+          "janky": false
+        },
+        "id": 216,
+        "eventId": "frm_00216",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470867,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 107 -> 108",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 107 -> 108"
+        },
+        "id": 217,
+        "eventId": "log_00217",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470879,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #113: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 113,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 218,
+        "eventId": "rbd_00218",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470969,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_PHASE idle",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_PHASE idle"
+        },
+        "id": 219,
+        "eventId": "log_00219",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470970,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 108 -> 109",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 108 -> 109"
+        },
+        "id": 220,
+        "eventId": "log_00220",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470994,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #114: 11 widget rebuild(s)",
+        "data": {
+          "frameNumber": 114,
+          "totalRebuilds": 11,
+          "distinctLocations": 11,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            },
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 221,
+        "eventId": "rbd_00221",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470994,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #113 3.4ms",
+        "data": {
+          "number": 113,
+          "elapsedMs": 3.41,
+          "buildMs": 0.9,
+          "rasterMs": 1.44,
+          "janky": false
+        },
+        "id": 222,
+        "eventId": "frm_00222",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471072,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 109 -> 110",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 109 -> 110"
+        },
+        "id": 223,
+        "eventId": "log_00223",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471080,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #115: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 115,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 224,
+        "eventId": "rbd_00224",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471093,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #114 14.9ms",
+        "data": {
+          "number": 114,
+          "elapsedMs": 14.9,
+          "buildMs": 11.93,
+          "rasterMs": 1.93,
+          "janky": false
+        },
+        "id": 225,
+        "eventId": "frm_00225",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471093,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #115 3.7ms",
+        "data": {
+          "number": 115,
+          "elapsedMs": 3.68,
+          "buildMs": 0.88,
+          "rasterMs": 1.7,
+          "janky": false
+        },
+        "id": 226,
+        "eventId": "frm_00226",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471174,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 110 -> 111",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 110 -> 111"
+        },
+        "id": 227,
+        "eventId": "log_00227",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471179,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #116: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 116,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 228,
+        "eventId": "rbd_00228",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471276,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 111 -> 112",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 111 -> 112"
+        },
+        "id": 229,
+        "eventId": "log_00229",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471278,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #117: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 117,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 230,
+        "eventId": "rbd_00230",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471281,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #116 2.5ms",
+        "data": {
+          "number": 116,
+          "elapsedMs": 2.51,
+          "buildMs": 0.74,
+          "rasterMs": 1.37,
+          "janky": false
+        },
+        "id": 231,
+        "eventId": "frm_00231",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471281,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #117 3.4ms",
+        "data": {
+          "number": 117,
+          "elapsedMs": 3.36,
+          "buildMs": 0.74,
+          "rasterMs": 1.88,
+          "janky": false
+        },
+        "id": 232,
+        "eventId": "frm_00232",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471376,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 112 -> 113",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 112 -> 113"
+        },
+        "id": 233,
+        "eventId": "log_00233",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471379,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #118: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 118,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 234,
+        "eventId": "rbd_00234",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471476,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 113 -> 114",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 113 -> 114"
+        },
+        "id": 235,
+        "eventId": "log_00235",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471481,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #119: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 119,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 236,
+        "eventId": "rbd_00236",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471482,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #118 3.0ms",
+        "data": {
+          "number": 118,
+          "elapsedMs": 3.03,
+          "buildMs": 0.71,
+          "rasterMs": 1.46,
+          "janky": false
+        },
+        "id": 237,
+        "eventId": "frm_00237",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471482,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #119 4.4ms",
+        "data": {
+          "number": 119,
+          "elapsedMs": 4.38,
+          "buildMs": 0.74,
+          "rasterMs": 1.45,
+          "janky": false
+        },
+        "id": 238,
+        "eventId": "frm_00238",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471578,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 114 -> 115",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 114 -> 115"
+        },
+        "id": 239,
+        "eventId": "log_00239",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471597,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #120: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 120,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 240,
+        "eventId": "rbd_00240",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471680,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 115 -> 116",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 115 -> 116"
+        },
+        "id": 241,
+        "eventId": "log_00241",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471696,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #121: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 121,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 242,
+        "eventId": "rbd_00242",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471699,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #120 3.7ms",
+        "data": {
+          "number": 120,
+          "elapsedMs": 3.7,
+          "buildMs": 0.82,
+          "rasterMs": 1.55,
+          "janky": false
+        },
+        "id": 243,
+        "eventId": "frm_00243",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471699,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #121 3.1ms",
+        "data": {
+          "number": 121,
+          "elapsedMs": 3.1,
+          "buildMs": 1.02,
+          "rasterMs": 1.67,
+          "janky": false
+        },
+        "id": 244,
+        "eventId": "frm_00244",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471781,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 116 -> 117",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 116 -> 117"
+        },
+        "id": 245,
+        "eventId": "log_00245",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471796,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #122: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 122,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 246,
+        "eventId": "rbd_00246",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471882,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 117 -> 118",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 117 -> 118"
+        },
+        "id": 247,
+        "eventId": "log_00247",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471896,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #123: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 123,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 248,
+        "eventId": "rbd_00248",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471897,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #122 3.1ms",
+        "data": {
+          "number": 122,
+          "elapsedMs": 3.12,
+          "buildMs": 0.83,
+          "rasterMs": 1.47,
+          "janky": false
+        },
+        "id": 249,
+        "eventId": "frm_00249",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471898,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #123 3.3ms",
+        "data": {
+          "number": 123,
+          "elapsedMs": 3.27,
+          "buildMs": 0.94,
+          "rasterMs": 1.35,
+          "janky": false
+        },
+        "id": 250,
+        "eventId": "frm_00250",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471983,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 118 -> 119",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 118 -> 119"
+        },
+        "id": 251,
+        "eventId": "log_00251",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801471996,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #124: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 124,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 252,
+        "eventId": "rbd_00252",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472084,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 119 -> 120",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 119 -> 120"
+        },
+        "id": 253,
+        "eventId": "log_00253",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472096,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #125: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 125,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 254,
+        "eventId": "rbd_00254",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472098,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #124 3.2ms",
+        "data": {
+          "number": 124,
+          "elapsedMs": 3.23,
+          "buildMs": 0.99,
+          "rasterMs": 1.65,
+          "janky": false
+        },
+        "id": 255,
+        "eventId": "frm_00255",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472098,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #125 3.3ms",
+        "data": {
+          "number": 125,
+          "elapsedMs": 3.29,
+          "buildMs": 0.83,
+          "rasterMs": 1.51,
+          "janky": false
+        },
+        "id": 256,
+        "eventId": "frm_00256",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472186,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 120 -> 121",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 120 -> 121"
+        },
+        "id": 257,
+        "eventId": "log_00257",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472197,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #126: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 126,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 258,
+        "eventId": "rbd_00258",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472287,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 121 -> 122",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 121 -> 122"
+        },
+        "id": 259,
+        "eventId": "log_00259",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472296,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #127: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 127,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 260,
+        "eventId": "rbd_00260",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472298,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #126 3.2ms",
+        "data": {
+          "number": 126,
+          "elapsedMs": 3.17,
+          "buildMs": 0.83,
+          "rasterMs": 1.53,
+          "janky": false
+        },
+        "id": 261,
+        "eventId": "frm_00261",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472298,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #127 3.8ms",
+        "data": {
+          "number": 127,
+          "elapsedMs": 3.82,
+          "buildMs": 0.94,
+          "rasterMs": 1.55,
+          "janky": false
+        },
+        "id": 262,
+        "eventId": "frm_00262",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472388,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 122 -> 123",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 122 -> 123"
+        },
+        "id": 263,
+        "eventId": "log_00263",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472397,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #128: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 128,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 264,
+        "eventId": "rbd_00264",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472491,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 123 -> 124",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 123 -> 124"
+        },
+        "id": 265,
+        "eventId": "log_00265",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472496,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #129: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 129,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 266,
+        "eventId": "rbd_00266",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472499,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #128 3.7ms",
+        "data": {
+          "number": 128,
+          "elapsedMs": 3.7,
+          "buildMs": 0.94,
+          "rasterMs": 1.64,
+          "janky": false
+        },
+        "id": 267,
+        "eventId": "frm_00267",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472499,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #129 2.6ms",
+        "data": {
+          "number": 129,
+          "elapsedMs": 2.63,
+          "buildMs": 0.78,
+          "rasterMs": 1.33,
+          "janky": false
+        },
+        "id": 268,
+        "eventId": "frm_00268",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472593,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 124 -> 125",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 124 -> 125"
+        },
+        "id": 269,
+        "eventId": "log_00269",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472595,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #130: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 130,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 270,
+        "eventId": "rbd_00270",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472695,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 125 -> 126",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 125 -> 126"
+        },
+        "id": 271,
+        "eventId": "log_00271",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472697,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #130 2.4ms",
+        "data": {
+          "number": 130,
+          "elapsedMs": 2.42,
+          "buildMs": 0.71,
+          "rasterMs": 1.53,
+          "janky": false
+        },
+        "id": 272,
+        "eventId": "frm_00272",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472712,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #131: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 131,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 273,
+        "eventId": "rbd_00273",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472796,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 126 -> 127",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 126 -> 127"
+        },
+        "id": 274,
+        "eventId": "log_00274",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472813,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #132: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 132,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 275,
+        "eventId": "rbd_00275",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472815,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #131 2.7ms",
+        "data": {
+          "number": 131,
+          "elapsedMs": 2.68,
+          "buildMs": 0.88,
+          "rasterMs": 1.16,
+          "janky": false
+        },
+        "id": 276,
+        "eventId": "frm_00276",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472815,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #132 3.4ms",
+        "data": {
+          "number": 132,
+          "elapsedMs": 3.39,
+          "buildMs": 0.81,
+          "rasterMs": 1.58,
+          "janky": false
+        },
+        "id": 277,
+        "eventId": "frm_00277",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472897,
+        "source": "Stdout",
+        "severity": "info",
+        "category": "log",
+        "message": "flutter: PROBE_TRANSITION CounterBloc Increment 127 -> 128",
+        "data": {
+          "stream": "Stdout",
+          "line": "flutter: PROBE_TRANSITION CounterBloc Increment 127 -> 128"
+        },
+        "id": 278,
+        "eventId": "log_00278",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801472913,
+        "source": "Flutter.RebuiltWidgets",
+        "severity": "debug",
+        "category": "rebuild",
+        "message": "Frame #133: 1 widget rebuild(s)",
+        "data": {
+          "frameNumber": 133,
+          "totalRebuilds": 1,
+          "distinctLocations": 1,
+          "top": [
+            {
+              "file": "unknown",
+              "count": 1,
+              "appCode": false
+            }
+          ],
+          "truncated": false
+        },
+        "id": 279,
+        "eventId": "rbd_00279",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801473016,
+        "source": "Flutter.Frame",
+        "severity": "debug",
+        "category": "frame",
+        "message": "Frame #133 4.1ms",
+        "data": {
+          "number": 133,
+          "elapsedMs": 4.11,
+          "buildMs": 0.83,
+          "rasterMs": 1.87,
+          "janky": false
+        },
+        "id": 280,
+        "eventId": "frm_00280",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468476,
+        "correlationId": "-4406384747791225206",
+        "source": "HttpProfile",
+        "severity": "info",
+        "category": "network",
+        "message": "GET http://127.0.0.1:8477/api/health \u2192 200",
+        "data": {
+          "requestId": "-4406384747791225206",
+          "method": "GET",
+          "uri": "http://127.0.0.1:8477/api/health",
+          "statusCode": 200,
+          "startTimeMs": 1787801468476,
+          "endTimeMs": 1787801468481,
+          "durationMs": 4.95,
+          "contentLength": -1
+        },
+        "id": 281,
+        "eventId": "net_00281",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801468804,
+        "correlationId": "-4406384747791225147",
+        "source": "HttpProfile",
+        "severity": "error",
+        "category": "network",
+        "message": "GET http://127.0.0.1:8477/api/orders \u2192 500",
+        "data": {
+          "requestId": "-4406384747791225147",
+          "method": "GET",
+          "uri": "http://127.0.0.1:8477/api/orders",
+          "statusCode": 500,
+          "startTimeMs": 1787801468804,
+          "endTimeMs": 1787801468807,
+          "durationMs": 3.01,
+          "contentLength": -1,
+          "requestHeaders": {
+            "user-agent": "Dart/3.12 (dart:io)",
+            "accept-encoding": "gzip",
+            "content-length": "0",
+            "authorization": "[REDACTED]",
+            "host": "127.0.0.1:8477"
+          },
+          "responseHeaders": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "date": "Thu, 27 Aug 2026 03:31:08 GMT"
+          },
+          "redactedHeaders": [
+            "authorization"
+          ],
+          "responseReason": "Internal Server Error"
+        },
+        "id": 282,
+        "eventId": "net_00282",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469111,
+        "correlationId": "-4406384747791225088",
+        "source": "HttpProfile",
+        "severity": "info",
+        "category": "network",
+        "message": "GET http://127.0.0.1:8477/api/health \u2192 200",
+        "data": {
+          "requestId": "-4406384747791225088",
+          "method": "GET",
+          "uri": "http://127.0.0.1:8477/api/health",
+          "statusCode": 200,
+          "startTimeMs": 1787801469111,
+          "endTimeMs": 1787801469115,
+          "durationMs": 3.1,
+          "contentLength": -1
+        },
+        "id": 283,
+        "eventId": "net_00283",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469420,
+        "correlationId": "-4406384747791225029",
+        "source": "HttpProfile",
+        "severity": "error",
+        "category": "network",
+        "message": "GET http://127.0.0.1:8477/api/orders \u2192 500",
+        "data": {
+          "requestId": "-4406384747791225029",
+          "method": "GET",
+          "uri": "http://127.0.0.1:8477/api/orders",
+          "statusCode": 500,
+          "startTimeMs": 1787801469420,
+          "endTimeMs": 1787801469423,
+          "durationMs": 3,
+          "contentLength": -1,
+          "requestHeaders": {
+            "user-agent": "Dart/3.12 (dart:io)",
+            "accept-encoding": "gzip",
+            "content-length": "0",
+            "authorization": "[REDACTED]",
+            "host": "127.0.0.1:8477"
+          },
+          "responseHeaders": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "date": "Thu, 27 Aug 2026 03:31:09 GMT"
+          },
+          "redactedHeaders": [
+            "authorization"
+          ],
+          "responseReason": "Internal Server Error"
+        },
+        "id": 284,
+        "eventId": "net_00284",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801469729,
+        "correlationId": "-4406384747791224970",
+        "source": "HttpProfile",
+        "severity": "info",
+        "category": "network",
+        "message": "GET http://127.0.0.1:8477/api/health \u2192 200",
+        "data": {
+          "requestId": "-4406384747791224970",
+          "method": "GET",
+          "uri": "http://127.0.0.1:8477/api/health",
+          "statusCode": 200,
+          "startTimeMs": 1787801469729,
+          "endTimeMs": 1787801469732,
+          "durationMs": 3.07,
+          "contentLength": -1
+        },
+        "id": 285,
+        "eventId": "net_00285",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470039,
+        "correlationId": "-4406384747791224902",
+        "source": "HttpProfile",
+        "severity": "error",
+        "category": "network",
+        "message": "GET http://127.0.0.1:8477/api/orders \u2192 500",
+        "data": {
+          "requestId": "-4406384747791224902",
+          "method": "GET",
+          "uri": "http://127.0.0.1:8477/api/orders",
+          "statusCode": 500,
+          "startTimeMs": 1787801470039,
+          "endTimeMs": 1787801470042,
+          "durationMs": 3.06,
+          "contentLength": -1,
+          "requestHeaders": {
+            "user-agent": "Dart/3.12 (dart:io)",
+            "accept-encoding": "gzip",
+            "content-length": "0",
+            "authorization": "[REDACTED]",
+            "host": "127.0.0.1:8477"
+          },
+          "responseHeaders": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "date": "Thu, 27 Aug 2026 03:31:10 GMT"
+          },
+          "redactedHeaders": [
+            "authorization"
+          ],
+          "responseReason": "Internal Server Error"
+        },
+        "id": 286,
+        "eventId": "net_00286",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470348,
+        "correlationId": "-4406384747791224843",
+        "source": "HttpProfile",
+        "severity": "info",
+        "category": "network",
+        "message": "GET http://127.0.0.1:8477/api/health \u2192 200",
+        "data": {
+          "requestId": "-4406384747791224843",
+          "method": "GET",
+          "uri": "http://127.0.0.1:8477/api/health",
+          "statusCode": 200,
+          "startTimeMs": 1787801470348,
+          "endTimeMs": 1787801470352,
+          "durationMs": 4.01,
+          "contentLength": -1
+        },
+        "id": 287,
+        "eventId": "net_00287",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787801470660,
+        "correlationId": "-4406384747791224784",
+        "source": "HttpProfile",
+        "severity": "error",
+        "category": "network",
+        "message": "GET http://127.0.0.1:8477/api/orders \u2192 500",
+        "data": {
+          "requestId": "-4406384747791224784",
+          "method": "GET",
+          "uri": "http://127.0.0.1:8477/api/orders",
+          "statusCode": 500,
+          "startTimeMs": 1787801470660,
+          "endTimeMs": 1787801470664,
+          "durationMs": 3.97,
+          "contentLength": -1,
+          "requestHeaders": {
+            "user-agent": "Dart/3.12 (dart:io)",
+            "accept-encoding": "gzip",
+            "content-length": "0",
+            "authorization": "[REDACTED]",
+            "host": "127.0.0.1:8477"
+          },
+          "responseHeaders": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "date": "Thu, 27 Aug 2026 03:31:10 GMT"
+          },
+          "redactedHeaders": [
+            "authorization"
+          ],
+          "responseReason": "Internal Server Error"
+        },
+        "id": 288,
+        "eventId": "net_00288",
+        "sessionId": "s1"
+      }
+    ],
+    "eventsAreCitedSubset": false,
+    "diagnoses": {
+      "runtime": {
+        "status": "diagnosed",
+        "summary": "4 failing/slow network request(s) detected.",
+        "rootCause": "GET http://127.0.0.1:8477/api/orders \u2192 500",
+        "cause": "network",
+        "evidence": [
+          {
+            "eventId": "net_00288",
+            "timestamp": 1787801470660,
+            "source": "HttpProfile",
+            "category": "network",
+            "severity": "error",
+            "message": "GET http://127.0.0.1:8477/api/orders \u2192 500"
+          },
+          {
+            "eventId": "net_00286",
+            "timestamp": 1787801470039,
+            "source": "HttpProfile",
+            "category": "network",
+            "severity": "error",
+            "message": "GET http://127.0.0.1:8477/api/orders \u2192 500"
+          },
+          {
+            "eventId": "net_00284",
+            "timestamp": 1787801469420,
+            "source": "HttpProfile",
+            "category": "network",
+            "severity": "error",
+            "message": "GET http://127.0.0.1:8477/api/orders \u2192 500"
+          },
+          {
+            "eventId": "net_00282",
+            "timestamp": 1787801468804,
+            "source": "HttpProfile",
+            "category": "network",
+            "severity": "error",
+            "message": "GET http://127.0.0.1:8477/api/orders \u2192 500"
+          }
+        ],
+        "timeline": [
+          {
+            "eventId": "rbd_00201",
+            "timestamp": 1787801470363,
+            "deltaMs": -297,
+            "relation": "preceded",
+            "category": "rebuild",
+            "severity": "debug",
+            "message": "Frame #108: 1 widget rebuild(s)"
+          },
+          {
+            "eventId": "frm_00202",
+            "timestamp": 1787801470365,
+            "deltaMs": -295,
+            "relation": "preceded",
+            "category": "frame",
+            "severity": "debug",
+            "message": "Frame #107 3.0ms"
+          },
+          {
+            "eventId": "frm_00203",
+            "timestamp": 1787801470365,
+            "deltaMs": -295,
+            "relation": "preceded",
+            "category": "frame",
+            "severity": "debug",
+            "message": "Frame #108 2.9ms"
+          },
+          {
+            "eventId": "log_00204",
+            "timestamp": 1787801470455,
+            "deltaMs": -205,
+            "relation": "preceded",
+            "category": "log",
+            "severity": "info",
+            "message": "flutter: PROBE_TRANSITION CounterBloc Increment 103 -> 104"
+          },
+          {
+            "eventId": "rbd_00205",
+            "timestamp": 1787801470463,
+            "deltaMs": -197,
+            "relation": "preceded",
+            "category": "rebuild",
+            "severity": "debug",
+            "message": "Frame #109: 1 widget rebuild(s)"
+          },
+          {
+            "eventId": "log_00206",
+            "timestamp": 1787801470557,
+            "deltaMs": -103,
+            "relation": "preceded",
+            "category": "log",
+            "severity": "info",
+            "message": "flutter: PROBE_TRANSITION CounterBloc Increment 104 -> 105"
+          },
+          {
+            "eventId": "rbd_00207",
+            "timestamp": 1787801470563,
+            "deltaMs": -97,
+            "relation": "preceded",
+            "category": "rebuild",
+            "severity": "debug",
+            "message": "Frame #110: 1 widget rebuild(s)"
+          },
+          {
+            "eventId": "frm_00208",
+            "timestamp": 1787801470564,
+            "deltaMs": -96,
+            "relation": "preceded",
+            "category": "frame",
+            "severity": "debug",
+            "message": "Frame #109 3.2ms"
+          },
+          {
+            "eventId": "frm_00209",
+            "timestamp": 1787801470564,
+            "deltaMs": -96,
+            "relation": "preceded",
+            "category": "frame",
+            "severity": "debug",
+            "message": "Frame #110 3.1ms"
+          },
+          {
+            "eventId": "net_00288",
+            "timestamp": 1787801470660,
+            "deltaMs": 0,
+            "relation": "anchor",
+            "category": "network",
+            "severity": "error",
+            "message": "GET http://127.0.0.1:8477/api/orders \u2192 500"
+          },
+          {
+            "eventId": "log_00210",
+            "timestamp": 1787801470665,
+            "deltaMs": 1,
+            "relation": "followed",
+            "category": "log",
+            "severity": "info",
+            "message": "flutter: PROBE_HTTP 500 http://127.0.0.1:8477/api/orders"
+          },
+          {
+            "eventId": "log_00211",
+            "timestamp": 1787801470665,
+            "deltaMs": 1,
+            "relation": "followed",
+            "category": "log",
+            "severity": "info",
+            "message": "flutter: PROBE_TRANSITION CounterBloc Increment 105 -> 106"
+          },
+          {
+            "eventId": "rbd_00212",
+            "timestamp": 1787801470680,
+            "deltaMs": 16,
+            "relation": "followed",
+            "category": "rebuild",
+            "severity": "debug",
+            "message": "Frame #111: 1 widget rebuild(s)"
+          },
+          {
+            "eventId": "log_00213",
+            "timestamp": 1787801470767,
+            "deltaMs": 103,
+            "relation": "followed",
+            "category": "log",
+            "severity": "info",
+            "message": "flutter: PROBE_TRANSITION CounterBloc Increment 106 -> 107"
+          },
+          {
+            "eventId": "rbd_00214",
+            "timestamp": 1787801470780,
+            "deltaMs": 116,
+            "relation": "followed",
+            "category": "rebuild",
+            "severity": "debug",
+            "message": "Frame #112: 1 widget rebuild(s)"
+          },
+          {
+            "eventId": "frm_00215",
+            "timestamp": 1787801470781,
+            "deltaMs": 117,
+            "relation": "followed",
+            "category": "frame",
+            "severity": "debug",
+            "message": "Frame #111 3.1ms"
+          },
+          {
+            "eventId": "frm_00216",
+            "timestamp": 1787801470781,
+            "deltaMs": 117,
+            "relation": "followed",
+            "category": "frame",
+            "severity": "debug",
+            "message": "Frame #112 3.5ms"
+          },
+          {
+            "eventId": "log_00217",
+            "timestamp": 1787801470867,
+            "deltaMs": 203,
+            "relation": "followed",
+            "category": "log",
+            "severity": "info",
+            "message": "flutter: PROBE_TRANSITION CounterBloc Increment 107 -> 108"
+          },
+          {
+            "eventId": "rbd_00218",
+            "timestamp": 1787801470879,
+            "deltaMs": 215,
+            "relation": "followed",
+            "category": "rebuild",
+            "severity": "debug",
+            "message": "Frame #113: 1 widget rebuild(s)"
+          },
+          {
+            "eventId": "log_00219",
+            "timestamp": 1787801470969,
+            "deltaMs": 305,
+            "relation": "followed",
+            "category": "log",
+            "severity": "info",
+            "message": "flutter: PROBE_PHASE idle"
+          }
+        ],
+        "alternativeCauses": [],
+        "limitations": [
+          "No memory samples captured. Call get_memory, or open the dashboard, to include memory in future diagnoses.",
+          "VM timeline events are fetched on demand and not stored, so they take no part in correlation.",
+          "Only Dart-side runtime state is observed. A cause in platform (Kotlin/Swift) code or in a WebView cannot appear here."
+        ],
+        "coverage": {
+          "present": [
+            "log",
+            "frame",
+            "rebuild",
+            "network",
+            "system"
+          ],
+          "empty": [
+            "exception",
+            "navigation",
+            "state"
+          ],
+          "evicted": {
+            "log": 0,
+            "exception": 0,
+            "frame": 0,
+            "rebuild": 0,
+            "network": 0,
+            "navigation": 0,
+            "state": 0,
+            "system": 0
+          },
+          "oldestEventMs": 1787801449434,
+          "newestEventMs": 1787801473016
+        },
+        "confidence": 0.7,
+        "confidenceBreakdown": {
+          "evidenceStrength": 0.7,
+          "dataCompleteness": 0.63,
+          "alternativeStrength": 0,
+          "basis": "Conservative heuristic scored from corroborating evidence, not a calibrated probability. Below 0.7 the status is \"unknown\" rather than a guess."
+        },
+        "recommendedFixes": [
+          "Check the endpoint http://127.0.0.1:8477/api/orders and its error handling.",
+          "Handle non-2xx responses explicitly and surface a user-facing error state."
+        ]
+      },
+      "performance": {
+        "status": "healthy",
+        "summary": "1/65 frames (2%) exceeded the 16.67ms budget \u2014 within normal range.",
+        "frames": {
+          "total": 65,
+          "janky": 1,
+          "jankPercent": 2,
+          "p50Ms": 3.27,
+          "p90Ms": 4.3,
+          "p99Ms": 30.37,
+          "worstMs": 30.37,
+          "meanBuildMs": 28.04,
+          "meanRasterMs": 0.78
+        },
+        "dominantPhase": null,
+        "findings": [],
+        "rebuildHotspots": [
+          {
+            "file": "unknown",
+            "rebuilds": 94,
+            "frames": 94,
+            "appCode": false
+          }
+        ],
+        "recommendedFixes": [],
+        "confidence": 0.7,
+        "limitations": [
+          "No CPU sampling. A slow build can be attributed to a widget, but not to a specific function \u2014 use the DevTools CPU profiler for that.",
+          "GC events are not observable: the VM timeline is fetched on demand and not stored, so garbage-collection pauses cannot be ruled in or out.",
+          "Frames are only captured while connected, and older ones roll out of the retention window.",
+          "No state-management activity observed. Riverpod and provider announce on the Extension stream (a flutter_bloc app surfaces through provider, since its notifications go through it); stock bloc announces nothing of its own. An app using none of them looks identical to one that simply has not changed state.",
+          "Rebuild totals cover the busiest locations in each frame, not every rebuild \u2014 the long tail is counted but not itemised.",
+          "App-versus-package attribution is a path heuristic: getPubRootDirectories is empty until a DevTools client sets it, so there is no authoritative project root.",
+          "Only 65 frames in the sample \u2014 treat the percentiles as indicative."
+        ]
+      },
+      "navigation": {
+        "current": null,
+        "visits": [],
+        "notes": [
+          "No route changes captured. Navigator posts Flutter.Navigation on push/pop, so either nothing has navigated since connecting, or the app is a release build."
+        ]
+      },
+      "rebuilds": {
+        "framesWithRebuilds": 64,
+        "totalRebuilds": 94,
+        "meanPerFrame": 1.5,
+        "hotspots": [
+          {
+            "file": "unknown",
+            "rebuilds": 94,
+            "frames": 94,
+            "appCode": false
+          }
+        ],
+        "notes": [
+          "94 rebuild(s) could not be resolved to a source location. These are widgets whose location the framework described before this session began.",
+          "No hotspot resolved to your own code. Everything listed is package or framework code, which usually means the rebuild originates from a parent you do own."
+        ]
+      }
+    }
+  },
+  "expect": {
+    "cause": "network",
+    "status": "diagnosed",
+    "confidence": [
+      0.65,
+      0.75
+    ],
+    "evidenceIncludes": [
+      "net_00282",
+      "net_00288"
+    ]
+  }
+}

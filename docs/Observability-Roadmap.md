@@ -155,7 +155,10 @@ Done, in `eval/` and `src/eval/`:
   where `exception` is right, and a `RenderFlex overflowed` alongside build-bound
   jank where `jank` is right. Both contain an exception and jank over threshold,
   so no fixed ordering of the two hypotheses satisfies both — which is how the
-  unconditional `exception` priority was found to be wrong.
+  unconditional `exception` priority was found to be wrong. A fifth covers
+  `network` against a local server that fails one endpoint, and doubles as the
+  first proof that header redaction runs at capture rather than only in a unit
+  test.
 - **Replay harness** over `export_session` output. Needed `RuntimeStore.hydrate`,
   because `add()` mints fresh ids and replaying through it would renumber every
   event and invalidate every cited `exc_00042`.
@@ -174,8 +177,8 @@ emits `cause` as a stable `CauseKind` label beside it. Additive.
 
 Still open:
 
-- Incidents for network and memory causes. Both probes are offline, and memory
-  needs a session long enough to show sustained growth.
+- A memory incident — the last `CauseKind` with no recording. Needs a session
+  long enough to show sustained growth.
 - A recorded incident for the demotion itself — an incidental exception with no
   competing hypothesis. Unit-tested, not recorded.
 - Tool calls and tokens per diagnosis. Not measured; needs instrumentation at

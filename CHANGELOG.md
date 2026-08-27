@@ -16,13 +16,26 @@ misbehaved.
 
 - **`eval/incidents/*.json`** - golden incidents: a real session captured from a
   device with `export_session` in `full` mode, plus what the right answer is.
-  Four so far. Two deliberately straddle the jank threshold: 74/381 frames
+  Five so far. Two deliberately straddle the jank threshold: 74/381 frames
   (19.4%) must stay `unknown`, 48/240 (20.0%) must be diagnosed as `jank`. The
   pairing is the point - together they pin the *boundary*, which is the part of a
   heuristic that drifts. Two unrelated incidents would not. The other two are a
   ranking pair: both contain an exception *and* jank over threshold, and their
   right answers are opposite, so no fixed ordering of the two hypotheses can
-  satisfy both.
+  satisfy both. The fifth covers `network`: one endpoint returns 500 four times
+  while another returns 200 four times, so connectivity demonstrably works and
+  the finding is specific to an endpoint. `memory` is now the only `CauseKind`
+  with no recording.
+- **`probe/flaky-server.mjs`** and a `network` scenario in `bloc_probe`. Offline
+  and deterministic — an incident that depends on someone else's server is not
+  reproducible, and a probe should not make outbound requests to record a
+  fixture.
+- **Header redaction is now proven on a recorded artifact**, not only in a unit
+  test. The probe sends `Authorization: Bearer …` on every request; the recorded
+  incident contains `"authorization": "[REDACTED]"`, lists `authorization` under
+  `redactedHeaders`, and the token string appears nowhere in the file. The
+  untested claim was never the redaction function — it was that redaction runs
+  at capture, so the artifact a developer pastes into a chat is clean.
 - **`src/eval/replay.ts`** - hydrates a recorded session and re-runs the
   diagnosers. Nothing new had to be invented to record an incident:
   `export_session` was already versioned, carried every event and diagnosis, and

@@ -23,7 +23,14 @@
 //   3. gap         — nothing at all, so the error cannot be correlated forward
 //   4. slow        — expensive work inside build(), the actual fault
 //   5. idle        — baseline again
+//
+// Or, with `--dart-define=scenario=network`, HTTP traffic against
+// `probe/flaky-server.mjs` (start it first):
+//   1. idle        — baseline
+//   2. requests    — alternating 200s and 500s, no other fault in the session
+//   3. idle        — baseline again
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -123,7 +130,10 @@ const stormWatchers = 60;
 /// that and multiplies the provider events in the recording — `provider` posts
 /// one per notified dependent, so 60 watchers is 60x the fixture for no extra
 /// evidence. The scenario's own cells provide the rebuild the ticks need.
-int get watcherCount => scenario == 'incidental' ? 0 : stormWatchers;
+int get watcherCount => scenario == 'crash' ? stormWatchers : 0;
+
+/// Where the `network` scenario points. `probe/flaky-server.mjs` serves it.
+const flakyServer = 'http://127.0.0.1:8477';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -155,6 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _runCycle() async {
     if (!mounted) return;
     if (scenario == 'incidental') return _runIncidentalCycle();
+    if (scenario == 'network') return _runNetworkCycle();
     final bloc = context.read<CounterBloc>();
     final cubit = context.read<CounterCubit>();
 
@@ -238,6 +249,54 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _slow = false);
 
     await _ticking('idle', 10, bloc);
+  }
+
+  /// HTTP traffic and nothing else wrong, so the only fault in the session is
+  /// the one the server is returning.
+  ///
+  /// The ticks keep frames flowing at a cheap, on-budget rate: a session with no
+  /// frames at all cannot show that the jank hypothesis declined to fire, only
+  /// that it had nothing to look at.
+  Future<void> _runNetworkCycle() async {
+    if (!mounted) return;
+    final bloc = context.read<CounterBloc>();
+
+    await _ticking('idle', 20, bloc);
+
+    phase('requests');
+    if (mounted) setState(() => _current = 'requests');
+    for (var i = 0; i < 8; i++) {
+      // Alternating, so the recording contains healthy traffic as well. A
+      // capture where every request failed cannot show that the collector
+      // tells them apart.
+      await _get(i.isEven ? '$flakyServer/api/health' : '$flakyServer/api/orders');
+      await _tick(3, bloc);
+    }
+
+    await _ticking('idle', 20, bloc);
+  }
+
+  /// One request through `dart:io`, which is what the HTTP profile records.
+  ///
+  /// Errors are caught deliberately. An uncaught one would reach
+  /// `FlutterError.reportError` and put an exception in a session whose whole
+  /// point is that the network is the only thing wrong.
+  Future<void> _get(String url) async {
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(Uri.parse(url));
+      // Not a real credential. It is here so a recorded artifact proves the
+      // header redaction actually runs at capture, rather than the claim
+      // resting on a unit test alone.
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer probe-not-a-real-token');
+      final response = await request.close();
+      await response.drain<void>();
+      debugPrint('PROBE_HTTP ${response.statusCode} $url');
+    } catch (e) {
+      debugPrint('PROBE_HTTP_FAILED $url $e');
+    } finally {
+      client.close();
+    }
   }
 
   Future<void> _ticking(String name, int ticks, CounterBloc bloc) async {

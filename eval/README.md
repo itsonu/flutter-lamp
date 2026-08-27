@@ -54,6 +54,7 @@ of **zero**. Both are verified to fail, not assumed to — see below.
 | `unknown-jank-just-under-threshold` | `unknown` | 74/381 frames (19.4%) — real jank, below the 20% the hypothesis requires, and no other fault. The honest answer is "nothing I can name" |
 | `exception-uncaught-build-failure` | `exception`, diagnosed, ~0.8 | An uncaught `StateError` thrown inside `build`, twice, with a stack. 24.3% of frames are janky too — so the jank hypothesis fires and must still lose |
 | `jank-with-incidental-framework-error` | `jank`, diagnosed, ~0.8 | A `RenderFlex overflowed` error *and* real jank. The exception must lose: in the 3s either side of it not one of 50 frames missed budget |
+| `network-endpoint-failing` | `network`, diagnosed, 0.7 | One endpoint 500s four times while another returns 200 four times. Connectivity works; one endpoint refuses |
 
 The first two are a deliberate pair, and the pairing is the point: 19.4% must
 stay unknown, 20.0% must be diagnosed. Together they pin the **boundary**, which
@@ -98,14 +99,20 @@ Verified by mutation — the gate is not decoration:
 | exception priority made unconditional again | 3 tests fail, false confidence **25%** — the overflow is named as the cause of a build-bound stall |
 | jank strength dropped below the 0.7 threshold | 1 test fails on status and band; **false confidence stays 0%** — the engine abstains rather than answering wrongly |
 | worst-frame-first evidence ordering removed | 1 test fails on evidence recall alone — the verdict stops citing the frame it rests on |
+| network detector blinded to 5xx | 2 tests fail — the answer becomes `unknown`, and **false confidence does not fire**: going blind is an honest abstention |
+| network strength dropped to 0.65 | 1 test fails on status; false confidence stays 0% |
 
 Too eager trips the ceiling. Too cautious trips the floor. Different failures,
 which is what the scoring is for.
 
 ## Not covered yet
 
-- **No network incident.** Both probes are offline.
-- **No memory incident.** Needs a session long enough to show sustained growth.
+- **No memory incident.** Needs a session long enough to show sustained growth,
+  and it is the last `CauseKind` with no recording.
+- **The network incident cannot fail as *confidently wrong*.** Nothing else is
+  wrong in that session, so there is no competing cause for the engine to pick
+  by mistake; both its mutations produce abstention. It guards against the
+  detector going blind or losing confidence, not against misranking.
 - **No incident where the exception is starved by volume.** The regression that
   motivated it — a flat 2,000-event diagnosis window letting a bursty category
   crowd out the session's only exception — is guarded by a unit test in
@@ -116,12 +123,24 @@ which is what the scoring is for.
 - **Confidence bands are policy, not calibration.** They say "the engine should
   be about this sure", chosen to leave room for tuning. They are not evidence
   that 0.8 means 80%.
-- **Four incidents is a floor, not a suite.** Top-1 accuracy over four cases is
+- **Five incidents is a floor, not a suite.** Top-1 accuracy over five cases is
   a regression guard, not a measurement of the engine's accuracy. Do not quote
   it as one.
 - **No incident where an exception is incidental and nothing else fires.** The
   demotion is guarded by unit tests in `src/diagnosis/engine.test.ts`, not by a
   recording.
+
+## What a recording proves that a unit test does not
+
+`network-endpoint-failing` carries an `Authorization: Bearer …` header, sent by
+the probe on every request. In the recorded artifact it reads
+`"authorization": "[REDACTED]"`, `redactedHeaders: ["authorization"]`, and the
+token string appears nowhere in the file.
+
+Redaction was already unit-tested. What was never shown before is that it runs
+at capture, on a real request, and that the artifact a developer might paste
+into a chat or attach to an issue is clean. That is a different claim, and only
+a recording can make it.
 
 ## Adding an incident
 
