@@ -99,6 +99,26 @@ function metered(server: McpServer): McpServer["registerTool"] {
     }) as never)) as McpServer["registerTool"];
 }
 
+/**
+ * The timeline is missing on this target, said in a way an agent can act on.
+ *
+ * Deliberately not an error result: "this target has no VM timeline" is an
+ * answer, and the same shape as an empty-but-healthy read, so a caller does not
+ * have to special-case a failure to learn a fact about its target.
+ */
+function timelineUnsupported(err: unknown) {
+  return {
+    count: 0,
+    events: [],
+    available: false,
+    detail:
+      "This target has no VM timeline: " +
+      (err instanceof Error ? err.message : String(err)) +
+      ". A web target runs on DWDS rather than a Dart VM and does not implement getVMTimeline, and " +
+      "release builds may not either. An empty timeline here means unobservable, not idle.",
+  };
+}
+
 function json(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
 }
@@ -433,13 +453,27 @@ export function registerTools(server: McpServer): void {
     async ({ recordFrom, limit }) => {
       connection.requireConnectedOrThrow();
       if (recordFrom) {
-        await connection.vmCall("setVMTimelineFlags", {
-          recordedStreams: ["Dart", "GC", "Compiler", "Embedder"],
-        });
+        try {
+          await connection.vmCall("setVMTimelineFlags", {
+            recordedStreams: ["Dart", "GC", "Compiler", "Embedder"],
+          });
+        } catch (err) {
+          return json(timelineUnsupported(err));
+        }
         return json({ recording: true, message: "Timeline recording enabled. Reproduce the activity, then call get_timeline again." });
       }
-      const tl = await connection.vmCall<{ traceEvents?: any[] }>("getVMTimeline");
-      const raw = tl.traceEvents ?? [];
+      let raw: any[];
+      try {
+        const tl = await connection.vmCall<{ traceEvents?: any[] }>("getVMTimeline");
+        raw = tl.traceEvents ?? [];
+      } catch (err) {
+        // Not every target implements the timeline. A web target runs on DWDS
+        // rather than a Dart VM and answers `-32601 Unknown method`, and until
+        // this was caught the tool handed that straight to the agent. Every
+        // collector in this codebase explains an absent capability instead of
+        // surfacing a protocol code; measured on Chrome, this one did not.
+        return json(timelineUnsupported(err));
+      }
       // The recorder can stall permanently while its flags still claim it is
       // recording (measured on-device; see vm/timelineStaleness.ts). Compare
       // against the VM's own timeline clock so stale events are labelled.

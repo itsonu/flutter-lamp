@@ -83,3 +83,28 @@ when a signal does appear, check what its *volume* is a function of before
 reporting the number as if it meant the thing you were looking for.
 
 See [EVIDENCE.md](EVIDENCE.md) for the table, and `measure-bloc.mjs` to re-run it.
+
+## Sweeping the live surface
+
+```bash
+node probe/sweep-live.mjs <vm-service-uri>
+```
+
+Calls every read-only tool against a running app, then exits non-zero if any of
+them errored or if the VM Service credential appeared in any response. Prints the
+session's cost and any collector that is not `active`.
+
+`scripts/verify-release.sh` verifies the *package* — versions, tags, tarball
+contents. This verifies the *behaviour*, which is where both defects that made
+0.18.0 unusable were found: a unit test does not read a whole response, and a
+mock does not care what a parameter is called. Worth running against both a
+device and `-d chrome`, because the two targets fail differently — Chrome has no
+`dart:io` and no structured errors, so it exercises the degraded paths a native
+target never reaches.
+
+Two honest limits. The credential check is opportunistic: it can only see a leak
+if the app actually logged its own debug-service URI and that line is still in the
+backlog DDS replays on connect, which is true on a web target's first connect and
+often not afterwards. And it skips `connect_vm`, `disconnect_vm` and
+`ensure_tcp_device`, because a sweep that disconnects halfway through measures
+nothing.

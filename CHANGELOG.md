@@ -98,6 +98,23 @@ below the confidence threshold trips status and band with false confidence still
 at 0% - abstention and confident wrongness scored apart, which is the whole
 point of the metric.
 
+### Added - verification
+
+- **`probe/sweep-live.mjs`** — calls every read-only tool against a running app
+  and exits non-zero if any errored or if the VM Service credential turned up in
+  a response. `verify-release.sh` checks the package; nothing checked the
+  behaviour, and both defects that made 0.18.0 unusable were found by hand
+  exactly this way. Verified to fail, not assumed to: removing the credential
+  scrub makes it report `credential leaks: 1 -> get_logs` on a web target, and it
+  is what caught the `get_timeline` defect above.
+
+  Its limits are written down rather than left to be discovered. The credential
+  check is opportunistic — it can only see a leak the app actually logged, and
+  only while that line is still in the backlog DDS replays on connect. Reading
+  collector health off `runtime_status` instead of `runtime_health` made it
+  silently print nothing at first, which is the same class of bug it exists to
+  catch.
+
 ### Added - coverage
 
 - **`coverage.unobservable`** on every diagnosis: of the empty categories, those
@@ -192,6 +209,15 @@ point of the metric.
   hands it out. The test for that was itself false-passing at first: the config
   is read once at import, so setting the variable without
   `reloadRedactionConfig()` exercised the enabled path and proved nothing.
+- **`get_timeline` handed a raw protocol error to the agent.** On a target
+  without a VM timeline it surfaced
+  `VM Service error -32601: Unknown method "getVMTimeline"` — measured on Chrome,
+  which runs on DWDS rather than a Dart VM. Every collector in this codebase
+  explains an absent capability instead of leaking a protocol code, and this tool
+  did not. It now answers `{available: false, detail: …}` with the reason, in the
+  same shape as an empty-but-healthy read, so a caller does not have to
+  special-case a failure to learn a fact about its target. Release builds are
+  likely to hit the same path.
 - **An empty exception list could mean blind, and said `active`.**
   `ExceptionCollector` was the one collector with no `health()`. Subscribing to a
   stream always succeeds, so it reported healthy on targets where
