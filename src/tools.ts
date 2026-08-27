@@ -5,6 +5,7 @@ import { diagnose } from "./diagnosis/engine.js";
 import { exportSession } from "./export/session.js";
 import { getDashboardInfo } from "./dashboard/server.js";
 import { redactionEnabled } from "./core/redaction.js";
+import { costMeter } from "./core/costMeter.js";
 import type { Severity } from "./core/events.js";
 import { runtimeHealth, whatChanged } from "./diagnosis/health.js";
 import { routeHistory } from "./diagnosis/navigation.js";
@@ -76,12 +77,36 @@ const MUTATING = {
 const isolateCall: IsolateCall = (method, params) => connection.isolateCall(method, params);
 
 /** Every tool returns JSON only (docs/Rules.md). */
+/**
+ * Registers a tool and measures what calling it costs.
+ *
+ * Wrapping registration rather than editing every handler keeps the accounting
+ * in one place, and means a tool cannot be added later without being counted.
+ * The casts are because `registerTool` is generic over its input schema and
+ * this wrapper only passes the handler through untouched.
+ */
+function metered(server: McpServer): McpServer["registerTool"] {
+  const register = server.registerTool.bind(server);
+  return ((name: string, config: never, handler: (...a: never[]) => unknown) =>
+    register(name, config, (async (...args: never[]) => {
+      const started = Date.now();
+      const result = (await handler(...args)) as
+        | { content?: Array<{ text?: string }>; isError?: boolean }
+        | undefined;
+      const bytes = (result?.content ?? []).reduce((n, c) => n + (c.text?.length ?? 0), 0);
+      costMeter.record(name, bytes, Date.now() - started, result?.isError === true);
+      return result;
+    }) as never)) as McpServer["registerTool"];
+}
+
 function json(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
 }
 
 export function registerTools(server: McpServer): void {
-  server.registerTool(
+  const registerTool = metered(server);
+
+  registerTool(
     "connect_vm",
     {
       annotations: ann("connect_vm"),
@@ -104,7 +129,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "ensure_tcp_device",
     {
       annotations: ann("ensure_tcp_device"),
@@ -142,7 +167,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "runtime_status",
     {
       annotations: ann("runtime_status"),
@@ -165,6 +190,10 @@ export function registerTools(server: McpServer): void {
         // this machine's. A large offset means a timeline mixing the two is off
         // by that much.
         clockOffsetMs: status.clockOffsetMs,
+        // What this session has cost the caller so far. Every response above is
+        // input tokens on the next turn; `estimatedTokens` is bytes/4, an
+        // estimate rather than a tokenizer count.
+        cost: costMeter.report(),
         eventsCaptured: connection.store.size(),
         byCategory: connection.store.counts(),
         // Retention is bounded; say so rather than letting an agent reason over
@@ -175,7 +204,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "get_dashboard_url",
     {
       annotations: ann("get_dashboard_url"),
@@ -195,7 +224,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "get_logs",
     {
       annotations: ann("get_logs"),
@@ -225,7 +254,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "get_exceptions",
     {
       annotations: ann("get_exceptions"),
@@ -240,7 +269,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "get_frames",
     {
       annotations: ann("get_frames"),
@@ -262,7 +291,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "get_network",
     {
       annotations: ann("get_network"),
@@ -278,7 +307,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "diagnose_runtime",
     {
       annotations: ann("diagnose_runtime"),
@@ -294,7 +323,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "diagnose_performance",
     {
       annotations: ann("diagnose_performance"),
@@ -311,7 +340,7 @@ export function registerTools(server: McpServer): void {
   );
 
   // ── Phase 4 — Widget Inspector ────────────────────────────────────────────
-  server.registerTool(
+  registerTool(
     "get_widget_tree",
     {
       annotations: ann("get_widget_tree"),
@@ -342,7 +371,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "get_selected_widget",
     {
       annotations: ann("get_selected_widget"),
@@ -373,7 +402,7 @@ export function registerTools(server: McpServer): void {
   );
 
   // ── Phase 6 — Memory ────────────────────────────────────────────────────────
-  server.registerTool(
+  registerTool(
     "get_memory",
     {
       annotations: ann("get_memory"),
@@ -389,7 +418,7 @@ export function registerTools(server: McpServer): void {
   );
 
   // ── Phase 5 — Timeline ────────────────────────────────────────────────────
-  server.registerTool(
+  registerTool(
     "get_timeline",
     {
       annotations: ann("get_timeline"),
@@ -429,7 +458,7 @@ export function registerTools(server: McpServer): void {
   );
 
   // ── Agent-facing summaries ────────────────────────────────────────────────
-  server.registerTool(
+  registerTool(
     "runtime_health",
     {
       annotations: ann("runtime_health"),
@@ -446,7 +475,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "what_changed",
     {
       annotations: ann("what_changed"),
@@ -474,7 +503,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "get_navigation",
     {
       annotations: ann("get_navigation"),
@@ -491,7 +520,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "get_rebuilds",
     {
       annotations: ann("get_rebuilds"),
@@ -508,7 +537,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "get_state_activity",
     {
       annotations: ann("get_state_activity"),
@@ -531,7 +560,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "explain_diagnosis",
     {
       annotations: ann("explain_diagnosis"),
@@ -563,13 +592,13 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "export_session",
     {
       annotations: ann("export_session"),
       title: "Export the debugging session",
       description:
-        "The whole session as one versioned JSON artifact: metadata, per-collector health, retention, the captured events, and every diagnosis (runtime, performance, navigation, rebuilds). Use mode 'brief' for the smallest sufficient context — the diagnoses plus only the events their evidence cites — and 'full' to archive everything retained, for a bug report, offline analysis or a regression fixture. Credentials are already redacted at capture, so nothing here was ever stored raw.",
+        "The whole session as one versioned JSON artifact: metadata, per-collector health, retention, the captured events, and every diagnosis (runtime, performance, navigation, rebuilds). Use mode 'brief' for the smallest sufficient context — the diagnoses plus only the events their evidence cites — and 'full' to archive everything retained, for a bug report, offline analysis or a regression fixture. Sizes are not close: measured on a ~1,700-event session, 'brief' returned 36kB and 'full' returned 247kB — roughly 62,000 tokens, about a third of a 200k context window, so treat 'full' as something to write to a file rather than read inline. Credentials are already redacted at capture, so nothing here was ever stored raw.",
       inputSchema: {
         mode: z
           .enum(["full", "brief"])
@@ -597,7 +626,7 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
+  registerTool(
     "get_capabilities",
     {
       annotations: ann("get_capabilities"),

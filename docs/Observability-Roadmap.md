@@ -192,8 +192,14 @@ Still open:
   cause and which is symptom is genuinely arguable.
 - A recorded incident for the demotion itself — an incidental exception with no
   competing hypothesis. Unit-tested, not recorded.
-- Tool calls and tokens per diagnosis. Not measured; needs instrumentation at
-  the MCP layer rather than in replay.
+- ~~Tool calls and tokens per diagnosis.~~ DONE. `costMeter` counts calls and
+  response bytes per session, surfaced on `runtime_status`; the measured
+  per-tool figures are in `docs/AI-Agent-Integration.md`. Bytes are counted and
+  tokens estimated at bytes/4 — the real count needs a tokenizer this server
+  cannot see, and a confident wrong number would be worse than a labelled
+  estimate. The finding worth acting on: `export_session` mode `full` is ~62,000
+  tokens, a third of a 200k window, against ~2,000 for `diagnose_runtime`. Ask
+  the question; do not dump the session.
 - Enough incidents for top-1 accuracy to be a measurement rather than a
   regression guard. Three is a floor.
 

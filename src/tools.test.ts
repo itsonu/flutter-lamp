@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { registerTools } from "./tools.js";
+import { costMeter } from "./core/costMeter.js";
 
 /**
  * Exercises the real MCP surface an agent sees: register the tools on a server,
@@ -156,4 +157,27 @@ test("runtime_health answers without a connection instead of throwing", async ()
   assert.equal(health.connected, false);
   assert.equal(health.verdict, "no-data");
   assert.ok(health.notes.some((n: string) => n.includes("Not connected")));
+});
+
+test("every tool call is charged to the session's cost report", async () => {
+  // Registration is wrapped rather than each handler edited, so a tool cannot be
+  // added later without being counted. This asserts the wrapper is actually in
+  // the path an agent's call takes.
+  costMeter.reset();
+  const status = await withClient(async (client) => {
+    await client.callTool({ name: "get_capabilities", arguments: {} });
+    await client.callTool({ name: "get_capabilities", arguments: {} });
+    const r: any = await client.callTool({ name: "runtime_status", arguments: {} });
+    return JSON.parse(r.content[0].text);
+  });
+
+  assert.ok(status.cost, "runtime_status must report cost");
+  // Two, not three: a tool cannot include its own cost, because the cost is the
+  // size of the response being built. `runtime_status` reports what the calls
+  // before it spent.
+  assert.equal(status.cost.calls, 2, `expected the 2 prior calls, got ${status.cost.calls}`);
+  assert.ok(status.cost.responseBytes > 0, "responses must have measurable size");
+  assert.equal(status.cost.estimatedTokens, Math.round(status.cost.responseBytes / 4));
+  const caps = status.cost.byTool.find((t: any) => t.tool === "get_capabilities");
+  assert.equal(caps?.calls, 2, "per-tool counts must be attributed by name");
 });

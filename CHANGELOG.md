@@ -90,6 +90,29 @@ below the confidence threshold trips status and band with false confidence still
 at 0% - abstention and confident wrongness scored apart, which is the whole
 point of the metric.
 
+### Added - cost
+
+- **What this server costs the caller is now measured.** Every response is input
+  tokens on the agent's next turn, and that was previously guessed at. Measured
+  against a live app with ~1,700 events retained: `tools/list` is 16.7kB
+  (~4,200 tokens) before any work happens, `diagnose_runtime` is 8.2kB,
+  `get_frames` is 19.8kB for its default 50 frames, and `export_session` is 36kB
+  in `brief` against **247kB in `full` — roughly 62,000 tokens, about a third of
+  a 200k context window in a single call**. `full`'s description now says so, so
+  the choice between the two modes is informed rather than a coin flip.
+
+  `runtime_status` reports the running total: `cost.calls`,
+  `cost.responseBytes`, `cost.estimatedTokens` and a per-tool breakdown ranked by
+  bytes. Registration is wrapped rather than each handler edited, so a tool
+  cannot be added later without being counted.
+
+  Bytes are counted; tokens are an estimate at bytes/4 and labelled as such
+  everywhere, because the real count depends on a tokenizer this server cannot
+  see. Deliberately not added to `export_session`: a tool cannot include its own
+  cost — the cost is the size of the response being built — so the number inside
+  an archived artifact would mean "before this export", which is more confusing
+  than useful.
+
 ### Changed
 
 - **An exception no longer outranks a performance pattern unconditionally.**

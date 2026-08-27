@@ -169,6 +169,40 @@ the time".
 High strength with low completeness means a confident conclusion drawn from a
 narrow slice. Say so.
 
+## What it costs to use this
+
+Every response this server returns is input tokens on your next turn. Measured
+against a live app with ~1,700 events retained, largest first:
+
+| Call | Bytes | ~Tokens |
+| --- | --- | --- |
+| `export_session` mode `full` | 247,227 | ~62,000 |
+| `export_session` mode `brief` | 36,330 | ~9,100 |
+| `get_frames` (default 50) | 19,803 | ~5,000 |
+| `diagnose_runtime` | 8,179 | ~2,000 |
+| `what_changed` | 6,500 | ~1,600 |
+| `get_capabilities` | 5,721 | ~1,400 |
+| `diagnose_performance` | 3,005 | ~750 |
+| `runtime_health` | 2,721 | ~680 |
+| everything else | < 2,100 each | |
+
+Plus `tools/list` at 16,665 bytes (~4,200 tokens), paid once per session before
+any work happens.
+
+Two things follow. **`export_session` mode `full` is a third of a 200k context
+window in one call** — it exists to archive a session to a file or a bug report,
+not to be read inline; `brief` is the default and returns the diagnoses plus only
+the events their evidence cites. And a diagnosis is cheap: `diagnose_runtime` at
+~2,000 tokens is a twentieth of the cost of dumping the session, so ask the
+question rather than reading the raw evidence and reasoning from scratch.
+
+`runtime_status` reports what the session has spent so far — `cost.calls`,
+`cost.responseBytes`, `cost.estimatedTokens`, and a per-tool breakdown ranked by
+bytes. Bytes are counted; tokens are an estimate at bytes/4, because the real
+count depends on a tokenizer this server cannot see. A tool never includes its
+own cost, since the cost is the size of the response being built — so
+`runtime_status` shows what the calls before it spent.
+
 ## Rules
 
 **Never ask for pasted logs while a VM Service is reachable.** That is the

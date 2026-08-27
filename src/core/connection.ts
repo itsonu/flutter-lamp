@@ -8,6 +8,7 @@ import { NetworkCollector } from "../collectors/networkCollector.js";
 import { RebuildCollector } from "../collectors/rebuildCollector.js";
 import { RuntimeStore } from "./runtimeStore.js";
 import { redactVmServiceUri } from "./redaction.js";
+import { costMeter } from "./costMeter.js";
 import { StateCollector } from "../collectors/stateCollector.js";
 import { VmService } from "../vm/vmService.js";
 import { diagnoseUnreachable } from "../vm/adb.js";
@@ -148,6 +149,9 @@ class ConnectionManager {
     // so everything a collector emits during startup lands in the new session.
     for (const c of this.collectors) c.reset?.();
     const sessionId = this.store.beginSession();
+    // Cost is per debugging session, like every other count here. Without this
+    // a reconnect would keep charging the new session for the old one's calls.
+    costMeter.reset();
     for (const c of this.collectors) await c.start(vm, this.store, isolateId);
 
     this.vm = vm;
