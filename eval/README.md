@@ -56,11 +56,20 @@ of **zero**. Both are verified to fail, not assumed to — see below.
 | `jank-with-incidental-framework-error` | `jank`, diagnosed, ~0.8 | A `RenderFlex overflowed` error *and* real jank. The exception must lose: in the 3s either side of it not one of 50 frames missed budget |
 | `network-endpoint-failing` | `network`, diagnosed, 0.7 | One endpoint 500s four times while another returns 200 four times. Connectivity works; one endpoint refuses |
 | `memory-sustained-heap-growth` | `memory`, diagnosed, 0.75 | Twelve heap samples rising monotonically, 89MB to 217MB, no drop. A sawtooth would fall back; this does not |
+| `unknown-too-little-evidence` | `unknown` | Two events. The one frame is janky — a 100% ratio — and the answer is still `unknown`, because one slow startup frame is not a pattern |
 
 The first two are a deliberate pair, and the pairing is the point: 19.4% must
 stay unknown, 20.0% must be diagnosed. Together they pin the **boundary**, which
 is the part of a heuristic that actually drifts. Two unrelated incidents would
 not.
+
+The two negatives are a pair for the same reason, on a different axis.
+`unknown-jank-just-under-threshold` abstains because the *ratio* is too low
+(19.4% of 381 frames). `unknown-too-little-evidence` abstains despite a ratio of
+**100%** — one janky frame out of one — because the *sample* is too small. Both
+answers are `unknown` and neither mutation catches the other's bound: loosening
+the ratio breaks the first and leaves the second passing; removing the
+three-frame floor breaks the second and leaves the first passing.
 
 The last two are a **ranking** pair, and between them they say that
 `exception present` is not `exception is the root cause`. One session's
@@ -105,6 +114,8 @@ Verified by mutation — the gate is not decoration:
 | memory growth threshold raised past the session | 2 tests fail — answer becomes `unknown`, abstention again |
 | memory growth measured against a wider base | same 2 failures |
 | **memory promoted above jank** | **all 6 passed** — no recorded incident constrains memory's ranking; now pinned by a unit test instead (see below) |
+| jank minimum-sample floor dropped from 3 to 1 | 3 tests fail, **false confidence 14%** — one 90.4ms startup frame becomes a confident jank verdict at 0.7 |
+| same floor dropped only to 2 | all 7 pass, correctly: the thin session holds one janky frame, so this incident pins "at least 2", not "at least 3" |
 
 Too eager trips the ceiling. Too cautious trips the floor. Different failures,
 which is what the scoring is for.
@@ -133,9 +144,14 @@ which is what the scoring is for.
 - **Confidence bands are policy, not calibration.** They say "the engine should
   be about this sure", chosen to leave room for tuning. They are not evidence
   that 0.8 means 80%.
-- **Six incidents is a floor, not a suite.** Top-1 accuracy over six cases is a
-  regression guard, not a measurement of the engine's accuracy. Do not quote it
-  as one.
+- **Seven incidents is a floor, not a suite.** Top-1 accuracy over seven cases
+  is a regression guard, not a measurement of the engine's accuracy. Do not
+  quote it as one.
+- **No incident where empty means blind.** `unknown-too-little-evidence` has six
+  empty categories with all seven collectors reporting `active`, so emptiness
+  there is real quiet. The opposite case — a collector that failed, so empty
+  means unobserved — has the same shape and the opposite collector health, and
+  is not recorded. `collectorHealth.test.ts` covers the mechanism.
 - **No incident where an exception is incidental and nothing else fires.** The
   demotion is guarded by unit tests in `src/diagnosis/engine.test.ts`, not by a
   recording.

@@ -20,7 +20,9 @@ them apart. `--dart-define=scenario=network` makes HTTP requests against
 `probe/flaky-server.mjs` (`node probe/flaky-server.mjs`, start it first), half
 of them to an endpoint that returns 500, with nothing else wrong in the session.
 `--dart-define=scenario=memory` appends to a list it never releases, in steps
-small enough that no collection pause registers as jank. Each prints
+small enough that no collection pause registers as jank.
+`--dart-define=scenario=idle` starts nothing at all — a running app that is fine
+and quiet, which is what a diagnosis should decline to explain. Each prints
 `PROBE_PHASE <name>` before each phase, so an observed event can be attributed
 to the thing that caused it. `bloc_probe` also prints `PROBE_TRANSITION` from a
 `BlocObserver`, which is how "the transitions really happened and the VM Service

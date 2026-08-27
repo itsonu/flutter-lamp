@@ -34,6 +34,11 @@
 //   1. idle        — baseline
 //   2. retain      — allocate and keep referencing, in small steady steps
 //   3. idle        — baseline again, still holding everything
+//
+// Or, with `--dart-define=scenario=idle`, nothing at all: no timer, no
+// workload. A running app with nothing wrong and nothing happening, which is a
+// different reason for a diagnosis to answer "unknown" than a signal sitting
+// under its threshold.
 import 'dart:async';
 import 'dart:io';
 
@@ -164,6 +169,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    // The idle scenario starts nothing on purpose. Flutter renders its first
+    // frames and then stops, because nothing changes — which is exactly the
+    // session worth recording: an app that is fine and quiet.
+    if (scenario == 'idle') return;
     _cycle = Timer.periodic(const Duration(seconds: 20), (_) => _runCycle());
     Future<void>.delayed(const Duration(seconds: 3), _runCycle);
   }

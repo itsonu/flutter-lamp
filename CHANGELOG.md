@@ -16,7 +16,7 @@ misbehaved.
 
 - **`eval/incidents/*.json`** - golden incidents: a real session captured from a
   device with `export_session` in `full` mode, plus what the right answer is.
-  Six so far. Two deliberately straddle the jank threshold: 74/381 frames
+  Seven so far. Two deliberately straddle the jank threshold: 74/381 frames
   (19.4%) must stay `unknown`, 48/240 (20.0%) must be diagnosed as `jank`. The
   pairing is the point - together they pin the *boundary*, which is the part of a
   heuristic that drifts. Two unrelated incidents would not. The other two are a
@@ -31,6 +31,15 @@ misbehaved.
   is Dart heap rather than external allocation accounted elsewhere, and
   `heapCapacityMB` climbs with it, so the VM was expanding for live data rather
   than sitting on uncollected garbage. Every `CauseKind` now has a recording.
+
+  The seventh is a second negative, and it pairs with the first on a different
+  axis. One abstains because the jank *ratio* is too low (19.4% of 381 frames);
+  the new one abstains despite a ratio of 100% — one janky frame out of one —
+  because the *sample* is too small. Dropping the three-frame floor to one turns
+  a single 90.4ms startup frame into a confident jank verdict, which would be the
+  most embarrassing false positive available: technically accurate, useless, and
+  true of every app that has ever started. Neither negative catches the other's
+  bound.
 - **Two ranking policies pinned by unit test**, both found by mutation rather
   than by reading the code. Sustained heap growth must not outrank an evidenced
   jank pattern — promoting `memory` above `jank` passed the entire eval suite

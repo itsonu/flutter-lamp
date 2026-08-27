@@ -1,0 +1,252 @@
+{
+  "name": "unknown-too-little-evidence",
+  "capturedFrom": "probe/bloc_probe with `--dart-define=scenario=idle`, Windows desktop target, 2026-08-28. That scenario starts no timer and no workload: the app boots, renders, and then sits still, because nothing changes. 10-second window, two events.",
+  "why": "`unknown` is correct, and the reason is different from the other negative in this set \u2014 which is the whole point of recording a second one.\n\nThe session holds two events: the connect note, and one frame, `frm_00002`, at 90.4ms. That frame is janky. One janky frame out of one frame is a **100% jank ratio**, five times the 20% the jank hypothesis requires. On ratio alone this session is the most janky recording in the set, and the honest answer is still that nothing can be concluded.\n\nWhat stops it is the minimum-sample floor: the hypothesis also requires at least three janky frames, and one slow frame at startup is not a pattern. Every app's first frame is expensive \u2014 shaders, first layout, first paint. A tool that reported '100% of frames exceeded the 16.7ms budget' from a single startup frame would be technically accurate and completely useless, and it would be the most embarrassing possible false positive. So `unknown-jank-just-under-threshold` pins the ratio bound and this one pins the sample-size bound; they fail to different mutations.\n\nThe rest of the diagnosis shows the engine knows *why* it is unsure rather than just being quiet. `dataCompleteness` is 0.25 against an `evidenceStrength` of 0.3, so the weakness is attributed to thin data. `coverage.empty` names six of the eight categories \u2014 log, exception, rebuild, network, navigation, state \u2014 instead of leaving a reader to infer silence. `diagnose_performance` abstains separately and says so in words: 'Only 1 frames captured; too few to tell a pattern from noise (need 20).'\n\nAnd the part that makes the emptiness trustworthy: all seven collectors report status `active`. Nothing was broken or unsubscribed. The categories are empty because the app genuinely did nothing, not because the server was blind to it \u2014 which is the distinction this codebase exists to keep ('absence of evidence, not evidence of absence'). An incident where empty meant blind would need the same shape and the opposite collector health, and that is not this one.\n\nRecorded deliberately small \u2014 7kB against the 200-800kB of the others. The cheapest fixture in the set guards the case a heuristic is most likely to get wrong when someone tunes it: almost no data.",
+  "session": {
+    "schemaVersion": 1,
+    "tool": {
+      "name": "flutter-lamp",
+      "version": "0.18.1"
+    },
+    "mode": "full",
+    "session": {
+      "id": "s1",
+      "startedAt": 1787858451043,
+      "exportedAt": 1787858461381,
+      "connected": true,
+      "wsUri": "ws://127.0.0.1:8181/[REDACTED]/ws",
+      "clockOffsetMs": -1
+    },
+    "collectors": [
+      {
+        "name": "logs",
+        "status": "active",
+        "eventsRetained": 0,
+        "lastEventMs": null
+      },
+      {
+        "name": "exceptions",
+        "status": "active",
+        "eventsRetained": 0,
+        "lastEventMs": null
+      },
+      {
+        "name": "frames",
+        "status": "active",
+        "eventsRetained": 1,
+        "lastEventMs": 1787858451444
+      },
+      {
+        "name": "network",
+        "status": "active",
+        "eventsRetained": 0,
+        "lastEventMs": null
+      },
+      {
+        "name": "navigation",
+        "status": "active",
+        "eventsRetained": 0,
+        "lastEventMs": null
+      },
+      {
+        "name": "rebuilds",
+        "status": "active",
+        "eventsRetained": 0,
+        "lastEventMs": null
+      },
+      {
+        "name": "state",
+        "status": "active",
+        "detail": "No state-management activity observed yet. Riverpod posts riverpod:new_event and provider posts provider:provider_changed when dependents are notified (which is the only way a flutter_bloc app shows up, since bloc itself posts nothing). An app using none of them, and one that simply has not changed state yet, look the same from here, so an empty result never proves an app has no blocs.",
+        "eventsRetained": 0,
+        "lastEventMs": null
+      }
+    ],
+    "counts": {
+      "log": 0,
+      "exception": 0,
+      "frame": 1,
+      "rebuild": 0,
+      "network": 0,
+      "navigation": 0,
+      "state": 0,
+      "system": 1
+    },
+    "retention": {
+      "capacity": {
+        "log": 3000,
+        "exception": 1000,
+        "frame": 1000,
+        "rebuild": 1000,
+        "network": 1000,
+        "navigation": 500,
+        "state": 2000,
+        "system": 500
+      },
+      "retained": {
+        "log": 0,
+        "exception": 0,
+        "frame": 1,
+        "rebuild": 0,
+        "network": 0,
+        "navigation": 0,
+        "state": 0,
+        "system": 1
+      },
+      "evicted": {
+        "log": 0,
+        "exception": 0,
+        "frame": 0,
+        "rebuild": 0,
+        "network": 0,
+        "navigation": 0,
+        "state": 0,
+        "system": 0
+      },
+      "oldestEventMs": 1787858451356,
+      "newestEventMs": 1787858451444
+    },
+    "events": [
+      {
+        "timestamp": 1787858451356,
+        "source": "system",
+        "severity": "info",
+        "category": "system",
+        "message": "Connected to VM Service at ws://127.0.0.1:8181/[REDACTED]/ws",
+        "data": {
+          "wsUri": "ws://127.0.0.1:8181/[REDACTED]/ws",
+          "isolateId": "isolates/8943000621164975",
+          "sessionId": "s1"
+        },
+        "id": 1,
+        "eventId": "sys_00001",
+        "sessionId": "s1"
+      },
+      {
+        "timestamp": 1787858451444,
+        "source": "Flutter.Frame",
+        "severity": "error",
+        "category": "frame",
+        "message": "Frame #4 90.4ms (jank)",
+        "data": {
+          "number": 4,
+          "elapsedMs": 90.37,
+          "buildMs": 87.63,
+          "rasterMs": 1.31,
+          "janky": true
+        },
+        "id": 2,
+        "eventId": "frm_00002",
+        "sessionId": "s1"
+      }
+    ],
+    "eventsAreCitedSubset": false,
+    "diagnoses": {
+      "runtime": {
+        "status": "unknown",
+        "summary": "Unknown \u2014 insufficient runtime evidence. Runtime activity captured but no exceptions, jank pattern, or network errors were found.",
+        "rootCause": "Unknown (confidence below 70%).",
+        "cause": "unknown",
+        "evidence": [],
+        "timeline": [],
+        "alternativeCauses": [],
+        "limitations": [
+          "No network evidence in this session. HTTP capture is pull-on-demand and Dart-side only \u2014 platform-code and WebView traffic is never visible.",
+          "No memory samples captured. Call get_memory, or open the dashboard, to include memory in future diagnoses.",
+          "VM timeline events are fetched on demand and not stored, so they take no part in correlation.",
+          "Only Dart-side runtime state is observed. A cause in platform (Kotlin/Swift) code or in a WebView cannot appear here."
+        ],
+        "coverage": {
+          "present": [
+            "frame",
+            "system"
+          ],
+          "empty": [
+            "log",
+            "exception",
+            "rebuild",
+            "network",
+            "navigation",
+            "state"
+          ],
+          "evicted": {
+            "log": 0,
+            "exception": 0,
+            "frame": 0,
+            "rebuild": 0,
+            "network": 0,
+            "navigation": 0,
+            "state": 0,
+            "system": 0
+          },
+          "oldestEventMs": 1787858451356,
+          "newestEventMs": 1787858451444
+        },
+        "confidence": 0.3,
+        "confidenceBreakdown": {
+          "evidenceStrength": 0.3,
+          "dataCompleteness": 0.25,
+          "alternativeStrength": 0,
+          "basis": "Conservative heuristic scored from corroborating evidence, not a calibrated probability. Below 0.7 the status is \"unknown\" rather than a guess."
+        },
+        "recommendedFixes": [
+          "The app appears healthy. Reproduce the issue while connected, then diagnose again."
+        ]
+      },
+      "performance": {
+        "status": "unknown",
+        "summary": "Only 1 frames captured; too few to tell a pattern from noise (need 20).",
+        "frames": {
+          "total": 1,
+          "janky": 1,
+          "jankPercent": 100,
+          "p50Ms": 90.37,
+          "p90Ms": 90.37,
+          "p99Ms": 90.37,
+          "worstMs": 90.37,
+          "meanBuildMs": 87.63,
+          "meanRasterMs": 1.31
+        },
+        "dominantPhase": null,
+        "findings": [],
+        "rebuildHotspots": [],
+        "recommendedFixes": [
+          "Exercise the janky interaction while connected, then run this again."
+        ],
+        "confidence": 0.3,
+        "limitations": [
+          "No CPU sampling. A slow build can be attributed to a widget, but not to a specific function \u2014 use the DevTools CPU profiler for that.",
+          "GC events are not observable: the VM timeline is fetched on demand and not stored, so garbage-collection pauses cannot be ruled in or out.",
+          "Frames are only captured while connected, and older ones roll out of the retention window.",
+          "No state-management activity observed. Riverpod and provider announce on the Extension stream (a flutter_bloc app surfaces through provider, since its notifications go through it); stock bloc announces nothing of its own. An app using none of them looks identical to one that simply has not changed state.",
+          "No widget rebuild data in this session. Rebuild tracking needs a debug build with widget creation tracking; without it a build-heavy frame cannot be traced to a widget.",
+          "Only 1 frames in the sample \u2014 treat the percentiles as indicative."
+        ]
+      },
+      "navigation": {
+        "current": null,
+        "visits": [],
+        "notes": [
+          "No route changes captured. Navigator posts Flutter.Navigation on push/pop, so either nothing has navigated since connecting, or the app is a release build."
+        ]
+      },
+      "rebuilds": {
+        "framesWithRebuilds": 0,
+        "totalRebuilds": 0,
+        "meanPerFrame": null,
+        "hotspots": [],
+        "notes": [
+          "No rebuilds captured yet. Rebuild events are only emitted for frames that actually rebuild something \u2014 interact with the app, then try again."
+        ]
+      }
+    }
+  },
+  "expect": {
+    "cause": "unknown",
+    "status": "unknown",
+    "confidence": [
+      0.2,
+      0.4
+    ]
+  }
+}
