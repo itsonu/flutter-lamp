@@ -189,6 +189,25 @@ point of the metric.
 
 ### Fixed
 
+- **`what_changed` sliced its windows on the wrong clock**, a consequence of
+  moving events onto the app's clock in the same release. With no exception to
+  anchor on, the window ended at `Date.now()` — this process's time — while every
+  event in the store now carries the VM's. Measured against a phone over adb the
+  two are 839ms apart, which only trims the window slightly; but the offset is
+  whatever the device's clock says, and a device an hour out puts
+  `[now - 30s, now]` entirely after every event. Both windows come back empty,
+  which reads as "nothing changed" rather than "I compared the wrong interval".
+
+  It now ends at the newest captured event, and the note says so. `Date.now()`
+  survives only for a session with no events at all, where there is nothing to be
+  wrong about.
+
+  The first version of that fix took the head of the query result, which was also
+  wrong: `query()` orders by insertion, and since events carry post-time rather
+  than arrival time those orders have come apart — DDS drains a backlog in
+  arrival order while each event keeps the time the app posted it. A test that
+  inserts events the way a backlog actually arrives put the window's end 7.8s
+  before the newest event, so it takes the maximum instead.
 - **The VM Service credential could leak through the observed app's own logs.**
   On a web target the app prints `This app is linked to the debug service:
   ws://127.0.0.1:60106/<token>=/ws` to its console, and the log collector stored

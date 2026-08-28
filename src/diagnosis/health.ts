@@ -188,7 +188,27 @@ export function whatChanged(
   const requested = opts.eventId ? store.byEventId(opts.eventId) : undefined;
   const anchorEvent = requested ?? all.find((e) => e.category === "exception");
 
-  const toMs = anchorEvent?.timestamp ?? Date.now();
+  // Fall back to the newest *event*, not to this machine's clock.
+  //
+  // Events carry the VM's clock, and the two are not the same clock: measured
+  // against a phone over adb, the VM ran 839ms behind this process. A window
+  // anchored on `Date.now()` is therefore offset from the timeline it is
+  // slicing by however wrong the device's clock is — sub-second here, unbounded
+  // in principle. A device an hour behind would put `[now - 30s, now]` entirely
+  // after every event and report both windows empty, which reads as "nothing
+  // changed" rather than as "I compared the wrong interval".
+  //
+  // The latest timestamp, not `all[0]`. `query()` orders by insertion, and since
+  // events carry the app's clock rather than arrival time the two orders are no
+  // longer the same thing: DDS drains a backlog in arrival order while every
+  // event in it keeps the time the app posted it. Taking the head of the list
+  // put the window's end 7.8s before the newest event in a test that inserted a
+  // backlog the way one actually arrives.
+  //
+  // `Date.now()` survives only for a session with no events at all, where there
+  // is nothing to be wrong about.
+  const newestMs = all.reduce((max, e) => (e.timestamp > max ? e.timestamp : max), Number.NEGATIVE_INFINITY);
+  const toMs = anchorEvent?.timestamp ?? (all.length > 0 ? newestMs : Date.now());
   const fromMs = toMs - windowMs;
   const notes: string[] = [];
   if (opts.eventId && !requested) {
@@ -199,7 +219,13 @@ export function whatChanged(
           : "No exception to fall back to, so the window ends at the current time."),
     );
   }
-  if (!anchorEvent) notes.push("No exception found; the window ends at the current time.");
+  if (!anchorEvent) {
+    notes.push(
+      all.length > 0
+        ? "No exception found; the window ends at the most recent captured event."
+        : "No exception found and nothing captured; the window ends at the current time.",
+    );
+  }
 
   const comparison = compareWindows(store, all, toMs, windowMs);
   if (!comparison.baselineCovered) {
