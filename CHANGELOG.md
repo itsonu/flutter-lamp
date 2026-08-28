@@ -6,6 +6,41 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-08-28
+
+Documentation only — no runtime change. Published because `README.md` ships
+inside the package, so the corrections below were not visible to anyone reading
+0.19.0 on npm.
+
+### Fixed - README claims that had gone stale
+
+- **"Framework errors (`Flutter.Error`) are always captured regardless."** Not
+  true, and measured untrue: the widget inspector posts that event only while
+  structured error reporting is on, which the framework disables in profile mode
+  and on the web. On those targets a thrown framework error leaves no trace at
+  all. The same claim had already been corrected in
+  `docs/Implementation-Notes.md` and was left standing in the README.
+- **The retention list named five categories and omitted three** (state,
+  rebuilds, navigation), and gave only the 60fps frame figure. A 25-minute run
+  measured eviction beginning at 4 minutes under a 10fps workload, and the note
+  that every diagnosis carries a retention warning once eviction starts was
+  missing entirely.
+- **Security did not mention the VM Service credential scrub**, nor that
+  `FLUTTER_LAMP_REDACT=off` deliberately does not disable it. That distinction is
+  the point of the fix in 0.19.0: the switch exists so a developer can read their
+  own app's headers and log text, not so the server will hand out the key to the
+  app it is attached to.
+- "Agents should not call all sixteen" — the table lists 22.
+- The roadmap listed state-management activity and navigation as *next*; both
+  shipped in 0.17.0.
+- Three tool rows described output that grew in 0.19.0: `runtime_status` (session
+  cost, VM-to-host clock offset), `diagnose_runtime` (stable `cause` label,
+  unobservable coverage), `get_state_activity` (Provider and Bloc, not only
+  Riverpod).
+
+The README's tool table and the server's `tools/list` were then diffed rather
+than eyeballed: 22 each, with no entry on either side missing from the other.
+
 ## [0.19.0] - 2026-08-28
 
 A minor release, not a patch: `Diagnosis` gains fields and two tools gain output.
@@ -1192,6 +1227,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.19.1]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.19.1
 [0.19.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.19.0
 [0.18.1]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.18.1
 [0.18.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.18.0
