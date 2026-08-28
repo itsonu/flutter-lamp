@@ -67,6 +67,41 @@
   .empty { color: var(--muted); padding: 30px; text-align: center; font-family: var(--mono); }
   .placeholder { border: 1px dashed var(--border); border-radius: 10px; padding: 40px; text-align: center; color: var(--muted); }
   label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
+  /* Subsystem states. Deliberately NOT a binary green/red: "pull only" and
+     "not available" are facts about the architecture, not failures, and a red
+     dot next to them would read as something being broken. */
+  .sub-row { display: grid; grid-template-columns: 190px 132px 1fr; gap: 10px; align-items: baseline;
+             padding: 9px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12.5px; }
+  .sub-row .name { color: var(--text); }
+  .sub-row .why { color: var(--muted); word-break: break-word; }
+  .st { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: .4px; }
+  .st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+  .st-active, .st-connected, .st-receiving { color: var(--green); }
+  .st-receiving { color: var(--accent); }
+  .st-idle { color: var(--muted); }
+  .st-pull, .st-degraded { color: var(--yellow); }
+  .st-na { color: var(--muted); }
+  .st-na::before { background: none; box-shadow: inset 0 0 0 1px var(--muted); }
+  .st-down { color: var(--red); }
+  h3.sec { font-size: 12px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted);
+           margin: 22px 0 8px; font-weight: 600; }
+  h3.sec:first-child { margin-top: 0; }
+  pre.topo { font-family: var(--mono); font-size: 12px; color: var(--muted); background: var(--panel);
+             border: 1px solid var(--border); border-radius: 10px; padding: 14px; overflow-x: auto; margin: 0; }
+  pre.topo b { color: var(--accent); font-weight: 500; }
+  table.tbl { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
+  table.tbl th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase;
+                 letter-spacing: .5px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  table.tbl td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  table.tbl td.num, table.tbl th.num { text-align: right; }
+  .finding { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; border-bottom: 1px solid var(--border);
+             font-family: var(--mono); font-size: 12.5px; }
+  .finding.click { cursor: pointer; } .finding.click:hover { background: var(--panel); }
+  .finding .go { color: var(--accent); font-size: 11px; margin-left: auto; white-space: nowrap; }
+  .finding .mark { flex: none; }
+  .warn .mark { color: var(--yellow); } .bad .mark { color: var(--red); } .ok .mark { color: var(--green); }
+  .blind .mark { color: var(--muted); }
+  .note { color: var(--muted); font-size: 12px; font-family: var(--mono); margin-top: 10px; line-height: 1.5; }
   @media (max-width: 640px) { .log-row { grid-template-columns: 70px 60px 1fr; } .log-row .src { display: none; } }
 </style>
 </head>
@@ -86,9 +121,20 @@
 
 <script>
 (() => {
-  const TABS = ["Overview","Logs","Network","Exceptions","Timeline","Performance","Inspector"];
+  const TABS = ["Overview","Logs","Network","Exceptions","Timeline","Performance","MCP","Inspector","Diagnostics"];
   const CAP = 5000;
-  const state = { events: [], status: { connected: false, isolateId: null, wsUri: null }, paused: false, active: "Overview", expanded: new Set() };
+  const state = {
+    events: [], status: { connected: false, isolateId: null, wsUri: null }, paused: false,
+    active: "Overview", expanded: new Set(),
+    // Everything the server knows about itself: tool-call accounting, collector
+    // health, the connected agent. Null until the first message — and null is
+    // rendered as "unknown", never as zero.
+    telemetry: null,
+    wsState: "connecting",
+    // Set by a finding on Overview; consumed once by the tab it points at, so a
+    // finding can hand the reader the exact evidence behind it.
+    pendingQuery: {},
+  };
   let dirty = true, socket = null, backoff = 1000;
 
   // ---- DOM scaffolding ----
@@ -128,16 +174,18 @@
     // handshake requires it, so a cross-origin tab cannot open the stream.
     const token = encodeURIComponent(window.__LAMP_TOKEN__ || "");
     socket = new WebSocket(proto + "://" + location.host + "/ws?t=" + token);
-    socket.onopen = () => { backoff = 1000; setConn("wait", "connected to dashboard"); };
+    socket.onopen = () => { backoff = 1000; state.wsState = "open"; setConn("wait", "connected to dashboard"); };
     socket.onmessage = (m) => {
       const msg = JSON.parse(m.data);
-      if (msg.type === "snapshot") { state.events = msg.events || []; state.status = msg.status; }
-      else if (msg.type === "event") { state.events.push(msg.event); if (state.events.length > CAP) state.events.splice(0, state.events.length - CAP); }
+      state.lastMessageAt = Date.now();
+      if (msg.type === "snapshot") { state.events = msg.events || []; state.status = msg.status; state.telemetry = msg.telemetry || null; }
+      else if (msg.type === "event") { state.events.push(msg.event); if (state.events.length > CAP) state.events.splice(0, state.events.length - CAP); state.lastEventAt = Date.now(); }
       else if (msg.type === "status") { state.status = msg.status; }
+      else if (msg.type === "telemetry") { state.telemetry = msg.telemetry; }
       else if (msg.type === "cleared") { state.events = []; }
       updateConn(); dirty = true;
     };
-    socket.onclose = () => { setConn("off", "reconnecting…"); setTimeout(connect, backoff); backoff = Math.min(backoff*1.7, 10000); };
+    socket.onclose = () => { state.wsState = "closed"; setConn("off", "reconnecting…"); setTimeout(connect, backoff); backoff = Math.min(backoff*1.7, 10000); dirty = true; };
     socket.onerror = () => socket.close();
   }
   function setConn(cls, text){ const d=document.getElementById("dot"); d.className="dot "+cls; document.getElementById("statusText").textContent = text; }
@@ -154,33 +202,192 @@
   // painting (backgrounded / headless), which would freeze the live view.
   function loop(){ if (dirty && !state.paused){ render(false); dirty = false; } }
   setInterval(loop, 200);
+  // These tabs show "last seen 12s ago" style values, which go stale on their
+  // own with no event to trigger a redraw. Nothing else needs a wall clock.
+  const CLOCK_TABS = new Set(["Overview","MCP","Diagnostics"]);
+  setInterval(() => { if (CLOCK_TABS.has(state.active)) dirty = true; }, 1000);
   function render(force){
+    const t = state.telemetry;
+    const impaired = t ? t.collectors.filter(c => c.status !== "active").length : 0;
     TABS.forEach(n => { const b = document.getElementById("badge-"+n); if(!b) return;
-      const counts = { Logs: byCat("log").length, Network: byCat("network").length, Exceptions: byCat("exception").length, Timeline: state.events.length };
+      const counts = { Logs: byCat("log").length, Network: byCat("network").length,
+        Exceptions: byCat("exception").length, Timeline: state.events.length,
+        // Blank, not 0, while telemetry is unknown — see fmtCount.
+        MCP: t ? t.mcp.cost.calls : "", Diagnostics: impaired ? "⚠"+impaired : "" };
       b.textContent = counts[n] != null ? counts[n] : ""; });
-    const r = { Overview: renderOverview, Logs: renderLogs, Network: renderNetwork, Exceptions: renderExceptions, Timeline: renderTimeline, Performance: renderPerformance, Inspector: renderInspector }[state.active];
+    const r = { Overview: renderOverview, Logs: renderLogs, Network: renderNetwork, Exceptions: renderExceptions,
+      Timeline: renderTimeline, Performance: renderPerformance, MCP: renderMcp,
+      Inspector: renderInspector, Diagnostics: renderDiagnostics }[state.active];
     if (r) r(panels[state.active]);
+  }
+
+  // ---- honest-state helpers ----
+  // The rule these encode: absence of evidence is not zero. A value the server
+  // has not reported renders as "unknown"; a category nothing can observe
+  // renders as "unobservable"; only a measured zero renders as 0.
+  const st = (cls, text) => '<span class="st st-'+cls+'">'+text+'</span>';
+  const fmtBytes = (n) => n < 1024 ? n+" B" : n < 1048576 ? (n/1024).toFixed(1)+" kB" : (n/1048576).toFixed(2)+" MB";
+  const ago = (ts) => { if(ts==null) return "never";
+    const s = Math.max(0, Math.round((Date.now()-ts)/1000));
+    return s < 60 ? s+"s ago" : s < 3600 ? Math.round(s/60)+"m ago" : Math.round(s/3600)+"h ago"; };
+  /** Which collector, if any, owns a category — so an empty tab can say why. */
+  const CATEGORY_COLLECTOR = { log:"logs", exception:"exceptions", frame:"frames", network:"network",
+    navigation:"navigation", rebuild:"rebuilds", state:"state" };
+  function collectorFor(category){
+    const t = state.telemetry; if(!t) return null;
+    return t.collectors.find(c => c.name === CATEGORY_COLLECTOR[category]) || null;
+  }
+  /**
+   * Why a list is empty. Three different facts share one appearance, and only
+   * one of them means "nothing happened":
+   *   - a filter is hiding everything
+   *   - the collector cannot see this category on this target (blind)
+   *   - the collector is watching and has genuinely seen nothing
+   */
+  function emptyWhy(category, query, nothingText){
+    if (query) return "no matches for that filter";
+    if (!state.status.connected) return "not connected — nothing has been observed";
+    const c = collectorFor(category);
+    if (!c) return nothingText;
+    if (c.status === "unavailable")
+      return "unobservable on this target — " + esc(c.detail || "this collector reports it cannot see " + category) +
+             "<br/>An empty list here is a blind spot, not a clean result.";
+    if (c.status === "degraded")
+      return "partially observable — " + esc(c.detail || "this collector is degraded") +
+             "<br/>Some events in this category may never arrive.";
+    return nothingText + " · collector active and watching";
+  }
+
+  /** Jump to a tab carrying the evidence behind a finding. */
+  function drillTo(tab, query){ state.pendingQuery[tab] = query == null ? "" : query; setTab(tab); }
+  /** Apply a pending drill-down query to a tab's search box, once. */
+  function takeQuery(tab, input){
+    if(!(tab in state.pendingQuery)) return;
+    input.value = state.pendingQuery[tab]; delete state.pendingQuery[tab];
   }
 
   // ---- Overview ----
   function computeFps(){ const f = byCat("frame").slice(-30); if(!f.length) return null;
     const avg = f.reduce((s,e)=>s+(e.data.elapsedMs||0),0)/f.length; return avg>0 ? Math.min(1000/avg, 120) : null; }
   function latestMem(){ const m = byCat("system").filter(e=>e.data && e.data.heapUsageMB!=null); return m.length ? m[m.length-1].data : null; }
+  // The collector already decides what jank is (Flutter.Frame vs the 60fps
+  // budget) and stamps `janky` on the event. Re-deriving it here with a second
+  // threshold would let the dashboard and the diagnosis engine disagree about
+  // the same frame, so this only reads the flag.
+  const JANK_MS = 16.7; // shown as the budget; not used to classify
+  const isJanky = (e) => e.data.janky === true;
+
+  /**
+   * What is abnormal, and the evidence behind it.
+   *
+   * Every finding is derived from events actually in the store — none is
+   * inferred from configuration, and none is stated for a category that could
+   * not be observed. Blind spots are findings of their own, because an empty
+   * tab that nothing could have filled must not read as "clean".
+   */
+  function findings(){
+    const out = [], t = state.telemetry;
+    const frames = byCat("frame"), exceptions = byCat("exception"), network = byCat("network");
+
+    const janky = frames.filter(e => (e.data.elapsedMs||0) > JANK_MS);
+    if (janky.length) {
+      const worst = janky.reduce((a,b) => (b.data.elapsedMs > a.data.elapsedMs ? b : a));
+      const pct = Math.round(janky.length/frames.length*100);
+      out.push({ cls:"warn", mark:"⚠", text: janky.length+" of "+frames.length+" frames over the "+JANK_MS+"ms budget ("+pct+"%)",
+                 go:"Performance", tab:"Timeline", q:"(jank)" });
+      if (worst.data.elapsedMs >= JANK_MS*4)
+        out.push({ cls:"bad", mark:"⚠", text:"worst frame "+worst.data.elapsedMs.toFixed(1)+"ms — "+(worst.data.elapsedMs/JANK_MS).toFixed(0)+"× the budget",
+                   go:"Timeline", tab:"Timeline", q:"Frame #"+(worst.data.number ?? "") });
+    }
+
+    // Grouped by message, because ten repeats of one bug is one finding.
+    const sig = new Map();
+    exceptions.forEach(e => { const k = e.message.slice(0,80); sig.set(k, (sig.get(k)||0)+1); });
+    [...sig.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([k,n]) =>
+      out.push({ cls:"bad", mark:"✕", text:(n>1? n+"× ":"")+k, go:"Exceptions", tab:"Exceptions", q:k.slice(0,40) }));
+
+    const failed = network.filter(e => e.data.error || (e.data.statusCode||0) >= 400);
+    if (failed.length)
+      out.push({ cls:"bad", mark:"✕", text:failed.length+" of "+network.length+" HTTP requests failed",
+                 go:"Network", tab:"Timeline", q:"→ " });
+
+    if (t) {
+      if (t.mcp.cost.errors)
+        out.push({ cls:"warn", mark:"⚠", text:t.mcp.cost.errors+" of "+t.mcp.cost.calls+" MCP tool calls returned an error",
+                   go:"MCP", tab:"MCP" });
+      t.collectors.filter(c => c.status !== "active").forEach(c =>
+        out.push({ cls:"blind", mark:"○", text:c.name+" is "+c.status+" — an empty "+c.name+" tab proves nothing here",
+                   go:"Diagnostics", tab:"Diagnostics" }));
+      const evicted = Object.values(t.retention.evicted).reduce((a,b)=>a+b,0);
+      if (evicted)
+        out.push({ cls:"blind", mark:"○", text:evicted.toLocaleString()+" events dropped — the buffer is full, so history before that is gone",
+                   go:"Diagnostics", tab:"Diagnostics" });
+    }
+    return out;
+  }
+
   function renderOverview(p){
-    const s = state.status, fps = computeFps(), mem = latestMem();
+    const s = state.status, fps = computeFps(), mem = latestMem(), t = state.telemetry;
     const c = {}; state.events.forEach(e => c[e.category]=(c[e.category]||0)+1);
-    p.innerHTML = "";
-    const grid = el('<div class="grid"></div>');
-    const card = (k,v,sub) => el('<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="sub">'+(sub||"")+'</div></div>');
-    grid.append(
-      card("Connection", s.connected?'<span style="color:var(--green)">online</span>':'<span style="color:var(--red)">offline</span>', s.wsUri||"—"),
-      card("VM Isolate", s.isolateId?esc(s.isolateId):"—", s.connected?"1 isolate":"—"),
-      card("FPS", fps!=null?fps.toFixed(0):"—", fps!=null?"~"+(1000/fps).toFixed(1)+"ms/frame":"no frames yet"),
-      card("Memory", mem?mem.heapUsageMB+" MB":"—", mem?("cap "+mem.heapCapacityMB+" · ext "+mem.externalUsageMB+" MB"):"call get_memory / auto-sampled"),
-      card("CPU", "—", "not sampled by VM Service"),
-      card("Events", state.events.length, Object.entries(c).map(([k,v])=>k+":"+v).join(" · ")||"none yet")
-    );
-    p.appendChild(grid);
+    const found = findings();
+    const frames = byCat("frame"), janky = frames.filter(isJanky);
+    const worst = frames.length ? frames.reduce((a,b)=>(b.data.elapsedMs>a.data.elapsedMs?b:a)) : null;
+    const bad = found.filter(f => f.cls === "bad" || f.cls === "warn").length;
+    const health = !s.connected ? ["st-down","NOT CONNECTED","no app attached"]
+      : bad ? ["st-degraded","DEGRADED", bad+" finding"+(bad>1?"s":"")]
+      : ["st-active","HEALTHY","nothing abnormal in what is observable"];
+
+    // Memory is polled, not pushed. Before the first sample there is no number —
+    // and "0 MB" for a running app would be a lie, not a reading.
+    const memCard = mem
+      ? { v: mem.heapUsageMB + " MB", sub: "cap "+mem.heapCapacityMB+" MB · external "+mem.externalUsageMB+" MB" }
+      : s.connected
+        ? { v: '<span style="color:var(--muted);font-size:17px">not sampled yet</span>', sub: "polled every 2s while this page is open" }
+        : { v: '<span style="color:var(--muted);font-size:17px">unavailable</span>', sub: "requires a connected app" };
+    // Flutter renders nothing when nothing changes, so no frames is a normal
+    // state for an idle app — not a stalled one. Say which it is.
+    const fpsCard = fps != null
+      ? { v: fps.toFixed(0), sub: "~"+(1000/fps).toFixed(1)+"ms/frame over the last "+Math.min(frames.length,30)+" frames" }
+      : { v: '<span style="color:var(--muted);font-size:17px">no frames</span>',
+          sub: s.connected ? "Flutter renders only on change — an idle app is silent here" : "requires a connected app" };
+
+    const card = (k,v,sub) => '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="sub">'+(sub||"")+'</div></div>';
+    let h = '<h3 class="sec">Runtime session</h3><div class="grid">';
+    h += card("Health", '<span class="st '+health[0]+'" style="font-size:15px">'+health[1]+'</span>', health[2]);
+    h += card("Events", state.events.length.toLocaleString(),
+      Object.entries(c).map(([k,v])=>k+":"+v).join(" · ") || "none captured yet");
+    h += card("FPS", fpsCard.v, fpsCard.sub);
+    h += card("Memory", memCard.v, memCard.sub);
+    h += card("Worst frame", worst ? worst.data.elapsedMs.toFixed(1)+"ms" : '<span style="color:var(--muted);font-size:17px">—</span>',
+      worst ? janky.length+" over budget of "+frames.length : "no frames observed");
+    h += card("CPU", '<span style="color:var(--muted);font-size:17px">not available</span>', "the VM Service does not sample it");
+    h += '</div>';
+
+    h += '<h3 class="sec">MCP</h3><div class="grid">';
+    if (t) {
+      h += card("Agent", t.mcp.client ? esc(t.mcp.client.name) : '<span style="color:var(--muted);font-size:17px">not initialized</span>',
+        t.mcp.client ? (t.mcp.client.version ? "v"+esc(t.mcp.client.version) : "no version sent")+" · self-reported" : "no client has completed the handshake");
+      h += card("Tool calls", t.mcp.cost.calls, t.mcp.cost.errors+" errors · "+fmtBytes(t.mcp.cost.responseBytes)+" returned");
+      h += card("Last tool activity", t.mcp.cost.recent.length ? esc(t.mcp.cost.recent[0].tool) : '<span style="color:var(--muted);font-size:17px">none</span>',
+        t.mcp.cost.recent.length ? ago(t.mcp.cost.recent[0].at)+" · "+t.mcp.cost.recent[0].ms+"ms" : "no tool called this session");
+    } else {
+      h += card("MCP", '<span style="color:var(--muted);font-size:17px">unknown</span>', "no telemetry received yet");
+    }
+    h += '</div>';
+
+    h += '<h3 class="sec">Findings</h3>';
+    h += found.length
+      ? '<div>' + found.map((f,i) =>
+          '<div class="finding '+f.cls+(f.tab?' click':'')+'" data-f="'+i+'"><span class="mark">'+f.mark+'</span>'+
+          '<span>'+esc(f.text)+'</span>'+(f.tab?'<span class="go">'+f.go+' →</span>':'')+'</div>').join("") + '</div>'
+      : '<div class="finding ok"><span class="mark">✓</span><span>'+
+        (s.connected ? "nothing abnormal in what is observable" : "not connected — nothing has been observed")+'</span></div>';
+    h += '<div class="note">Findings describe what was <b>observed</b>. Adjacency in time is measured; cause is not — '+
+      'see Diagnostics for what this session could and could not see.</div>';
+    p.innerHTML = h;
+    p.querySelectorAll(".finding.click").forEach(node => node.onclick = () => {
+      const f = found[Number(node.dataset.f)]; drillTo(f.tab, f.q);
+    });
   }
 
   // ---- Logs ----
@@ -191,6 +398,7 @@
       '<select id="logSev"><option value="">all severities</option><option>debug</option><option>info</option><option>warning</option><option>error</option><option>critical</option></select>' +
       '<select id="logSrc"><option value="">all sources</option><option>Stdout</option><option>Stderr</option><option>Logging</option></select>' +
       '<label class="chk"><input type="checkbox" id="logAuto" checked/> auto-scroll</label>');
+    takeQuery("Logs", p.querySelector("#logSearch"));
     const q = (p.querySelector("#logSearch").value||"").toLowerCase();
     const sev = p.querySelector("#logSev").value, src = p.querySelector("#logSrc").value;
     const auto = p.querySelector("#logAuto").checked;
@@ -205,7 +413,7 @@
       '<div class="row log-row"><span class="t">'+fmtTime(e.timestamp)+'</span>'+
       '<span class="sev-'+e.severity+'">'+e.severity+'</span>'+
       '<span class="src t">'+esc(e.source)+'</span>'+
-      '<span class="msg">'+esc(e.message)+'</span></div>').join("") : '<div class="empty">no logs</div>';
+      '<span class="msg">'+esc(e.message)+'</span></div>').join("") : '<div class="empty">'+emptyWhy("log", q, "no logs captured")+'</div>';
     if(auto) list.parentElement.scrollTop = 999999, main.scrollTop = main.scrollHeight;
   }
 
@@ -213,6 +421,7 @@
   function renderNetwork(p){
     ensureFilters(p, "netf", '<input type="text" id="netSearch" placeholder="filter by url / method…" />');
     if(!p.querySelector("#netSearch").oninput) p.querySelector("#netSearch").oninput=()=>{dirty=true;render(true);};
+    takeQuery("Network", p.querySelector("#netSearch"));
     const q = (p.querySelector("#netSearch").value||"").toLowerCase();
     const list = p.querySelector("#netf-list");
     let rows = byCat("network");
@@ -232,7 +441,7 @@
         '<b>Request headers:</b>\n'+esc(fmtHeaders(d.requestHeaders))+"\n"+
         '<b>Response headers:</b>\n'+esc(fmtHeaders(d.responseHeaders))+'</div>'; }
       return html;
-    }).join("") : '<div class="empty">no network requests — call get_network or trigger app traffic</div>';
+    }).join("") : '<div class="empty">'+emptyWhy("network", q, "no HTTP requests observed")+'</div>';
     list.querySelectorAll(".net-row").forEach(r => r.onclick = () => toggle(r.dataset.x));
   }
   function fmtHeaders(h){ if(!h) return "  (fetched only for failed/slow requests)"; return Object.entries(h).map(([k,v])=>"  "+k+": "+v).join("\n")||"  (none)"; }
@@ -241,6 +450,7 @@
   function renderExceptions(p){
     ensureFilters(p, "excf", '<input type="text" id="excSearch" placeholder="filter exceptions…" />');
     if(!p.querySelector("#excSearch").oninput) p.querySelector("#excSearch").oninput=()=>{dirty=true;render(true);};
+    takeQuery("Exceptions", p.querySelector("#excSearch"));
     const q = (p.querySelector("#excSearch").value||"").toLowerCase();
     const list = p.querySelector("#excf-list");
     let rows = byCat("exception");
@@ -255,7 +465,7 @@
         (d.type?'<b>Type:</b> '+esc(d.type)+"\n":"")+
         '<b>Stack trace:</b>\n'+(d.stackTrace?'<pre class="stack">'+esc(d.stackTrace)+'</pre>':"  (no stack captured)")+'</div>'; }
       return html;
-    }).join("") : '<div class="empty">no exceptions 🎉</div>';
+    }).join("") : '<div class="empty">'+emptyWhy("exception", q, "no exceptions captured")+'</div>';
     list.querySelectorAll(".exc-row").forEach(r => r.onclick = () => toggle(r.dataset.x));
   }
 
@@ -263,6 +473,7 @@
   function renderTimeline(p){
     ensureFilters(p, "tlf", '<input type="text" id="tlSearch" placeholder="search all events…" />');
     if(!p.querySelector("#tlSearch").oninput) p.querySelector("#tlSearch").oninput=()=>{dirty=true;render(true);};
+    takeQuery("Timeline", p.querySelector("#tlSearch"));
     const q = (p.querySelector("#tlSearch").value||"").toLowerCase();
     const list = p.querySelector("#tlf-list");
     let rows = state.events.slice();
@@ -297,13 +508,181 @@
     ctx.fillText("max " + max.toFixed(1) + " · last " + (data[data.length-1]||0).toFixed(1), pad, 14);
   }
 
-  // ---- Inspector placeholder ----
+  // ---- Inspector ----
+  // Widget inspection is pull-based by design: get_widget_tree and
+  // get_selected_widget are RPCs against the Flutter Inspector, and nothing
+  // pushes a tree into the store. Rather than promise a live view that does not
+  // exist, this says which links are real and which are not implemented.
   function renderInspector(p){
-    p.innerHTML = '<div class="placeholder"><h3 style="color:var(--text);margin:0 0 8px">Widget / State Inspector</h3>'+
-      'Live widget-tree &amp; state streaming is not wired to the dashboard yet.<br/>'+
-      'Use the MCP tools <span style="font-family:var(--mono);color:var(--accent)">get_widget_tree</span>, '+
-      '<span style="font-family:var(--mono);color:var(--accent)">get_selected_widget</span> from your AI client.<br/><br/>'+
-      (state.status.connected ? "Runtime source: <span style='color:var(--green)'>connected</span>" : "Runtime source: <span style='color:var(--red)'>unavailable — connect a Flutter app</span>")+'</div>';
+    const s = state.status, t = state.telemetry;
+    const called = (name) => t && t.mcp.cost.byTool.find(x => x.tool === name);
+    const capability = (name, cls, label, why) => subRow(name, cls, label, why);
+    let h = '<h3 class="sec">Widget inspection</h3><div>';
+    if (!s.connected) {
+      h += capability("Widget tree", "down", "UNAVAILABLE", "requires a connected app in a debug build");
+      h += capability("Selected widget", "down", "UNAVAILABLE", "requires a connected app in a debug build");
+    } else {
+      const tree = called("get_widget_tree"), sel = called("get_selected_widget");
+      h += capability("Widget tree", "pull", "PULL ONLY",
+        "MCP <b>get_widget_tree</b> — " + (tree ? tree.calls+" call"+(tree.calls>1?"s":"")+" this session, last "+ago(tree.lastAt) : "not called this session"));
+      h += capability("Selected widget", "pull", "PULL ONLY",
+        "MCP <b>get_selected_widget</b> — " + (sel ? sel.calls+" call"+(sel.calls>1?"s":"")+" this session, last "+ago(sel.lastAt) : "not called this session"));
+    }
+    h += capability("Live tree stream", "na", "NOT IMPLEMENTED",
+      "no VM Service stream pushes widget trees; a live view would have to poll, and nothing does");
+    h += capability("Live state stream", "na", "NOT IMPLEMENTED",
+      "state activity is captured as events (see the state collector in Diagnostics), but provider values are not readable");
+    h += '</div>';
+    h += '<div class="note">Debug builds only — the Inspector service extension does not exist in profile or release builds. '+
+      'Results are returned to the agent that asked for them; they are not stored, so this page has nothing to render.</div>';
+    p.innerHTML = h;
+  }
+
+  // ---- MCP activity ----
+  // Drawn entirely from the server's own cost meter, which wraps tool
+  // registration — so a tool cannot be added without being counted. One quirk
+  // worth knowing: a response is measured after its handler returns, so a
+  // status tool never includes itself in the numbers it reports.
+  function renderMcp(p){
+    const t = state.telemetry;
+    if(!t){ p.innerHTML = '<div class="empty">waiting for server telemetry…</div>'; return; }
+    const cost = t.mcp.cost, c = t.mcp.client;
+    let h = "";
+
+    h += '<h3 class="sec">Client</h3>';
+    h += '<div class="grid">' + (c
+      ? '<div class="card"><div class="k">Agent</div><div class="v">'+esc(c.name)+'</div>'+
+        '<div class="sub">'+(c.version?"v"+esc(c.version):"no version sent")+' · handshake '+ago(c.initializedAt)+'</div></div>'
+      : '<div class="card"><div class="k">Agent</div><div class="v" style="color:var(--muted)">not initialized</div>'+
+        '<div class="sub">no MCP client has completed the handshake</div></div>') +
+      '<div class="card"><div class="k">Transport</div><div class="v">stdio</div>'+
+      '<div class="sub">exactly one peer — a second agent would be a second server</div></div>' +
+      '<div class="card"><div class="k">Server</div><div class="v">v'+esc(t.server.version)+'</div>'+
+      '<div class="sub">pid '+t.server.pid+' · up '+ago(t.server.startedAt).replace(" ago","")+'</div></div>' +
+      '</div>';
+
+    h += '<h3 class="sec">This session</h3>';
+    h += '<div class="grid">' +
+      '<div class="card"><div class="k">Tool calls</div><div class="v">'+cost.calls+'</div>'+
+      '<div class="sub">'+(cost.calls-cost.errors)+' ok · '+cost.errors+' errors</div></div>' +
+      '<div class="card"><div class="k">Response bytes</div><div class="v">'+fmtBytes(cost.responseBytes)+'</div>'+
+      '<div class="sub">≈'+cost.estimatedTokens.toLocaleString()+' tokens — bytes/4, an estimate</div></div>' +
+      '<div class="card"><div class="k">Distinct tools</div><div class="v">'+cost.byTool.length+'</div>'+
+      '<div class="sub">counts reset on every connect</div></div>' +
+      '</div>';
+
+    h += '<h3 class="sec">Recent calls</h3>';
+    h += cost.recent.length
+      ? '<div>' + cost.recent.map(r =>
+          '<div class="row tl-row"><span class="t">'+fmtTime(r.at)+'</span>'+
+          '<span'+(r.isError?' class="sev-error"':'')+'>'+esc(r.tool)+'</span>'+
+          '<span class="t">'+r.ms+'ms · '+fmtBytes(r.bytes)+(r.isError?' · error':'')+'</span></div>').join("") + '</div>'
+      : '<div class="empty">no tool calls yet this session</div>';
+
+    if (cost.byTool.length) {
+      h += '<h3 class="sec">By tool</h3>';
+      h += '<table class="tbl"><thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Errors</th>'+
+        '<th class="num">Avg</th><th class="num">Slowest</th><th class="num">Bytes</th><th>Last</th></tr></thead><tbody>' +
+        cost.byTool.map(r => '<tr><td>'+esc(r.tool)+'</td><td class="num">'+r.calls+'</td>'+
+          '<td class="num"'+(r.errors?' style="color:var(--red)"':'')+'>'+r.errors+'</td>'+
+          '<td class="num">'+Math.round(r.totalMs/r.calls)+'ms</td><td class="num">'+r.slowestMs+'ms</td>'+
+          '<td class="num">'+fmtBytes(r.bytes)+'</td><td class="t">'+ago(r.lastAt)+'</td></tr>').join("") +
+        '</tbody></table>';
+    }
+    h += '<div class="note">Only the most recent calls are kept individually; the table above is the full session total. '+
+      'What the agent did with a response is not observable from here.</div>';
+    p.innerHTML = h;
+  }
+
+  // ---- Diagnostics: what this process is, and what it can see ----
+  // Every row here is a fact the server reported or the page can observe about
+  // itself. Nothing is asserted from configuration: a URL existing is not a
+  // connection, and a subsystem that has produced nothing says so rather than
+  // showing a zero that reads as "measured zero".
+  function subRow(name, cls, label, why){
+    return '<div class="sub-row"><span class="name">'+esc(name)+'</span>'+st(cls, label)+
+      '<span class="why">'+why+'</span></div>';
+  }
+  const COLLECTOR_STATE = { active: ["active","ACTIVE"], degraded: ["degraded","DEGRADED"], unavailable: ["na","UNAVAILABLE"] };
+
+  function renderDiagnostics(p){
+    const s = state.status, t = state.telemetry;
+    let h = "";
+
+    h += '<h3 class="sec">Topology — measured, not assumed</h3>';
+    h += '<pre class="topo">' +
+      'Flutter app  ──ws──►  Collectors  ──►  <b>RuntimeStore</b>  ──┬──►  MCP tools  ──►  agent\n' +
+      '                                       (one instance)      │      (stdio)\n' +
+      '                                                           └──►  Dashboard WS  ──►  this page\n\n' +
+      'One process holds both. The MCP tools do not receive this stream — they own it:\n' +
+      'the collectors run inside the MCP server and write the store the dashboard reads.\n' +
+      'Verified by calling an MCP tool and observing its event arrive on this socket.' +
+      '</pre>';
+
+    h += '<h3 class="sec">System</h3><div>';
+    h += s.connected
+      ? subRow("Flutter runtime", "active", "ACTIVE",
+          "isolate " + esc(s.isolateId||"?") + (s.clockOffsetMs!=null ? " · VM clock offset "+s.clockOffsetMs+"ms" : " · clock offset not yet observed"))
+      : subRow("Flutter runtime", "down", "NOT CONNECTED", "no VM Service attached — call connect_vm");
+    if (t) {
+      const r = t.retention, retained = Object.values(r.retained).reduce((a,b)=>a+b,0);
+      const evicted = Object.values(r.evicted).reduce((a,b)=>a+b,0);
+      h += subRow("Runtime store", "active", "ACTIVE",
+        retained.toLocaleString()+" events retained" + (evicted ? " · "+evicted.toLocaleString()+" evicted (ring full)" : " · nothing evicted") +
+        (r.oldestEventMs ? " · oldest "+ago(r.oldestEventMs) : ""));
+    } else {
+      h += subRow("Runtime store", "idle", "UNKNOWN", "no telemetry received from the server yet");
+    }
+    h += state.wsState === "open"
+      ? subRow("Dashboard stream", "connected", "CONNECTED",
+          "last event " + ago(state.lastEventAt) + " · last server message " + ago(state.lastMessageAt))
+      : subRow("Dashboard stream", "down", "DISCONNECTED", "WebSocket closed — retrying");
+
+    if (t) {
+      h += subRow("MCP server", "active", "ACTIVE",
+        "pid "+t.server.pid+" · v"+esc(t.server.version)+" · started "+ago(t.server.startedAt)+
+        " — same process as this dashboard, so this cannot report otherwise");
+      const cost = t.mcp.cost;
+      h += cost.calls > 0
+        ? subRow("MCP tool activity", "receiving", "RECEIVING",
+            cost.calls+" calls · "+cost.errors+" errors · last "+ago(cost.recent.length?cost.recent[0].at:null))
+        : subRow("MCP tool activity", "idle", "NO CALLS YET", "the agent has not invoked a tool this session");
+      const c = t.mcp.client;
+      h += c
+        ? subRow("Agent client", "connected", "IDENTIFIED",
+            esc(c.name) + (c.version ? " " + esc(c.version) : " (no version sent)") +
+            " · handshake " + ago(c.initializedAt) + " — self-reported, not authenticated")
+        : subRow("Agent client", "idle", "NOT INITIALIZED", "no MCP client has completed the handshake");
+    }
+    h += '</div>';
+
+    h += '<h3 class="sec">Collectors</h3><div>';
+    if (!t) h += '<div class="empty">no telemetry yet</div>';
+    else h += t.collectors.map(c => {
+      const [cls, label] = COLLECTOR_STATE[c.status] || ["idle", String(c.status).toUpperCase()];
+      const why = (c.detail ? esc(c.detail)+" · " : "") + c.eventsRetained.toLocaleString() + " events" +
+        (c.lastEventMs ? " · last "+ago(c.lastEventMs) : " · none seen");
+      return subRow(c.name, cls, label, why);
+    }).join("");
+    h += '</div>';
+
+    h += '<h3 class="sec">Not observable</h3><div>';
+    h += subRow("Widget tree", "pull", "PULL ONLY",
+      "get_widget_tree / get_selected_widget are RPCs. Nothing pushes trees into the store, so there is no stream to render.");
+    h += subRow("CPU", "na", "NOT AVAILABLE", "the Dart VM Service does not sample CPU");
+    h += subRow("Other MCP clients", "na", "NOT AVAILABLE",
+      "the transport is stdio: exactly one peer, the process that spawned this one. A second agent would be a second server with its own store.");
+    h += subRow("Agent behaviour", "na", "NOT AVAILABLE",
+      "tool calls are counted; what the model concluded from a result never reaches this process");
+    h += subRow("Causality", "na", "NOT AVAILABLE",
+      "events carry time, not cause. Adjacency is measured; any cause shown elsewhere is inferred and labelled as such.");
+    h += '</div>';
+
+    if (t && t.unobservable.length) {
+      h += '<div class="note">Empty because nothing could see them, not because nothing happened: <b>' +
+        t.unobservable.map(esc).join(", ") + '</b>. Reading those tabs as "clean" would be wrong.</div>';
+    }
+    p.innerHTML = h;
   }
 
   function toggle(id){ if(state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id); dirty=true; render(true); }
