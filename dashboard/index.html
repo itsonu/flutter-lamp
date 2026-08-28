@@ -78,6 +78,16 @@
   button.on { border-color: var(--accent); color: var(--accent); }
   input[type=text] { min-width: 150px; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* A heading and live-region text that exist for assistive tech only. The
+     document previously started at h2 and announced nothing when the runtime
+     came and went. */
+  .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+             overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  /* A real button in a table cell, styled as the inline destination it already
+     looked like. It was blue text with an arrow and no way to reach it. */
+  button.lnk { background: none; border: none; padding: 0; color: var(--accent);
+               font-family: var(--sans); font-size: var(--fs-label); }
+  button.lnk:hover { border: none; text-decoration: underline; }
 
   nav { display: flex; gap: var(--s1); padding: 0 var(--s3); background: var(--panel);
         border-bottom: 1px solid var(--border); overflow-x: auto; position: relative; z-index: 2; }
@@ -162,6 +172,8 @@
           font-size: var(--fs-label); }
   .arow.clickable { cursor: pointer; }
   .arow.clickable:hover { background: var(--panel2); }
+  .arow.clickable:focus-visible { outline-offset: -2px; }
+  .fnd.clickable:focus-visible { outline-offset: -2px; }
   .arow .ts { font-family: var(--mono); color: var(--muted); font-size: var(--fs-meta); }
   .arow .src { font-size: var(--fs-meta); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
   .arow .msg { font-family: var(--mono); word-break: break-word; color: var(--text2); }
@@ -212,6 +224,10 @@
     .srow { grid-template-columns: 1fr; gap: var(--s1); padding: var(--s3); }
     .arow { grid-template-columns: 80px 1fr; }
     .arow .src, .arow .meta { grid-column: 2; }
+    /* The message is the content. Leaving it in the 80px column while the word
+       "SYSTEM" took 278px made rows 179px tall and the text unreadable — the
+       inverse of the squeeze this breakpoint exists to prevent. */
+    .arow .msg { grid-column: 1 / -1; }
     .stats { gap: var(--s4) var(--s6); }
     main { padding: var(--s4) var(--s3) var(--s8); }
   }
@@ -231,6 +247,8 @@
 </style>
 </head>
 <body>
+<h1 class="sr-only">Flutter Lamp runtime dashboard</h1>
+<div id="live" class="sr-only" role="status" aria-live="polite"></div>
 <header>
   <div class="brand">Flutter <b>Lamp</b></div>
   <div class="chips" id="chips" role="button" tabindex="0" title="Open Diagnostics"></div>
@@ -238,7 +256,7 @@
   <div class="controls">
     <button id="pauseBtn">Pause</button>
     <button id="clearBtn">Clear view</button>
-    <button id="exportBtn">Export JSON</button>
+    <button id="exportBtn" title="Downloads the runtime events held in this browser only — not MCP tool telemetry, diagnoses or anything already evicted. The full session export is the export_session MCP tool.">Export events</button>
   </div>
 </header>
 <nav id="tabs" role="tablist"></nav>
@@ -258,6 +276,12 @@
     expanded: new Set(), filter: "all", query: "",
     // Pinned vs following the newest entry, and when the reader pinned it.
     following: true, followFrom: null,
+    // Roving-tabindex cursor for the activity list: the id of the one row that
+    // is a tab stop. 400 individually tabbable rows would be a tab-stop
+    // nightmare; one stop plus arrow keys is the standard list pattern.
+    cursor: null,
+    // When the view was paused, and how many entries arrived since.
+    pausedAt: null, pausedCount: 0,
     wsState: "connecting", booted: false,
     lastEventAt: null, lastMessageAt: null,
   };
@@ -272,11 +296,15 @@
     const b = document.createElement("button");
     b.dataset.tab = name;
     b.setAttribute("role", "tab");
+    b.id = "tabbtn-" + name;
+    b.setAttribute("aria-controls", "tab-" + name);
     b.innerHTML = name + ' <span class="badge" id="badge-'+name+'"></span>';
     b.onclick = () => setTab(name);
     nav.appendChild(b);
     const p = document.createElement("section");
     p.className = "tab"; p.id = "tab-" + name;
+    p.setAttribute("role", "tabpanel");
+    p.setAttribute("aria-labelledby", "tabbtn-" + name);
     wrap.appendChild(p); panels[name] = p;
   });
   function setTab(name){
@@ -285,22 +313,53 @@
       const on = c.dataset.tab === name;
       c.classList.toggle("active", on);
       c.setAttribute("aria-selected", String(on));
+      // Roving tabindex: the tablist is one tab stop, arrows move within it.
+      c.tabIndex = on ? 0 : -1;
     });
     Object.entries(panels).forEach(([n,p]) => p.classList.toggle("active", n===name));
     main.scrollTop = 0;
     render();
   }
 
+  // Arrow-key movement inside the tablist, per the tabs pattern. Without it a
+  // roving tabindex would trap the keyboard on whichever tab was active.
+  nav.addEventListener("keydown", (e) => {
+    const keys = { ArrowRight: 1, ArrowLeft: -1, Home: 0, End: 0 };
+    if (!(e.key in keys)) return;
+    e.preventDefault();
+    const i = TABS.indexOf(state.active);
+    const n = e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1
+            : (i + keys[e.key] + TABS.length) % TABS.length;
+    setTab(TABS[n]);
+    nav.children[n].focus();
+  });
+
   // ---- controls ----
   const pauseBtn = document.getElementById("pauseBtn");
   pauseBtn.onclick = () => {
     state.paused = !state.paused;
     pauseBtn.textContent = state.paused ? "Resume" : "Pause";
+    pauseBtn.setAttribute("aria-pressed", String(state.paused));
     pauseBtn.classList.toggle("on", state.paused);
-    if(!state.paused){ dirty = true; render(); }
+    // Pause is a VIEW control. Collection continues, and the browser's own
+    // buffer keeps filling and trimming, so the count of what arrived while
+    // frozen is the honest thing to show on resume.
+    state.pausedAt = state.paused ? Date.now() : null;
+    state.pausedCount = 0;
+    // One render at the moment of pausing, so the frozen view shows that it is
+    // frozen. After that only the header keeps moving.
+    dirty = true; render();
   };
-  document.getElementById("clearBtn").onclick = () => { state.events = []; state.expanded.clear(); dirty = true; render(); };
+  pauseBtn.setAttribute("aria-pressed", "false");
+  document.getElementById("clearBtn").onclick = () => {
+    // View-only: the server's store is untouched and a reload restores what it
+    // still retains. Saying so is cheaper than a confirmation dialog.
+    state.events = []; state.expanded.clear(); state.cursor = null; state.cleared = Date.now();
+    dirty = true; render();
+  };
   document.getElementById("exportBtn").onclick = () => {
+    // Scope, stated where it is chosen rather than only in a tooltip: this is
+    // the browser's own buffer, not the session.
     const blob = new Blob([JSON.stringify(state.events, null, 2)], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
     a.download = "flutter-runtime-" + Date.now() + ".json"; a.click(); URL.revokeObjectURL(a.href);
@@ -332,6 +391,7 @@
         if (last) state.lastEventAt = last.timestamp;
       }
       else if (msg.type === "event") {
+        if (state.paused) state.pausedCount++;
         state.events.push(msg.event);
         if (state.events.length > CAP) state.events.splice(0, state.events.length - CAP);
         state.lastEventAt = msg.event.timestamp;
@@ -372,7 +432,13 @@
   }
 
   // ---- render loop ----
-  function loop(){ if (dirty && !state.paused){ render(); dirty = false; } }
+  // While paused the content is deliberately frozen, but the header must not be:
+  // it is the only thing that can still say the stream is alive and how much has
+  // arrived behind the frozen view.
+  function loop(){
+    if (state.paused) { renderChips(); return; }
+    if (dirty) { render(); dirty = false; }
+  }
   setInterval(loop, 200);
   // Relative times ("3s ago") go stale with no event to trigger a redraw — but
   // only two views show them. Activity shows absolute timestamps, so ticking it
@@ -395,6 +461,8 @@
     if (state.active !== "Activity") return null;
     const a = panels.Activity, q = a.querySelector("#aq");
     const input = (q && document.activeElement === q) ? { start: q.selectionStart, end: q.selectionEnd } : null;
+    const active = document.activeElement;
+    const focusRow = active && active.classList && active.classList.contains("arow") ? active.dataset.x : null;
     let anchor = null;
     if (!state.following) {
       for (const r of a.querySelectorAll(".arow")) {
@@ -402,7 +470,7 @@
         if (y >= 0) { anchor = { id: r.dataset.x, offset: y }; break; }
       }
     }
-    return { input, anchor };
+    return { input, anchor, focusRow };
   }
   function restoreAnchor(cap){
     if (!cap) return;
@@ -416,6 +484,10 @@
     if (cap.anchor) {
       const el = a.querySelector('.arow[data-x="' + CSS.escape(cap.anchor.id) + '"]');
       if (el) main.scrollTop += el.getBoundingClientRect().top - cap.anchor.offset;
+    }
+    if (cap.focusRow) {
+      const el = a.querySelector('.arow[data-x="' + CSS.escape(cap.focusRow) + '"]');
+      if (el) el.focus({ preventScroll: true });
     }
   }
 
@@ -431,9 +503,25 @@
     dirty = true;
   }, { passive: true });
 
+  // One polite announcement when a state a human would care about flips. A
+  // streaming log that announces every row would be unusable; silence when the
+  // runtime disappears is worse.
+  let lastAnnounced = "";
+  function announce(){
+    const sys = systemState();
+    const now = sys.runtime.label + "|" + sys.mcp.label + "|" + sys.stream.label + "|" + (state.paused ? "P" : "");
+    if (now === lastAnnounced) return;
+    lastAnnounced = now;
+    const el = document.getElementById("live");
+    if (el) el.textContent = "Runtime " + sys.runtime.label.toLowerCase() +
+      ", MCP " + sys.mcp.label.toLowerCase() + ", stream " + sys.stream.label.toLowerCase() +
+      (state.paused ? ", view paused" : "");
+  }
+
   function render(){
     const cap = captureAnchor();
     renderChips();
+    announce();
     const t = state.telemetry;
     const impaired = t && state.status.connected ? t.collectors.filter(c => c.status !== "active").length : 0;
     const att = attention();
@@ -494,7 +582,22 @@
     chips.innerHTML =
       '<span class="chip">Runtime '+st(sys.runtime.cls, '<b>'+sys.runtime.label.toLowerCase()+'</b>')+'</span>' +
       '<span class="chip">MCP '+st(sys.mcp.cls, '<b>'+sys.mcp.label.toLowerCase()+'</b>')+'</span>' +
-      '<span class="chip">Stream '+st(sys.stream.cls, '<b>'+sys.stream.label.toLowerCase()+'</b>')+'</span>';
+      '<span class="chip">Stream '+st(sys.stream.cls, '<b>'+sys.stream.label.toLowerCase()+'</b>')+'</span>' +
+      (state.paused
+        ? '<span class="chip">View '+st("warn", "<b>paused</b>")+
+          (state.pausedCount ? ' <b>+'+state.pausedCount.toLocaleString()+' behind</b>' : '')+'</span>'
+        : "");
+  }
+
+  /** What the view is doing, which is not what the stream is doing. */
+  function viewState(){
+    return state.paused
+      ? { cls:"warn", label:"PAUSED",
+          why:"frozen at <code>"+fmtTime(state.pausedAt || Date.now())+"</code> — collection continues; " +
+              state.pausedCount.toLocaleString()+" entr"+(state.pausedCount===1?"y has":"ies have")+
+              " arrived since. The browser buffer holds "+CAP.toLocaleString()+" entries and trims oldest-first, " +
+              "so a long enough pause does lose some here." }
+      : { cls:"ok", label:"LIVE", why:"following the stream" };
   }
 
   // ---- derived analysis --------------------------------------------------
@@ -545,6 +648,9 @@
     if (!s.connected) {
       const gaveUp = state.events.some(e => e.category==="system" && /Gave up reconnecting/.test(e.message));
       const diag = state.events.filter(e => e.category==="system" && /^Why the VM Service/.test(e.message)).pop();
+      // The diagnosis event carries concrete transport remedies in data.transport.
+      // Surface them verbatim — never synthesise a remediation step.
+      const remedy = diag && Array.isArray(diag.data && diag.data.transport) ? diag.data.transport : null;
       // "Never attached" and "was attached and lost" are different situations
       // and lead to different next actions. The store says which: a connect
       // event exists only in the second.
@@ -554,8 +660,8 @@
                : s.reconnecting ? "A reconnect is in flight — attempt " + (s.reconnectAttempt||1) + "."
                : wasAttached ? "The connection was lost. Evidence already captured stays available; nothing new arrives."
                : "Nothing has been observed this session. Call connect_vm to attach one.",
-        diag ? esc(diag.message) : null,
-        { tab:"Activity", filter:"runtime" });
+        remedy ? remedy.map(esc).join("<br/>") : diag ? esc(diag.message) : null,
+        { tab:"Activity", filter:"system" });
     }
 
     const p = toolPartition();
@@ -645,11 +751,15 @@
                                           : "nothing abnormal in what is observable") + '</span></div>';
     h += row("Flutter app", sys.runtime) + row("VM Service", sys.vm) + row("MCP server", sys.mcp) +
          row("Agent", sys.agent) + row("Tool execution", sys.tools) + row("Dashboard stream", sys.stream);
+    // The stream and the viewport are separate facts. Only shown while paused,
+    // because a permanent "VIEW: LIVE" row is a badge that can never be false.
+    if (state.paused) h += row("This view", viewState());
     h += '</div>';
 
     h += '<h2 class="sec">Attention</h2>';
     h += att.length ? '<div class="block">' + att.map((f,i) =>
-        '<div class="fnd f-'+f.sev+(f.action?' clickable':'')+'" data-a="'+i+'">' +
+        '<div class="fnd f-'+f.sev+(f.action?' clickable':'')+'" data-a="'+i+'"' +
+        (f.action ? ' role="button" tabindex="0"' : '') + '>' +
         '<span class="mk">'+f.mk+'</span><span><span class="ttl">'+esc(f.title)+'</span>' +
         (f.why ? '<div class="why">'+esc(f.why)+'</div>' : '') +
         (f.ev ? '<div class="ev">'+f.ev+'</div>' : '') + '</span>' +
@@ -665,8 +775,9 @@
     const stale = (sub) => s.connected ? sub : sub + " · before the disconnect";
     const stat = (k,v,sub,none) => '<div class="stat"><div class="k">'+k+'</div><div class="v'+(none?' none':'')+'">'+v+'</div><div class="s">'+(sub||"")+'</div></div>';
     h += '<h2 class="sec">Session</h2><div class="block"><div class="stats">';
-    h += stat("Events", state.events.length.toLocaleString(),
-      Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>k+" "+v).join(" · ") || "none captured");
+    h += stat("Events in view", state.events.length.toLocaleString(),
+      (Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>k+" "+v).join(" · ") || "none captured") +
+      (t ? " · store retains "+Object.values(t.retention.retained).reduce((a,b)=>a+b,0).toLocaleString() : ""));
     h += t ? stat("Tool calls", t.mcp.cost.calls.toLocaleString(),
         (t.mcp.cost.errors ? t.mcp.cost.errors+" failed" : "no errors") + " · " + fmtBytes(t.mcp.cost.responseBytes))
       : stat("Tool calls","unknown","no telemetry yet",true);
@@ -674,13 +785,13 @@
     // attached nothing could have been counted, and printing 0 there is the
     // exact substitution of a zero for a missing reading that this rules out.
     const observed = (label, cat, n, sub) => n > 0
-      ? stat(label, n.toLocaleString(), sub)
+      ? stat(label, n.toLocaleString(), stale(sub))
       : stat(label, emptyKind(cat) === "0 observed" ? "0" : emptyKind(cat),
              emptyKind(cat) === "0 observed" ? "collector active and watching" : collectorWhy(cat),
              emptyKind(cat) !== "0 observed");
     h += observed("Exceptions", "exception", byCat("exception").length, "see Attention");
-    h += fs ? stat("Frames", fs.n.toLocaleString(), stale(fs.janky+" over budget · p95 "+fs.p95.toFixed(1)+"ms"))
-            : stat("Frames", s.connected ? "none yet" : "unavailable",
+    h += fs ? stat("Frames in view", fs.n.toLocaleString(), stale(fs.janky+" over budget · p95 "+fs.p95.toFixed(1)+"ms"))
+            : stat("Frames in view", s.connected ? "none yet" : "unavailable",
                 s.connected ? "Flutter renders only on change" : "requires a connected app", true);
     h += mem ? stat("Heap", mem.data.heapUsageMB+" MB", stale("cap "+mem.data.heapCapacityMB+" MB"))
              : stat("Heap", s.connected ? "not sampled" : "unavailable",
@@ -693,11 +804,16 @@
     h += recent.length ? '<div class="block">' + recent.map(a => activityRow(a, false)).join("") + '</div>'
                        : '<div class="block"><div class="empty">No activity recorded yet.</div></div>';
     p.innerHTML = h;
-    p.querySelectorAll(".fnd.clickable").forEach(n => n.onclick = () => {
+    const go = (n) => {
       const a = att[Number(n.dataset.a)].action;
       if (a.filter) state.filter = a.filter;
       state.query = a.query != null ? a.query : "";
+      state.cursor = null;
       setTab(a.tab);
+    };
+    p.querySelectorAll(".fnd.clickable").forEach(n => {
+      n.onclick = () => go(n);
+      n.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(n); } };
     });
   }
 
@@ -706,6 +822,28 @@
   // five destinations the reader had to merge mentally; three of them rendered
   // the same empty sentence when the app was gone.
   const RETRY_RE = /^(Reconnecting in |Reconnect attempt \d+ failed)/;
+  const HEAP_RE = /^Heap [\d.]+MB \/ cap /;
+
+  /**
+   * Collapse a consecutive run of rows into one, keeping the originals behind a
+   * disclosure. Used for reconnect churn and for the dashboard's own heap
+   * polling — both are runs of near-identical self-generated rows that push the
+   * app's evidence off the screen.
+   */
+  function rollUp(out, test, summarise) {
+    const rolled = [];
+    for (let i = 0; i < out.length; i++) {
+      if (!test(out[i])) { rolled.push(out[i]); continue; }
+      let j = i;
+      while (j < out.length && test(out[j])) j++;
+      const run = out.slice(i, j);
+      // A run of one or two is not a flood; collapsing it would hide more than
+      // it saves and would cost a click to read two rows.
+      if (run.length < 3) rolled.push(...run); else rolled.push(summarise(run));
+      i = j - 1;
+    }
+    return rolled;
+  }
 
   function activityModel(){
     const out = [];
@@ -717,33 +855,46 @@
                  meta: c.ms+"ms · "+fmtBytes(c.bytes), call: c, id: "mcp-"+c.at+"-"+c.tool });
     out.sort((a,b) => b.at - a.at);
 
-    // Collapse reconnect churn. Eight attempts produced sixteen rows — 55% of
-    // the whole timeline for one incident — burying the events that explain it.
-    // The attempts stay, one disclosure away.
-    const rolled = [];
-    for (let i = 0; i < out.length; i++) {
-      if (!(out[i].src === "system" && RETRY_RE.test(out[i].label))) { rolled.push(out[i]); continue; }
-      let j = i;
-      while (j < out.length && out[j].src === "system" && RETRY_RE.test(out[j].label)) j++;
-      const run = out.slice(i, j);
-      const attempts = run.filter(r => /^Reconnect attempt/.test(r.label)).length;
-      rolled.push({ at: run[0].at, src: "system", sev: "warning",
-        label: "Reconnect — " + attempts + " attempt" + (attempts===1?"":"s") + " failed over " + dur(run[0].at - run[run.length-1].at),
-        meta: run.length + " rows", run, id: "run-"+run[run.length-1].at });
-      i = j - 1;
-    }
+    // Two runs of self-generated noise get collapsed, for the same reason:
+    // eight reconnect attempts produced sixteen rows, and the heap poller
+    // produced more rows than everything the app did combined.
+    let rolled = rollUp(out,
+      (r) => r.src === "system" && RETRY_RE.test(r.label),
+      (run) => {
+        const attempts = run.filter(r => /^Reconnect attempt/.test(r.label)).length;
+        return { at: run[0].at, src: "system", sev: "warning",
+          label: "Reconnect — " + attempts + " attempt" + (attempts===1?"":"s") + " failed over " + dur(run[0].at - run[run.length-1].at),
+          meta: run.length + " rows", run, id: "run-"+run[run.length-1].at };
+      });
+    rolled = rollUp(rolled,
+      (r) => r.src === "system" && HEAP_RE.test(r.label),
+      (run) => ({ at: run[0].at, src: "system", sev: "info",
+        label: "Heap sampled — " + run.length + " readings over " + dur(run[0].at - run[run.length-1].at),
+        meta: run.length + " rows", run, id: "heap-"+run[run.length-1].at }));
     return rolled;
   }
 
-  const FILTERS = [["all","All"],["runtime","Runtime"],["mcp","MCP"],["error","Errors"],
-                   ["log","Logs"],["network","Network"],["exception","Exceptions"],["frame","Frames"]];
+  const FILTERS = [["all","All"],["app","App"],["mcp","MCP"],["system","System"],
+                   ["toolfail","Tool failures"],["exception","Exceptions"],
+                   ["log","Logs"],["network","Network"],["frame","Frames"]];
+
+  /** Human wording for each filter, used by the active-filter summary. */
+  const FILTER_LABEL = Object.fromEntries(FILTERS);
+
+  // "App" is what the observed application produced. It deliberately excludes
+  // both MCP (the agent's own calls) and system (this server's notes and its
+  // own heap polling), which together dominated every other view.
+  const isApp = (a) => a.src !== "mcp" && a.src !== "system";
 
   function matchesFilter(a){
     switch(state.filter){
       case "all": return true;
+      case "app": return isApp(a);
       case "mcp": return a.src === "mcp";
-      case "error": return a.sev === "error" || a.sev === "critical";
-      case "runtime": return a.src !== "mcp";
+      case "system": return a.src === "system";
+      // A tool call that returned an error. Not an app exception, and not a
+      // slow frame — those have their own filters and mean different things.
+      case "toolfail": return a.src === "mcp" && !!(a.call && a.call.isError);
       default: return a.src === state.filter;
     }
   }
@@ -751,7 +902,10 @@
   function activityRow(a, interactive = true){
     const open = state.expanded.has(a.id);
     const expandable = !!(a.ev || a.call || a.run);
-    let h = '<div class="arow sev-'+a.sev+(interactive && expandable ? ' clickable' : '')+'" data-x="'+a.id+'">' +
+    const control = interactive && expandable;
+    let h = '<div class="arow sev-'+a.sev+(control ? ' clickable' : '')+'" data-x="'+a.id+'"' +
+      (control ? ' role="button" tabindex="'+(a.id === state.cursor ? '0' : '-1')+
+                 '" aria-expanded="'+(open ? 'true' : 'false')+'"' : '') + '>' +
       '<span class="ts">'+fmtTime(a.at)+'</span>' +
       '<span class="src">'+esc(a.src)+'</span>' +
       '<span class="msg">'+esc(a.label)+'</span>' +
@@ -788,21 +942,27 @@
   function fmtHeaders(h){ if(!h) return "  (fetched only for failed/slow requests)"; return Object.entries(h).map(([k,v])=>"  "+k+": "+v).join("\n")||"  (none)"; }
 
   function renderActivity(p){
-    let rows = activityModel().filter(matchesFilter);
+    const model = activityModel();
+    const total = model.length;
+    let rows = model.filter(matchesFilter);
     if (state.query) { const q = state.query.toLowerCase(); rows = rows.filter(a => a.label.toLowerCase().includes(q)); }
     const shown = rows.slice(0, 400);
 
     let h = '<div class="filters">' +
       FILTERS.map(([k,label]) => '<button class="fbtn'+(state.filter===k?' on':'')+'" data-f="'+k+'">'+label+'</button>').join("") +
-      '<input type="text" id="aq" placeholder="search…" value="'+esc(state.query)+'" />' +
+      '<input type="text" id="aq" aria-label="Search activity entries" placeholder="search…" value="'+esc(state.query)+'" />' +
       (state.query ? '<button id="aclear">clear</button>' : '') + '</div>';
 
     h += shown.length
       ? '<div class="block">' + shown.map(a => activityRow(a)).join("") + '</div>' +
         (rows.length > shown.length ? '<div class="note">Showing the newest '+shown.length+' of '+rows.length+' matching entries.</div>' : '')
       : '<div class="block"><div class="empty">' + activityEmpty() + '</div></div>';
-    if (state.query && shown.length)
-      h += '<div class="note">Filtered to entries matching <b>'+esc(state.query)+'</b>.</div>';
+    const narrowed = (state.filter !== "all") || !!state.query;
+    if (narrowed)
+      h += '<div class="note" id="fsum">Showing <b>'+esc(FILTER_LABEL[state.filter] || state.filter)+'</b>' +
+        (state.query ? ' matching <b>'+esc(state.query)+'</b>' : '') +
+        ' — '+rows.length.toLocaleString()+' of '+total.toLocaleString()+' entries. ' +
+        '<button id="fclear">Clear filters</button></div>';
 
     const t = state.telemetry;
     if (t && state.filter === "mcp" && t.mcp.cost.calls > t.mcp.cost.recent.length)
@@ -831,17 +991,52 @@
     const q = p.querySelector("#aq");
     q.oninput = () => { state.query = q.value; dirty = true; render(); };
     const cl = p.querySelector("#aclear"); if (cl) cl.onclick = () => { state.query = ""; dirty = true; render(); };
-    p.querySelectorAll(".arow.clickable").forEach(r => r.onclick = () => {
-      const id = r.dataset.x;
+    const fc = p.querySelector("#fclear");
+    if (fc) fc.onclick = () => { state.filter = "all"; state.query = ""; state.cursor = null; dirty = true; render(); };
+    const rowEls = [...p.querySelectorAll(".arow.clickable")];
+    // Exactly one row is a tab stop. Keep the cursor on a row that still exists
+    // after a re-render, otherwise the list becomes unreachable by keyboard.
+    if (rowEls.length && !rowEls.some(r => r.dataset.x === state.cursor)) {
+      state.cursor = rowEls[0].dataset.x;
+      rowEls[0].tabIndex = 0;
+    }
+    const toggle = (id) => {
       if (state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
       dirty = true; render();
-    });
+    };
+    rowEls.forEach(r => { r.onclick = () => { state.cursor = r.dataset.x; toggle(r.dataset.x); }; });
+
+    const list = p.querySelector(".block");
+    if (list) list.onkeydown = (e) => {
+      const row = e.target.closest && e.target.closest(".arow.clickable");
+      if (e.key === "Enter" || e.key === " ") {
+        if (!row) return;
+        e.preventDefault(); state.cursor = row.dataset.x; toggle(row.dataset.x);
+        return;
+      }
+      const step = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+      if (step === undefined && e.key !== "Home" && e.key !== "End") return;
+      e.preventDefault();
+      const here = rowEls.indexOf(row);
+      const n = e.key === "Home" ? 0 : e.key === "End" ? rowEls.length - 1
+              : Math.max(0, Math.min(rowEls.length - 1, (here < 0 ? 0 : here) + step));
+      const target = rowEls[n];
+      if (!target) return;
+      rowEls.forEach(r => { r.tabIndex = -1; });
+      target.tabIndex = 0; state.cursor = target.dataset.x;
+      target.focus();
+    };
   }
 
   function activityEmpty(){
     if (state.query) return "No entries match <b>" + esc(state.query) + "</b>.";
     if (state.filter === "mcp") return "<b>No MCP tool calls yet.</b> The agent has not invoked a tool this session.";
-    if (state.filter === "all" || state.filter === "runtime") return state.status.connected
+    if (state.filter === "toolfail") return "<b>No failed tool calls.</b> Every MCP call this session returned successfully.";
+    if (state.filter === "system") return "<b>No system events.</b> This server has not recorded a connection note or a heap sample yet.";
+    if (state.filter === "app") return state.status.connected
+      ? "<b>Nothing from the app yet.</b> Flutter emits no frames, logs or requests while it is idle. MCP and system entries are under their own filters."
+      : "<b>Not connected.</b> Nothing has been observed from an app this session.";
+    if (state.filter === "all") return state.status.connected
       ? "<b>Nothing yet.</b> Flutter emits no frames or logs while the app is idle."
       : "<b>Not connected.</b> Nothing has been observed this session.";
     const kind = emptyKind(state.filter), c = collectorFor(state.filter);
@@ -867,7 +1062,7 @@
     }
     const stat = (k,v,sub) => '<div class="stat"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="s">'+(sub||"")+'</div></div>';
     h += '<div class="block"><div class="stats">' +
-      stat("Frames", fs.n.toLocaleString(), "captured this session") +
+      stat("Frames", fs.n.toLocaleString(), "held in this browser's buffer") +
       stat("p50", fs.p50.toFixed(1)+"ms") + stat("p95", fs.p95.toFixed(1)+"ms") +
       stat("p99", fs.p99.toFixed(1)+"ms") + stat("Max", fs.max.toFixed(1)+"ms") +
       stat("Over budget", fs.janky, Math.round(fs.janky/fs.n*100)+"% of frames") +
@@ -881,20 +1076,24 @@
     h += '<h2 class="sec">Heap <span class="hint">sampled while this page is open</span></h2><canvas id="memChart"></canvas>';
 
     h += '<h2 class="sec">Worst frames</h2><div class="block"><div class="scroll-x"><table class="tbl">' +
-      '<thead><tr><th>Frame</th><th class="num">Total</th><th class="num">Build</th><th class="num">Raster</th><th>When</th><th></th></tr></thead><tbody>' +
+      '<thead><tr><th scope="col">Frame</th><th scope="col" class="num">Total</th><th scope="col" class="num">Build</th><th scope="col" class="num">Raster</th><th scope="col">When</th><th scope="col"><span class="sr-only">Drill through</span></th></tr></thead><tbody>' +
       fs.worst.map(e => '<tr class="clickable" data-f="'+esc("Frame #"+(e.data.number!=null?e.data.number:""))+'">' +
         '<td class="name">#'+(e.data.number!=null?e.data.number:"?")+'</td>' +
         '<td class="num'+(isJanky(e)?' bad':'')+'">'+e.data.elapsedMs.toFixed(1)+'ms</td>' +
         '<td class="num">'+(e.data.buildMs!=null?e.data.buildMs.toFixed(1)+"ms":"—")+'</td>' +
         '<td class="num">'+(e.data.rasterMs!=null?e.data.rasterMs.toFixed(1)+"ms":"—")+'</td>' +
-        '<td>'+fmtTime(e.timestamp)+'</td><td style="color:var(--accent)">Activity →</td></tr>').join("") +
+        '<td>'+fmtTime(e.timestamp)+'</td><td><button class="lnk">Activity →</button></td></tr>').join("") +
       '</tbody></table></div></div>';
     p.innerHTML = h;
 
     drawChart(p.querySelector("#frameChart"), byCat("frame").slice(-120).map(e=>e.data.elapsedMs||0), { budget: JANK_BUDGET_MS, color: "#58a6ff" });
     drawChart(p.querySelector("#memChart"), byCat("system").filter(e=>e.data&&e.data.heapUsageMB!=null).slice(-120).map(e=>e.data.heapUsageMB), { color: "#3fb950" });
-    p.querySelectorAll("tr.clickable").forEach(r => r.onclick = () => {
-      state.filter = "frame"; state.query = r.dataset.f; setTab("Activity");
+    p.querySelectorAll("tr.clickable").forEach(r => {
+      const go = () => { state.filter = "frame"; state.query = r.dataset.f; state.cursor = null; setTab("Activity"); };
+      r.onclick = go;
+      const b = r.querySelector("button.lnk");
+      if (b) { b.onclick = (e) => { e.stopPropagation(); go(); };
+               b.setAttribute("aria-label", "Show " + r.dataset.f + " in Activity"); }
     });
   }
 
@@ -904,14 +1103,18 @@
     ctx.clearRect(0,0,w,h);
     ctx.font = "11px ui-monospace, monospace";
     if(!data.length){ ctx.fillStyle="#8b949e"; ctx.fillText("no data yet", 12, 24); return; }
-    const max = Math.max(opts.budget||0, ...data)*1.15 || 1, pad = 10;
+    // Two different quantities that were previously one variable: what the data
+    // actually reached, and how tall the drawing area is.
+    const observedMax = Math.max(...data);
+    const max = Math.max(opts.budget||0, observedMax)*1.15 || 1, pad = 10;
     const x = i => pad + (i/(Math.max(data.length-1,1)))*(w-2*pad);
     const y = v => h-pad - (v/max)*(h-2*pad);
     if(opts.budget){ ctx.strokeStyle="rgba(248,81,73,.5)"; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(pad,y(opts.budget)); ctx.lineTo(w-pad,y(opts.budget)); ctx.stroke(); ctx.setLineDash([]); }
     ctx.strokeStyle = opts.color; ctx.lineWidth = 1.5; ctx.beginPath();
     data.forEach((v,i)=>{ i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)); }); ctx.stroke();
     ctx.fillStyle = "#8b949e";
-    ctx.fillText("max " + max.toFixed(1) + " · last " + (data[data.length-1]||0).toFixed(1), pad, 16);
+    ctx.fillText("max " + observedMax.toFixed(1) + " · last " + (data[data.length-1]||0).toFixed(1) +
+                 "  (" + data.length + " samples)", pad, 16);
   }
 
   // ---- Diagnostics -------------------------------------------------------
@@ -950,14 +1153,14 @@
     const part = toolPartition();
     if (part) {
       h += '<div class="block" style="margin-top:var(--s3)"><div class="scroll-x"><table class="tbl">' +
-        '<thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Errors</th><th class="num">Avg</th>' +
-        '<th class="num">Slowest</th><th class="num">Response</th><th>Last</th><th></th></tr></thead><tbody>' +
+        '<thead><tr><th scope="col">Tool</th><th scope="col" class="num">Calls</th><th scope="col" class="num">Errors</th><th scope="col" class="num">Avg</th>' +
+        '<th scope="col" class="num">Slowest</th><th scope="col" class="num">Response</th><th scope="col">Last</th><th scope="col"><span class="sr-only">Drill through</span></th></tr></thead><tbody>' +
         t.mcp.cost.byTool.map(r => '<tr class="clickable" data-t="'+esc(r.tool)+'"><td class="name">'+esc(r.tool)+'</td>' +
           '<td class="num">'+r.calls+'</td>' +
           '<td class="num '+(r.errors?'bad':'good')+'">'+r.errors+'</td>' +
           '<td class="num">'+Math.round(r.totalMs/r.calls)+'ms</td><td class="num">'+r.slowestMs+'ms</td>' +
           '<td class="num">'+fmtBytes(r.bytes)+'</td><td>'+ago(r.lastAt)+'</td>' +
-          '<td style="color:var(--accent)">Activity →</td></tr>').join("") +
+          '<td><button class="lnk">Activity →</button></td></tr>').join("") +
         '</tbody></table></div></div>';
       if (part.clean.length && part.failing.length)
         h += '<div class="note">The split is exact: <b>'+part.clean.length+'</b> tool'+(part.clean.length>1?'s':'')+
@@ -972,7 +1175,7 @@
       const [cls, label] = s.connected ? (COLL_STATE[c.status] || ["idle", String(c.status).toUpperCase()])
                                        : ["idle", "IDLE"];
       const why = (!s.connected ? "no runtime attached · " : (c.detail ? esc(c.detail)+" · " : "")) +
-        c.eventsRetained.toLocaleString()+" events" + (c.lastEventMs ? " · last "+ago(c.lastEventMs) : " · none seen");
+        c.eventsRetained.toLocaleString()+" retained in the store" + (c.lastEventMs ? " · last "+ago(c.lastEventMs) : " · none seen");
       return '<div class="srow"><span class="n">'+esc(c.name)+'</span>'+st(cls,label)+'<span class="w">'+why+'</span></div>';
     }).join("");
     h += '</div>';
@@ -1005,8 +1208,12 @@
       h += '<div class="note">Empty because nothing could see them, not because nothing happened: <b>' +
         t.unobservable.map(esc).join(", ") + '</b>.</div>';
     p.innerHTML = h;
-    p.querySelectorAll("tr.clickable").forEach(r => r.onclick = () => {
-      state.filter = "mcp"; state.query = r.dataset.t; setTab("Activity");
+    p.querySelectorAll("tr.clickable").forEach(r => {
+      const go = () => { state.filter = "mcp"; state.query = r.dataset.t; state.cursor = null; setTab("Activity"); };
+      r.onclick = go;
+      const b = r.querySelector("button.lnk");
+      if (b) { b.onclick = (e) => { e.stopPropagation(); go(); };
+               b.setAttribute("aria-label", "Show " + r.dataset.t + " calls in Activity"); }
     });
   }
 

@@ -359,6 +359,9 @@ rather than rendering an empty axis.
 - **Do** wrap any table in `.scroll-x`, and stack row grids below `760px` rather than compressing the explanation column.
 - **Do** keep press feedback at `scale(0.97)` / `90ms` on controls, and none on navigation.
 - **Do** honour `prefers-reduced-motion`, `prefers-reduced-transparency` and `prefers-contrast`.
+- **Do** give a long list one tab stop and a roving cursor, never one tab stop per row.
+- **Do** name a filter after the single thing it returns.
+- **Do** print the observed maximum; the padded drawing ceiling is not a reading.
 
 ### Don't:
 
@@ -369,6 +372,8 @@ rather than rendering an empty axis.
 - **Don't** carry state in colour alone; every status has a word beside its dot.
 - **Don't** animate anything that is not direct feedback on a press. Decorative transition on a data view reads as latency.
 - **Don't** collapse two semantically different states into one label to tidy the UI — `connected`, `reachable`, `receiving`, `available`, `observed`, `not sampled` and `unavailable` are distinct and stay distinct.
+- **Don't** let a control look interactive without being reachable by keyboard.
+- **Don't** let the dashboard's own telemetry outnumber the app's evidence in the default view.
 
 ## Behavior notes
 
@@ -385,23 +390,66 @@ serving an agent", which is a real and common state. Clicking the chips opens
 Diagnostics.
 
 **The activity stream anchors on a row, not on scroll position.** At the top it
-follows new entries. Scrolled away it pins, holding the row under the reader
-still, and offers *N new entries — jump to latest*. Returning to the top resumes
-following.
+follows new entries, holding the newest row in place. Scrolled away it pins,
+holding the row under the reader still, and offers *N new entries — jump to
+latest*. Returning to the top resumes following. Measured: 0px drift following,
+0.2px pinned, under live traffic.
+
+**Keyboard model.** The tab strip is one tab stop with arrow-key movement
+(roving tabindex). The activity stream is one tab stop with a roving cursor —
+arrows move, Home/End jump, Enter/Space expands — so several hundred rows never
+become several hundred tab stops. Findings and the drill-through buttons inside
+tables are ordinary tab stops. Focus is captured and restored across the
+wholesale re-render that follows every state change.
+
+**Filters name one thing each.** `All`, then three source filters — `App` (what
+the observed application produced), `MCP` (the agent's calls), `System` (this
+server's own notes and heap sampling) — then `Tool failures`, `Exceptions`,
+`Logs`, `Network`, `Frames`. There is deliberately no generic *Errors* filter:
+it previously returned MCP tool failures, janky frames and app exceptions
+together, three unrelated kinds of failure under one word. When any filter or
+search is active a summary line names it and offers **Clear filters**.
+
+**Runs of self-generated rows are rolled up**, keeping every original behind a
+disclosure. Two qualify: reconnect churn, and the dashboard's own heap poller,
+which otherwise accounted for 52-67% of the visible stream. A run of fewer than
+three rows is left alone.
 
 **Drill-through** sets a filter and a search together and lands on the exact
 evidence — a worst-frame row opens Activity filtered to that frame number.
 Changing a filter clears a drill-through's search, because carrying it across
 made a populated category look empty.
 
-**Pause** stops the browser view from updating. It does **not** stop collection:
-the server keeps ingesting, and the browser keeps appending to its own buffer.
-That buffer is finite — approximately 5,000 entries, trimmed oldest-first — so a
-sufficiently long pause **can** evict entries client-side. Do not document or
+**Findings carry the remedy when the evidence already contains one.** The VM
+Service diagnosis event holds concrete transport advice in `data.transport`;
+the finding renders it verbatim. Remediation is never synthesised — if the
+evidence has no remedy, the finding shows none.
+
+**Pause is a view control, and the header says so.** `STREAM` and `VIEW` are
+separate chips: the stream can read `receiving` while the view reads `paused`,
+because both are true. While paused the chip counts what has arrived behind the
+frozen view (`+N behind`), and an Overview row states the freeze timestamp.
+Pause does **not** stop collection: the server keeps ingesting, and the browser
+keeps appending to its own buffer. That buffer is finite — approximately 5,000
+entries, trimmed oldest-first — so a sufficiently long pause **can** evict
+entries client-side. The UI says this in the paused row. Do not document or
 imply that nothing is lost while paused.
 
 **Clear view** empties the browser's buffer only. The server's store is
 untouched, and a reload restores what it still retains.
+
+**Export events** downloads that same browser buffer — not MCP tool telemetry,
+not diagnoses, not anything already evicted. The full session export is the
+`export_session` MCP tool. The button is named and titled for that scope.
+
+**Counts name their window.** *Events in view* and *Frames in view* are the
+browser's buffer; Diagnostics reports what the store retains. The two differ
+routinely and the labels say why.
+
+**Charts report the observed maximum, never the drawing ceiling.** The plotting
+area is padded 15% above the data so the series does not touch the top edge;
+that padded number is not a measurement and is never printed. The caption gives
+the true maximum, the last value, and the sample count.
 
 **Empty states name their kind.** An empty view says whether a filter is hiding
 rows, the collector cannot see this category on this target, the app is not

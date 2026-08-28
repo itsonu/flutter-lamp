@@ -134,7 +134,22 @@ commitment, not a stylistic preference.
 ## Accessibility & Inclusion
 
 No external conformance standard has been committed to. What is implemented and
-should not regress: keyboard operability with visible focus, `prefers-reduced-
-motion`, `prefers-reduced-transparency` and `prefers-contrast` support, and
-status that is never carried by colour alone. Keyboard-first operation is a
-stated intent for a developer tool, not a certified conformance level.
+should not regress:
+
+- **Keyboard operability.** Every interactive control is reachable and operable
+  without a mouse. The tab strip is a single tab stop navigated with arrow keys;
+  the activity stream is a single tab stop with a roving cursor (arrows move,
+  Home/End jump, Enter/Space expands a row), so 400 rows do not become 400 tab
+  stops; findings and drill-through controls are ordinary tab stops. Focus is
+  restored across the wholesale re-render that follows every state change.
+- **Visible focus** on every focusable element, from one unscoped
+  `:focus-visible` rule.
+- `prefers-reduced-motion`, `prefers-reduced-transparency` and
+  `prefers-contrast` are honoured.
+- **Status is never carried by colour alone** — every state has a word beside
+  its dot, and a live region announces runtime, MCP, stream and view-paused
+  transitions.
+
+Known gap, stated rather than implied: non-text contrast (control borders and
+hover feedback) is below the 3:1 of WCAG 1.4.11. Text contrast passes AA
+throughout.
