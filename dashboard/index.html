@@ -269,7 +269,8 @@
   // ---- Overview ----
   function computeFps(){ const f = byCat("frame").slice(-30); if(!f.length) return null;
     const avg = f.reduce((s,e)=>s+(e.data.elapsedMs||0),0)/f.length; return avg>0 ? Math.min(1000/avg, 120) : null; }
-  function latestMem(){ const m = byCat("system").filter(e=>e.data && e.data.heapUsageMB!=null); return m.length ? m[m.length-1].data : null; }
+  function memEvent(){ const m = byCat("system").filter(e=>e.data && e.data.heapUsageMB!=null); return m.length ? m[m.length-1] : null; }
+  function latestMem(){ const e = memEvent(); return e ? e.data : null; }
   // The collector already decides what jank is (Flutter.Frame vs the 60fps
   // budget) and stamps `janky` on the event. Re-deriving it here with a second
   // threshold would let the dashboard and the diagnosis engine disagree about
@@ -337,17 +338,24 @@
       : bad ? ["st-degraded","DEGRADED", bad+" finding"+(bad>1?"s":"")]
       : ["st-active","HEALTHY","nothing abnormal in what is observable"];
 
+    // A reading taken before the app went away is still a real reading, but it
+    // describes a session that has ended. Showing it unqualified next to a
+    // "not connected" health badge invites it to be read as current.
+    const stale = (sub, ts) => s.connected ? sub : sub + " · from before the disconnect" + (ts ? " ("+ago(ts)+")" : "");
+    const lastFrameAt = frames.length ? frames[frames.length-1].timestamp : null;
+    const lastMemAt = memEvent() ? memEvent().timestamp : null;
+
     // Memory is polled, not pushed. Before the first sample there is no number —
     // and "0 MB" for a running app would be a lie, not a reading.
     const memCard = mem
-      ? { v: mem.heapUsageMB + " MB", sub: "cap "+mem.heapCapacityMB+" MB · external "+mem.externalUsageMB+" MB" }
+      ? { v: mem.heapUsageMB + " MB", sub: stale("cap "+mem.heapCapacityMB+" MB · external "+mem.externalUsageMB+" MB", lastMemAt) }
       : s.connected
         ? { v: '<span style="color:var(--muted);font-size:17px">not sampled yet</span>', sub: "polled every 2s while this page is open" }
         : { v: '<span style="color:var(--muted);font-size:17px">unavailable</span>', sub: "requires a connected app" };
     // Flutter renders nothing when nothing changes, so no frames is a normal
     // state for an idle app — not a stalled one. Say which it is.
     const fpsCard = fps != null
-      ? { v: fps.toFixed(0), sub: "~"+(1000/fps).toFixed(1)+"ms/frame over the last "+Math.min(frames.length,30)+" frames" }
+      ? { v: fps.toFixed(0), sub: stale("~"+(1000/fps).toFixed(1)+"ms/frame over the last "+Math.min(frames.length,30)+" frames", lastFrameAt) }
       : { v: '<span style="color:var(--muted);font-size:17px">no frames</span>',
           sub: s.connected ? "Flutter renders only on change — an idle app is silent here" : "requires a connected app" };
 
@@ -359,7 +367,7 @@
     h += card("FPS", fpsCard.v, fpsCard.sub);
     h += card("Memory", memCard.v, memCard.sub);
     h += card("Worst frame", worst ? worst.data.elapsedMs.toFixed(1)+"ms" : '<span style="color:var(--muted);font-size:17px">—</span>',
-      worst ? janky.length+" over budget of "+frames.length : "no frames observed");
+      worst ? stale(janky.length+" over budget of "+frames.length, lastFrameAt) : "no frames observed");
     h += card("CPU", '<span style="color:var(--muted);font-size:17px">not available</span>', "the VM Service does not sample it");
     h += '</div>';
 
@@ -367,7 +375,7 @@
     if (t) {
       h += card("Agent", t.mcp.client ? esc(t.mcp.client.name) : '<span style="color:var(--muted);font-size:17px">not initialized</span>',
         t.mcp.client ? (t.mcp.client.version ? "v"+esc(t.mcp.client.version) : "no version sent")+" · self-reported" : "no client has completed the handshake");
-      h += card("Tool calls", t.mcp.cost.calls, t.mcp.cost.errors+" errors · "+fmtBytes(t.mcp.cost.responseBytes)+" returned");
+      h += card("Tool calls", t.mcp.cost.calls, t.mcp.cost.errors+" error"+(t.mcp.cost.errors===1?"":"s")+" · "+fmtBytes(t.mcp.cost.responseBytes)+" returned");
       h += card("Last tool activity", t.mcp.cost.recent.length ? esc(t.mcp.cost.recent[0].tool) : '<span style="color:var(--muted);font-size:17px">none</span>',
         t.mcp.cost.recent.length ? ago(t.mcp.cost.recent[0].at)+" · "+t.mcp.cost.recent[0].ms+"ms" : "no tool called this session");
     } else {
@@ -564,7 +572,7 @@
     h += '<h3 class="sec">This session</h3>';
     h += '<div class="grid">' +
       '<div class="card"><div class="k">Tool calls</div><div class="v">'+cost.calls+'</div>'+
-      '<div class="sub">'+(cost.calls-cost.errors)+' ok · '+cost.errors+' errors</div></div>' +
+      '<div class="sub">'+(cost.calls-cost.errors)+' ok · '+cost.errors+' error'+(cost.errors===1?'':'s')+'</div></div>' +
       '<div class="card"><div class="k">Response bytes</div><div class="v">'+fmtBytes(cost.responseBytes)+'</div>'+
       '<div class="sub">≈'+cost.estimatedTokens.toLocaleString()+' tokens — bytes/4, an estimate</div></div>' +
       '<div class="card"><div class="k">Distinct tools</div><div class="v">'+cost.byTool.length+'</div>'+

@@ -130,21 +130,43 @@ State this rather than inventing a status for it.
   not. The diagnosis engine already draws this line, and the timeline should
   say "temporally adjacent" rather than implying a cause.
 
-## Consequences for the dashboard work
+## Consequences for the dashboard work — and what was built
 
 1. `MCP` is not a connection to be probed — it is the host process. The useful
    panel is **activity**: tool calls, latency, errors, last invocation, drawn
-   from `costMeter`.
+   from `costMeter`. **Built** as the MCP tab; the payload carries no
+   `mcp.connected`, because a badge that cannot be false is decoration.
 2. `Agent` is knowable at handshake via `getClientVersion()`, and nothing more.
-   Identity yes; behaviour no.
+   Identity yes; behaviour no. **Built** — `src/core/mcpClient.ts`, shown with
+   "self-reported, not authenticated" next to it.
 3. The three states worth distinguishing are **configured / connected /
-   observed activity**. For the runtime that distinction is real and each state
-   has evidence behind it. For MCP, "connected" is structural, so the honest
-   display is activity or `no tool calls yet` — never a green dot that cannot
-   be false.
-4. `0 MB` and `not sampled` must stop looking alike. The memory card reads
-   `0 MB` when a sample has never been taken, which is a different fact from a
-   measured zero.
-5. Widget-tree streaming is genuinely not wired. Marking the Inspector
-   experimental and showing which of its links exist is more credible than
-   leaving a paragraph of instructions.
+   observed activity**. **Built** as Diagnostics, with five states rather than
+   two: `ACTIVE`, `CONNECTED`, `RECEIVING`, `PULL ONLY`, `NOT AVAILABLE`.
+4. `0 MB` and `not sampled` must stop looking alike. **Built** — and extended
+   to empty lists, which now say which of three things they mean, and to
+   readings taken before a disconnect, which are labelled rather than left
+   looking live.
+5. Widget-tree streaming is genuinely not wired. **Built** — the Inspector now
+   lists which links exist, with the call counts proving which have been used.
+
+### What tracing first changed
+
+Two things, both of which would have been wasted work otherwise:
+
+- The MCP panel was scoped as "wire the tools to the dashboard". It turned out
+  to be pure exposure of data `costMeter` already kept — no bridge, no new
+  instrumentation.
+- Exposing it surfaced a real defect. The meter recorded after `await
+  handler()` returned, so a handler that **threw** — which the SDK converts
+  into an error result the agent still pays for — was never counted. A session
+  where every call failed reported `0 calls, 0 errors`. The dashboard would
+  have rendered that zero confidently. Fixed in `src/tools.ts`, with a
+  mutation-checked regression test.
+
+### The contract
+
+This document is the architectural contract for dashboard work. The UI must
+show what the process actually knows: no status derived from configuration, no
+zero standing in for an absent measurement, and no cause claimed where only
+adjacency was observed. A new panel that cannot point at the field backing it
+does not belong.

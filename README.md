@@ -200,12 +200,23 @@ The cable is only needed for the one-time promotion. Reverse it any time with
 A zero-dependency dark UI (native HTTP + WebSocket, no build step) that streams
 runtime data as it happens:
 
-**Overview** (connection · FPS · memory · event counts) · **Logs** (search /
-filter / auto-scroll) · **Network** (expandable headers & timing) ·
-**Exceptions** (expandable stack traces) · **Timeline** · **Performance** (live
-canvas charts) · **Inspector**.
+**Overview** — a session report: health, FPS, memory, worst frame, MCP activity,
+and findings that link through to the events behind them (the worst-frame
+finding opens the timeline filtered to that frame) · **Logs** (search / filter /
+auto-scroll) · **Network** (expandable headers & timing) · **Exceptions**
+(expandable stack traces) · **Timeline** · **Performance** (live canvas charts) ·
+**MCP** — which agent connected, every tool it called, with latency, errors and
+response size · **Inspector** — which inspection links exist and which are
+pull-only · **Diagnostics** — the measured topology, per-collector health, and
+what this target cannot observe at all.
 
 Controls: pause/resume · clear view · export JSON · per-tab search · auto-reconnect.
+
+The UI distinguishes states that look alike and are not: `0 MB` is a
+measurement, `not sampled yet` is the absence of one, and an empty tab says
+whether a filter is hiding rows, the collector is blind on this target, or the
+collector is watching and has seen nothing. Readings taken before a disconnect
+are labelled as such rather than left looking live.
 
 ## How it works
 
