@@ -46,3 +46,23 @@ test("cost resets per session", () => {
   assert.equal(r.estimatedTokens, 0);
   assert.deepEqual(r.byTool, []);
 });
+
+test("recent calls are newest first and capped", () => {
+  costMeter.reset();
+  for (let i = 0; i < 40; i++) costMeter.record("t" + i, 10, i, false);
+  const r = costMeter.report();
+  assert.equal(r.recent[0].tool, "t39", "newest first");
+  assert.ok(r.recent.length <= 25, "capped so the dashboard payload stays small");
+  assert.ok(r.recent.length >= 20, "keeps enough to answer 'what just happened'");
+});
+
+test("average duration is derivable, not just the slowest", () => {
+  costMeter.reset();
+  costMeter.record("get_frames", 100, 10, false);
+  costMeter.record("get_frames", 100, 30, false);
+  const t = costMeter.report().byTool[0];
+  assert.equal(t.totalMs, 40);
+  assert.equal(t.totalMs / t.calls, 20);
+  assert.equal(t.slowestMs, 30);
+  assert.ok(t.lastAt !== null && t.lastAt > 0, "a tool with calls has a last-called time");
+});

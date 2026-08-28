@@ -181,3 +181,25 @@ test("every tool call is charged to the session's cost report", async () => {
   const caps = status.cost.byTool.find((t: any) => t.tool === "get_capabilities");
   assert.equal(caps?.calls, 2, "per-tool counts must be attributed by name");
 });
+
+test("a tool call that throws is still counted, as an error", async () => {
+  // Regression: the meter recorded only what handlers returned. A handler that
+  // threw — which the SDK turns into an error result the agent still pays for —
+  // vanished from the accounting entirely, so a session where every call failed
+  // reported `0 calls, 0 errors`. A dashboard rendering that would have shown a
+  // confident zero while nothing worked.
+  costMeter.reset();
+  const status = await withClient(async (client) => {
+    // Not connected, so this cannot succeed. `callTool` surfaces the failure
+    // either as an error result or a rejection; both are calls that happened.
+    await client.callTool({ name: "get_widget_tree", arguments: {} }).catch(() => undefined);
+    const r: any = await client.callTool({ name: "runtime_status", arguments: {} });
+    return JSON.parse(r.content[0].text);
+  });
+
+  assert.equal(status.cost.calls, 1, "the failed call must appear in the total");
+  assert.equal(status.cost.errors, 1, "and must be attributed as an error");
+  assert.equal(status.cost.byTool.find((t: any) => t.tool === "get_widget_tree")?.calls, 1);
+  assert.equal(status.cost.recent[0]?.tool, "get_widget_tree", "and must show up in recent calls");
+  assert.equal(status.cost.recent[0]?.isError, true);
+});

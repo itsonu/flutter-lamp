@@ -90,12 +90,23 @@ function metered(server: McpServer): McpServer["registerTool"] {
   return ((name: string, config: never, handler: (...a: never[]) => unknown) =>
     register(name, config, (async (...args: never[]) => {
       const started = Date.now();
-      const result = (await handler(...args)) as
-        | { content?: Array<{ text?: string }>; isError?: boolean }
-        | undefined;
-      const bytes = (result?.content ?? []).reduce((n, c) => n + (c.text?.length ?? 0), 0);
-      costMeter.record(name, bytes, Date.now() - started, result?.isError === true);
-      return result;
+      try {
+        const result = (await handler(...args)) as
+          | { content?: Array<{ text?: string }>; isError?: boolean }
+          | undefined;
+        const bytes = (result?.content ?? []).reduce((n, c) => n + (c.text?.length ?? 0), 0);
+        costMeter.record(name, bytes, Date.now() - started, result?.isError === true);
+        return result;
+      } catch (err) {
+        // A handler that throws is still a call the agent made and still a
+        // response it paid for — the SDK turns the throw into an error result.
+        // Recording only the returns made every failure invisible, so the
+        // dashboard would have shown a confident `0 errors` while tools were
+        // failing. Bytes are unknown on this path and are counted as 0 rather
+        // than guessed; the error count is what matters here.
+        costMeter.record(name, 0, Date.now() - started, true);
+        throw err;
+      }
     }) as never)) as McpServer["registerTool"];
 }
 

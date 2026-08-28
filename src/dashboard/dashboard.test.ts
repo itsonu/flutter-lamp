@@ -120,3 +120,52 @@ test("the WebSocket rejects hijack attempts and accepts legitimate clients", asy
     await dash.close();
   }
 });
+
+test("the snapshot carries the telemetry the diagnostics and MCP views render", async () => {
+  // These panels describe the server itself — tool calls, collector health, the
+  // connected agent. None of it flows through the event store, so if it is
+  // absent from this payload the UI has nothing to show and would have to
+  // invent a status. Asserting the shape here is what stops that.
+  const { costMeter } = await import("../core/costMeter.js");
+  costMeter.reset();
+  costMeter.record("get_frames", 1234, 7, false);
+
+  const dash = await startDashboard();
+  try {
+    const wsBase = dash.url.replace("http://", "ws://");
+    const ws = new WebSocket(`${wsBase}/ws?t=${dashboardWsToken()}`, { origin: dash.url });
+    const snapshotPromise = nextMessage(ws, (m) => m.type === "snapshot");
+    await once(ws, "open");
+    const t = (await snapshotPromise).telemetry;
+
+    assert.ok(t, "snapshot must carry telemetry");
+    assert.equal(t.server.name, "flutter-lamp");
+    assert.equal(typeof t.server.pid, "number");
+    // startedAt, not uptime: the payload is diffed before it is pushed, and a
+    // field that ticks every second would make an idle dashboard chatter.
+    assert.equal(typeof t.server.startedAt, "number");
+    assert.ok(!("uptimeMs" in t.server), "must not carry a field that changes every tick");
+
+    assert.equal(t.mcp.cost.calls, 1, "tool accounting must reach the browser");
+    assert.equal(t.mcp.cost.byTool[0].tool, "get_frames");
+    assert.equal(t.mcp.cost.recent[0].tool, "get_frames");
+    // No client has done a handshake in this test, and that is a real state.
+    // Reporting it as null is the point: the UI renders "not initialized"
+    // rather than asserting an agent is present.
+    assert.equal(t.mcp.client, null);
+
+    assert.ok(Array.isArray(t.collectors) && t.collectors.length > 0);
+    assert.ok(t.collectors.every((c: any) => typeof c.status === "string"));
+    assert.ok(Array.isArray(t.unobservable), "blind categories must be distinguishable from empty ones");
+    assert.ok(t.retention.capacity && t.retention.evicted, "retention drives the 'history was dropped' finding");
+
+    // The VM Service URI authorises arbitrary Dart execution. It travels on the
+    // status message, redacted; it must not reappear here by another route.
+    assert.ok(!JSON.stringify(t).includes("wsUri"), "telemetry must not carry the VM Service URI");
+
+    ws.close();
+    await once(ws, "close");
+  } finally {
+    await dash.close();
+  }
+});

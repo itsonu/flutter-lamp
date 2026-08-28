@@ -25,7 +25,27 @@ export interface ToolCost {
   errors: number;
   /** Slowest single call, ms. Cheap to keep and it is what a human asks next. */
   slowestMs: number;
+  /** Summed duration, so an average can be reported without keeping every call. */
+  totalMs: number;
+  /** Wall clock of the most recent call, this process's clock. Null never happens
+   *  once a tool has an entry, but the type says so rather than implying 0 = epoch. */
+  lastAt: number | null;
 }
+
+/** One call, kept only for the "what just happened" list. */
+export interface ToolCall {
+  tool: string;
+  at: number;
+  ms: number;
+  bytes: number;
+  isError: boolean;
+}
+
+/**
+ * How many recent calls to keep. Enough to answer "what did the agent just do";
+ * small enough that the dashboard payload stays trivial.
+ */
+const RECENT_CAP = 25;
 
 export interface CostReport {
   calls: number;
@@ -35,23 +55,40 @@ export interface CostReport {
   errors: number;
   /** Per tool, largest total first. */
   byTool: Array<{ tool: string } & ToolCost>;
+  /** Most recent calls, newest first, capped at {@link RECENT_CAP}. */
+  recent: ToolCall[];
 }
 
 class CostMeter {
   private tools = new Map<string, ToolCost>();
+  private recent: ToolCall[] = [];
 
   record(tool: string, bytes: number, ms: number, isError: boolean): void {
-    const t = this.tools.get(tool) ?? { calls: 0, bytes: 0, errors: 0, slowestMs: 0 };
+    const t = this.tools.get(tool) ?? {
+      calls: 0,
+      bytes: 0,
+      errors: 0,
+      slowestMs: 0,
+      totalMs: 0,
+      lastAt: null,
+    };
+    const at = Date.now();
     t.calls += 1;
     t.bytes += bytes;
+    t.totalMs += ms;
+    t.lastAt = at;
     if (isError) t.errors += 1;
     if (ms > t.slowestMs) t.slowestMs = ms;
     this.tools.set(tool, t);
+
+    this.recent.unshift({ tool, at, ms, bytes, isError });
+    if (this.recent.length > RECENT_CAP) this.recent.length = RECENT_CAP;
   }
 
   /** Called on connect: cost is per debugging session, like every other count. */
   reset(): void {
     this.tools.clear();
+    this.recent = [];
   }
 
   report(): CostReport {
@@ -65,6 +102,7 @@ class CostMeter {
       estimatedTokens: Math.round(responseBytes / 4),
       errors: byTool.reduce((sum, t) => sum + t.errors, 0),
       byTool,
+      recent: [...this.recent],
     };
   }
 }

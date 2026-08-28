@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerTools } from "./tools.js";
 import { startDashboard } from "./dashboard/server.js";
+import { trackMcpClient } from "./core/mcpClient.js";
 import { VERSION } from "./version.js";
 
 /**
@@ -19,6 +20,9 @@ async function main(): Promise<void> {
   });
 
   registerTools(server);
+  // Records who completed the handshake, so the dashboard can name the agent
+  // rather than assert that "an agent" is present. Must happen before connect().
+  trackMcpClient(server);
 
   // Realtime dashboard runs on its own HTTP/WS server, independent of stdio,
   // so an AI client and a browser can watch the same app at once. Best-effort:

@@ -3,8 +3,11 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
-import { connection } from "../core/connection.js";
+import { connection, unobservableCategories } from "../core/connection.js";
+import { costMeter } from "../core/costMeter.js";
+import { mcpClientInfo } from "../core/mcpClient.js";
 import type { RuntimeEvent } from "../core/events.js";
+import { VERSION } from "../version.js";
 
 /**
  * Realtime Runtime Dashboard (Phase 12).
@@ -29,10 +32,47 @@ const HTML_PATH = fileURLToPath(new URL("../../dashboard/index.html", import.met
 // "someone is watching AND connected" so it never runs in the background.
 // ponytail: 2s poll of getMemoryUsage, only while a browser is open.
 const MEMORY_SAMPLE_MS = 2000;
+const STARTED_AT = Date.now() - Math.round(process.uptime() * 1000);
 
 export interface DashboardHandle {
   url: string;
   close: () => Promise<void>;
+}
+
+/**
+ * Everything the dashboard knows about *itself* and the process hosting it, as
+ * opposed to about the app being observed.
+ *
+ * All of it was already collected and none of it was reachable from a browser:
+ * tool-call accounting lived only inside `runtime_status`, collector health only
+ * inside `runtime_health`, and the connected agent's name was never read at all.
+ * This is exposure, not new instrumentation — which matters, because a number
+ * the dashboard computes for itself is a number nothing else can check.
+ *
+ * `mcp` deliberately has no "connected" field. The collectors run in this
+ * process and write to the store this server reads, so the dashboard cannot be
+ * running while MCP is not — a badge that can never be false is decoration. What
+ * is genuinely variable, and therefore reported, is whether a client has
+ * completed the handshake and whether any tool has been called.
+ */
+export function telemetryPayload() {
+  const collectors = connection.collectorHealth();
+  return {
+    // `startedAt`, not `uptimeMs`: the payload is diffed before it is pushed, and
+    // a field that changes every tick would defeat that and make an idle
+    // dashboard chatter. The browser can subtract.
+    server: { name: "flutter-lamp", version: VERSION, pid: process.pid, startedAt: STARTED_AT },
+    mcp: {
+      client: mcpClientInfo(),
+      cost: costMeter.report(),
+    },
+    collectors,
+    // Empty because nothing could see it, as opposed to empty because nothing
+    // happened. The UI must render these two cases differently.
+    unobservable: unobservableCategories(collectors),
+    retention: connection.store.retention(),
+    counts: connection.store.counts(),
+  };
 }
 
 let current: { url: string; running: boolean } = { url: "", running: false };
@@ -157,6 +197,7 @@ export async function startDashboard(): Promise<DashboardHandle> {
     send(ws, {
       type: "snapshot",
       status: connection.status(),
+      telemetry: telemetryPayload(),
       // "all": a human watching wants the previous run's error to stay visible
       // across a hot restart. Agents get the current session only (see
       // RuntimeStore.query), because correlating across runs invents causes.
@@ -166,10 +207,18 @@ export async function startDashboard(): Promise<DashboardHandle> {
     ws.on("error", () => clients.delete(ws));
   });
 
-  // Gated memory sampler.
+  // Gated memory sampler, and the telemetry push that shares its cadence.
+  // Telemetry has no event to hang off — a tool call happens on the stdio side
+  // and writes nothing to the store — so it is polled. Only sent when it has
+  // actually changed, so an idle dashboard is silent rather than chattering.
+  let lastTelemetry = "";
   const sampler = setInterval(() => {
-    if (clients.size > 0 && connection.connected) {
-      connection.sampleMemory().catch(() => {});
+    if (clients.size === 0) return;
+    if (connection.connected) connection.sampleMemory().catch(() => {});
+    const telemetry = JSON.stringify({ type: "telemetry", telemetry: telemetryPayload() });
+    if (telemetry !== lastTelemetry) {
+      lastTelemetry = telemetry;
+      for (const ws of clients) if (ws.readyState === ws.OPEN) ws.send(telemetry);
     }
   }, MEMORY_SAMPLE_MS);
   sampler.unref?.(); // don't keep the process alive on the sampler alone
