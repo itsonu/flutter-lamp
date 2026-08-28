@@ -343,7 +343,7 @@ Docs live in [`docs/`](docs/):
 | [Observability Roadmap](docs/Observability-Roadmap.md) | Architecture target, phases, and explicit rejections |
 | [Data path](docs/Data-Path.md) | Where runtime events actually flow, and what is observable |
 | [Releasing](docs/Releasing.md) | How versions are staged, tagged and published |
-| [Design](docs/Design.md) | Dashboard visual and interaction spec |
+| [Design](docs/DESIGN.md) | Dashboard design system — tokens, status vocabulary, component rules |
 | [Implementation Notes](docs/Implementation-Notes.md) | Non-obvious things learned building it |
 
 ## Contributing

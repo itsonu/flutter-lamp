@@ -1,0 +1,400 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-28T09:37:04.271Z",
+  "title": "Design System: Flutter Lamp Dashboard",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "canonical": "oklch(17.6% 0.014 258.4)",
+        "tonalRamp": [
+          "#080b11",
+          "#20242b",
+          "#3b4047",
+          "#595e66",
+          "#787e86",
+          "#999fa7",
+          "#bfc5cd",
+          "#e9eff8"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "oklch(22.0% 0.016 256.8)",
+        "tonalRamp": [
+          "#070b12",
+          "#1f242c",
+          "#3a4048",
+          "#585e67",
+          "#777e87",
+          "#989fa8",
+          "#bec5ce",
+          "#e8eff9"
+        ]
+      },
+      "surface-recessed": {
+        "role": "neutral",
+        "displayName": "Surface Recessed",
+        "canonical": "oklch(24.6% 0.015 256.8)",
+        "tonalRamp": [
+          "#070b12",
+          "#1f242b",
+          "#3b4048",
+          "#585e66",
+          "#787e87",
+          "#989fa8",
+          "#bec5ce",
+          "#e8eff9"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "oklch(33.0% 0.015 252.3)",
+        "tonalRamp": [
+          "#070c11",
+          "#1f252b",
+          "#3a4048",
+          "#585e66",
+          "#777e86",
+          "#989fa8",
+          "#bdc5ce",
+          "#e8eff9"
+        ]
+      },
+      "rule-soft": {
+        "role": "neutral",
+        "displayName": "Rule Soft",
+        "canonical": "oklch(26.7% 0.015 256.8)",
+        "tonalRamp": [
+          "#070b11",
+          "#1f242b",
+          "#3b4048",
+          "#585e66",
+          "#787e86",
+          "#999fa8",
+          "#bec5ce",
+          "#e8eff9"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Text",
+        "canonical": "oklch(94.3% 0.011 243.7)",
+        "tonalRamp": [
+          "#070c10",
+          "#202529",
+          "#3b4145",
+          "#585e63",
+          "#787e83",
+          "#999fa5",
+          "#bec5cb",
+          "#e8eff5"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Text Secondary",
+        "canonical": "oklch(80.3% 0.019 250.6)",
+        "tonalRamp": [
+          "#060c13",
+          "#1d252d",
+          "#38414a",
+          "#565f68",
+          "#757e89",
+          "#96a0aa",
+          "#bbc5d0",
+          "#e5f0fb"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Text Muted",
+        "canonical": "oklch(66.2% 0.018 250.9)",
+        "tonalRamp": [
+          "#060c13",
+          "#1e252d",
+          "#394149",
+          "#565f68",
+          "#767e88",
+          "#969faa",
+          "#bcc5d0",
+          "#e6f0fb"
+        ]
+      },
+      "signal-blue": {
+        "role": "primary",
+        "displayName": "Signal Blue",
+        "canonical": "oklch(71.5% 0.152 253.3)",
+        "tonalRamp": [
+          "#000048",
+          "#001a6a",
+          "#003c8c",
+          "#005db0",
+          "#2f7fd4",
+          "#53a1fa",
+          "#79c8ff",
+          "#a3f3ff"
+        ]
+      },
+      "signal-green": {
+        "role": "secondary",
+        "displayName": "Signal Green",
+        "canonical": "oklch(69.5% 0.181 145.6)",
+        "tonalRamp": [
+          "#001700",
+          "#003500",
+          "#005500",
+          "#007500",
+          "#05972e",
+          "#41bb52",
+          "#6ce278",
+          "#98ffa1"
+        ]
+      },
+      "signal-amber": {
+        "role": "secondary",
+        "displayName": "Signal Amber",
+        "canonical": "oklch(72.0% 0.140 79.9)",
+        "tonalRamp": [
+          "#250000",
+          "#451200",
+          "#653100",
+          "#865100",
+          "#a87100",
+          "#cc9316",
+          "#f3b94c",
+          "#ffe479"
+        ]
+      },
+      "signal-red": {
+        "role": "secondary",
+        "displayName": "Signal Red",
+        "canonical": "oklch(66.5% 0.205 27.0)",
+        "tonalRamp": [
+          "#400000",
+          "#670000",
+          "#8e0000",
+          "#b50008",
+          "#dd3532",
+          "#ff5d54",
+          "#ff8679",
+          "#ffb2a2"
+        ]
+      },
+      "trace-red": {
+        "role": "tertiary",
+        "displayName": "Trace Red",
+        "canonical": "oklch(80.1% 0.113 25.8)",
+        "tonalRamp": [
+          "#2c0000",
+          "#4d0002",
+          "#70201e",
+          "#93403b",
+          "#b76059",
+          "#dc8179",
+          "#ffa79e",
+          "#ffd1c7"
+        ]
+      },
+      "trace-amber": {
+        "role": "tertiary",
+        "displayName": "Trace Amber",
+        "canonical": "oklch(79.0% 0.139 85.2)",
+        "tonalRamp": [
+          "#230000",
+          "#411600",
+          "#603500",
+          "#815400",
+          "#a27500",
+          "#c59616",
+          "#edbd4c",
+          "#ffe77a"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "metric": {
+        "displayName": "Metric",
+        "purpose": "The one number a stat is about. Monospace with negative tracking; never used for an absent reading."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Row names, findings, prose, button labels."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Explanations beside a status, table cells, activity rows."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Timestamps, sub-labels, per-row metadata, status words."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "The only uppercase in the system. Positive tracking because small caps read tight."
+      }
+    },
+    "shadows": [
+      {
+        "name": "floating-control",
+        "value": "0 4px 16px rgba(0,0,0,.4)",
+        "purpose": "The sticky 'jump to latest' button only. The single shadow in the system; everything else uses a border and a tonal step."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press",
+        "value": "transform 90ms ease-out, background-color 90ms ease-out",
+        "purpose": "Press feedback on controls, landing on pointer-down. Navigation opts out. Disabled entirely under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "stack",
+        "value": "760px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Every control in the header and filter row. Border shifts to accent on hover; presses scale down on pointer-down.",
+      "html": "<button class=\"ds-btn\">Pause</button>",
+      "css": ".ds-btn{font-family:var(--sans, system-ui,sans-serif);font-size:12px;color:var(--text, #e6edf3);background:var(--panel2, #1c2128);border:1px solid var(--border, #30363d);border-radius:6px;padding:5px 10px;cursor:pointer;transition:transform 90ms ease-out,background-color 90ms ease-out}.ds-btn:hover{border-color:var(--accent, #58a6ff)}.ds-btn:active{transform:scale(.97)}.ds-btn:focus-visible{outline:2px solid var(--accent, #58a6ff);outline-offset:2px}"
+    },
+    {
+      "name": "Filter Chip (selected)",
+      "kind": "chip",
+      "refersTo": "button-active",
+      "description": "A button carrying .on. The only selected-state treatment in the system: border and text both accent.",
+      "html": "<button class=\"ds-chip-on\">MCP</button>",
+      "css": ".ds-chip-on{font-family:var(--sans, system-ui,sans-serif);font-size:12px;background:var(--panel2, #1c2128);border:1px solid var(--accent, #58a6ff);color:var(--accent, #58a6ff);border-radius:6px;padding:5px 10px;cursor:pointer;transition:transform 90ms ease-out}.ds-chip-on:active{transform:scale(.97)}"
+    },
+    {
+      "name": "Status Row",
+      "kind": "custom",
+      "refersTo": "status-row",
+      "description": "The workhorse of Overview and Diagnostics: name, status chip, explanation. Inline identifiers shift to the mono face.",
+      "html": "<div class=\"ds-srow\"><span class=\"ds-srow-n\">Flutter app</span><span class=\"ds-st ds-st-ok\">CONNECTED</span><span class=\"ds-srow-w\">isolate <code>isolates/2010610787184099</code></span></div>",
+      "css": ".ds-srow{display:grid;grid-template-columns:168px 116px 1fr;gap:12px;align-items:baseline;padding:8px 16px;border-bottom:1px solid var(--border-soft, #21262d);font-family:var(--sans, system-ui,sans-serif);font-size:13px}.ds-srow-n{color:var(--text, #e6edf3);font-weight:500}.ds-srow-w{color:var(--muted, #8b949e);font-size:12px}.ds-srow-w code{font-family:var(--mono, ui-monospace,monospace);color:var(--text2, #b6c0cb)}.ds-st{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;font-family:var(--sans, system-ui,sans-serif)}.ds-st::before{content:\"\";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}.ds-st-ok{color:var(--green, #3fb950)}"
+    },
+    {
+      "name": "Status Chip - unobservable",
+      "kind": "custom",
+      "refersTo": "status-row",
+      "description": "The hollow ring. A filled dot means observed; a ring means the fact cannot exist on this target. These must never share a glyph.",
+      "html": "<span class=\"ds-st ds-st-na\">UNAVAILABLE</span>",
+      "css": ".ds-st{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;font-family:var(--sans, system-ui,sans-serif)}.ds-st::before{content:\"\";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}.ds-st-na{color:var(--muted, #8b949e)}.ds-st-na::before{background:none;box-shadow:inset 0 0 0 1px currentColor}"
+    },
+    {
+      "name": "Stat Strip",
+      "kind": "card",
+      "refersTo": "block",
+      "description": "A label, a value, a sub-line. The .ds-none variant switches the value to the body face so an absent reading never wears the costume of a measurement.",
+      "html": "<div class=\"ds-stats\"><div class=\"ds-stat\"><div class=\"ds-k\">Frames</div><div class=\"ds-v\">398</div><div class=\"ds-s\">10 over budget</div></div><div class=\"ds-stat\"><div class=\"ds-k\">Heap</div><div class=\"ds-v ds-none\">not sampled</div><div class=\"ds-s\">polled while this page is open</div></div></div>",
+      "css": ".ds-stats{display:flex;flex-wrap:wrap;gap:24px 32px;padding:16px;background:var(--panel, #161b22);border:1px solid var(--border, #30363d);border-radius:8px;font-family:var(--sans, system-ui,sans-serif)}.ds-k{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted, #8b949e)}.ds-v{font-family:var(--mono, ui-monospace,monospace);font-size:20px;line-height:1.1;letter-spacing:-.02em;margin-top:4px;color:var(--text, #e6edf3)}.ds-v.ds-none{font-family:var(--sans, system-ui,sans-serif);font-size:13px;letter-spacing:0;color:var(--muted, #8b949e);line-height:1.5}.ds-s{font-size:11px;color:var(--muted, #8b949e);margin-top:2px}"
+    },
+    {
+      "name": "Activity Row",
+      "kind": "custom",
+      "refersTo": "activity-row",
+      "description": "The unified stream. Four columns; severity tints the message only, never the row.",
+      "html": "<div class=\"ds-arow\"><span class=\"ds-ts\">13:30:09.445</span><span class=\"ds-src\">mcp</span><span class=\"ds-msg\">get_frames</span><span class=\"ds-meta\">0ms &middot; 19.1 kB</span></div><div class=\"ds-arow ds-err\"><span class=\"ds-ts\">13:30:11.002</span><span class=\"ds-src\">system</span><span class=\"ds-msg\">VM Service connection closed</span><span class=\"ds-meta\"></span></div>",
+      "css": ".ds-arow{display:grid;grid-template-columns:92px 76px 1fr auto;gap:12px;padding:5px 12px;border-bottom:1px solid var(--border-soft, #21262d);align-items:baseline;font-size:12px;font-family:var(--sans, system-ui,sans-serif);cursor:pointer}.ds-arow:hover{background:var(--panel2, #1c2128)}.ds-ts{font-family:var(--mono, ui-monospace,monospace);color:var(--muted, #8b949e);font-size:11px}.ds-src{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted, #8b949e)}.ds-msg{font-family:var(--mono, ui-monospace,monospace);word-break:break-word;color:var(--text2, #b6c0cb)}.ds-meta{font-family:var(--mono, ui-monospace,monospace);font-size:11px;color:var(--muted, #8b949e);white-space:nowrap}.ds-err .ds-msg{color:#ffa198}"
+    },
+    {
+      "name": "Finding",
+      "kind": "custom",
+      "refersTo": "status-row",
+      "description": "Mark, title, rationale, evidence, destination. The evidence line is mono because it quotes measured values.",
+      "html": "<div class=\"ds-fnd\"><span class=\"ds-mk\">&#9650;</span><span><span class=\"ds-ttl\">10 of 26 MCP tool calls failed</span><div class=\"ds-why\">MCP itself is operational. Failures are confined to the tools that read the runtime.</div><div class=\"ds-ev\">runtime_status, runtime_health &mdash; 0 errors in 7 calls</div></span><span class=\"ds-go\">Diagnostics &rarr;</span></div>",
+      "css": ".ds-fnd{display:grid;grid-template-columns:18px 1fr auto;gap:12px;padding:12px 16px;align-items:start;background:var(--panel, #161b22);border:1px solid var(--border, #30363d);border-radius:8px;font-family:var(--sans, system-ui,sans-serif);font-size:13px;cursor:pointer}.ds-fnd:hover{background:var(--panel2, #1c2128)}.ds-mk{color:var(--yellow, #d29922);line-height:1.4}.ds-ttl{font-weight:500;color:var(--text, #e6edf3)}.ds-why{color:var(--muted, #8b949e);font-size:12px;margin-top:2px}.ds-ev{color:var(--text2, #b6c0cb);font-size:12px;font-family:var(--mono, ui-monospace,monospace);margin-top:4px}.ds-go{color:var(--accent, #58a6ff);font-size:11px;white-space:nowrap;padding-top:3px}"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "nav-tab",
+      "description": "Four destinations. Active is text plus a 2px accent underline. Nav opts out of press-scale - a navigation strip that flinches reads as unstable.",
+      "html": "<nav class=\"ds-nav\"><button>Overview</button><button class=\"ds-on\">Activity <span class=\"ds-badge\">428</span></button><button>Performance</button><button>Diagnostics</button></nav>",
+      "css": ".ds-nav{display:flex;gap:4px;padding:0 12px;background:var(--panel, #161b22);border-bottom:1px solid var(--border, #30363d);overflow-x:auto}.ds-nav button{border:none;background:none;border-radius:0;padding:12px;border-bottom:2px solid transparent;color:var(--muted, #8b949e);white-space:nowrap;font-size:13px;font-family:var(--sans, system-ui,sans-serif);cursor:pointer}.ds-nav button:hover{border-bottom-color:var(--border, #30363d);color:var(--text2, #b6c0cb)}.ds-nav button.ds-on{color:var(--text, #e6edf3);border-bottom-color:var(--accent, #58a6ff)}.ds-badge{font-family:var(--mono, ui-monospace,monospace);font-size:11px;color:var(--muted, #8b949e);margin-left:6px}"
+    },
+    {
+      "name": "Header Status Chips",
+      "kind": "custom",
+      "refersTo": "status-row",
+      "description": "Three independent states in the header, because one badge cannot say 'the app is gone but MCP is serving an agent'.",
+      "html": "<div class=\"ds-chips\"><span class=\"ds-chip\">Runtime <span class=\"ds-st ds-st-err\"><b>disconnected</b></span></span><span class=\"ds-chip\">MCP <span class=\"ds-st ds-st-ok\"><b>active</b></span></span><span class=\"ds-chip\">Stream <span class=\"ds-st ds-st-recv\"><b>receiving</b></span></span></div>",
+      "css": ".ds-chips{display:flex;gap:12px;align-items:center;padding:4px 8px;border-radius:8px;border:1px solid transparent;cursor:pointer;font-family:var(--sans, system-ui,sans-serif);background:rgba(22,27,34,.82);backdrop-filter:blur(20px) saturate(160%)}.ds-chips:hover{border-color:var(--border, #30363d)}.ds-chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted, #8b949e)}.ds-chip b{font-weight:500;letter-spacing:.02em;text-transform:none;font-size:12px}.ds-st{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;font-family:var(--sans, system-ui,sans-serif)}.ds-st::before{content:\"\";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}.ds-st-ok{color:var(--green, #3fb950)}.ds-st-err{color:var(--red, #f85149)}.ds-st-recv{color:var(--accent, #58a6ff)}"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "button",
+      "description": "Same geometry as a button. Caret and selection survive re-render; the field behaves like a normal text input.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"search...\" />",
+      "css": ".ds-input{font-family:var(--sans, system-ui,sans-serif);font-size:12px;color:var(--text, #e6edf3);background:var(--panel2, #1c2128);border:1px solid var(--border, #30363d);border-radius:6px;padding:5px 10px;min-width:150px}.ds-input:focus-visible{outline:2px solid var(--accent, #58a6ff);outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Instrument Panel",
+    "overview": "A calibrated readout, not a report. Authority comes from restraint: every marking is there because something measured it, and a gauge with no signal reads 'no signal', never zero. The surface is dark and dense because it is read for long stretches beside an editor and a device, and because density is what lets a whole session sit in one viewport. Colour appears only where it carries state; a container appears only where something is genuinely grouped; motion appears only as press feedback. The non-negotiable inherited from PRODUCT.md is that the interface must never imply a fact the runtime cannot observe - a visual constraint as much as a product one.",
+    "keyCharacteristics": [
+      "Dark-only ground with two raised tints",
+      "Five type sizes; monospace reserved for machine-produced values",
+      "One status vocabulary, six states, identical on every view",
+      "Containers are rare; rows and tables carry the structure",
+      "No webfont, no build step, no runtime dependency"
+    ],
+    "rules": [
+      {
+        "name": "The Hollow Ring Rule",
+        "section": "colors",
+        "body": "A filled dot means observed. A hollow ring means unobservable. Different facts never share a glyph, even when both render grey."
+      },
+      {
+        "name": "The Four-Hue Rule",
+        "section": "colors",
+        "body": "No fifth accent. A new state earns a new word in the status vocabulary, not a new colour. The palette's smallness is what makes red mean something."
+      },
+      {
+        "name": "The Machine-Values Rule",
+        "section": "typography",
+        "body": "Monospace is for values a machine produced - tool names, timestamps, durations, byte counts, identifiers, traces. Never for headings, labels or sentences written for a human."
+      },
+      {
+        "name": "The Absent-Reading Rule",
+        "section": "typography",
+        "body": "A real measurement renders in the metric face; an absent one renders in the body face, muted. The typeface tells you whether a number exists."
+      },
+      {
+        "name": "The One-Shadow Rule",
+        "section": "elevation",
+        "body": "A shadow is reserved for something genuinely floating over content. Blocks, rows, tables and the header use a border and a tonal step."
+      }
+    ],
+    "dos": [
+      "Do use the four signal hues for state only, and add a word rather than a fifth hue when a new state appears.",
+      "Do render an absent reading in the body face and a real measurement in the metric face.",
+      "Do keep monospace for machine-produced values.",
+      "Do take every gap from the 4px scale (--s1 to --s8).",
+      "Do give a filled dot to something observed and a hollow ring to something unobservable.",
+      "Do wrap any table in .scroll-x, and stack row grids below 760px rather than compressing the explanation column.",
+      "Do keep press feedback at scale(0.97) / 90ms on controls, and none on navigation.",
+      "Do honour prefers-reduced-motion, prefers-reduced-transparency and prefers-contrast."
+    ],
+    "donts": [
+      "Don't add a container to something that is a row.",
+      "Don't print 0 where nothing could have been measured - name which kind of nothing it is.",
+      "Don't introduce a webfont, a build step, or a runtime dependency.",
+      "Don't add a second shadow.",
+      "Don't carry state in colour alone; every status has a word beside its dot.",
+      "Don't animate anything that is not direct feedback on a press.",
+      "Don't collapse two semantically different states into one label to tidy the UI."
+    ]
+  }
+}
