@@ -62,11 +62,11 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 | `what_changed` | Evidence from the window before a failure, with a timeline. | read-only |
 | `get_navigation` | Current route and recent transitions, with per-route failures. | read-only |
 | `get_rebuilds` | Widget rebuild hotspots resolved to widget, file and line. | read-only |
-| `get_state_activity` | Riverpod provider activity over time, and how often it coincides with build-heavy frames. | read-only |
+| `get_state_activity` | Riverpod, Provider and Bloc activity over time, and how often it coincides with build-heavy frames. | read-only |
 | `export_session` | The whole session as versioned JSON — `brief` (diagnoses + cited evidence) or `full`. | read-only |
 | `explain_diagnosis` | Why a diagnosis was reached: resolved evidence, alternatives, gaps. | read-only |
 | `get_capabilities` | Active collectors, tool safety classes, what cannot be observed. | read-only |
-| `runtime_status` | Connection, session, reconnect state, event counts, retention window. | read-only |
+| `runtime_status` | Connection, session, reconnect state, event counts, retention window, what the session has cost in responses, and the VM-to-host clock offset. | read-only |
 | `get_logs` | Console + `dart:developer` logs (filter by severity / source / text). | read-only |
 | `get_exceptions` | Framework & unhandled exceptions **with stack traces**. | read-only |
 | `get_frames` | Frame build/raster timings; `onlyJanky` filter. | read-only |
@@ -75,7 +75,7 @@ state over official Flutter/Dart APIs (never scraping DevTools), so instead of
 | `get_selected_widget` | Widget currently selected in the Inspector. | read-only |
 | `get_memory` | Dart heap + external memory (MB). | read-only |
 | `get_timeline` | Recent VM timeline events (build/paint/layout/GC). | **mutates** |
-| `diagnose_runtime` | Root cause with evidence ids, timeline, alternatives, limitations. | read-only |
+| `diagnose_runtime` | Root cause with a stable `cause` label, evidence ids, timeline, alternatives, and coverage — including which categories nothing could observe. | read-only |
 | `diagnose_performance` | Why the app is janky — percentiles, phase split, rebuild attribution. | read-only |
 | `get_dashboard_url` | URL of the live browser dashboard. | read-only |
 
@@ -85,7 +85,7 @@ on the app so network capture works; `get_timeline` with `recordFrom: true`
 changes the VM's recording flags. Every tool carries an MCP `readOnlyHint`
 annotation so a client can enforce this itself.
 
-Agents should not call all sixteen. The recommended flow is
+Agents should not call all of them. The recommended flow is
 `runtime_health` → `what_changed` → a targeted `get_*` → `diagnose_runtime`;
 see [AI Agent Integration](docs/AI-Agent-Integration.md).
 
@@ -237,14 +237,22 @@ never scrape DevTools, and never claim a cause the evidence doesn't support.
 - **Network is pull-on-demand.** Dart exposes no push stream for `dart:io` HTTP,
   so requests are fetched when `get_network` or `diagnose_runtime` runs — not
   streamed continuously.
-- **`Debug.PauseException` needs pause-on-exception** enabled in the app to fire.
-  Framework errors (`Flutter.Error`) are always captured regardless.
+- **Exceptions are not always observable.** `Debug.PauseException` needs
+  pause-on-exception enabled in the app to fire. `Flutter.Error` is posted by the
+  widget inspector only while structured error reporting is on, which the
+  framework disables in profile mode and on the web — so on those targets a
+  thrown framework error leaves no trace at all. The collector asks the app and
+  reports `degraded` when that is the case, so an empty exception list is never
+  silently mistaken for a quiet one.
 - **Dart-side HTTP only.** Calls made from platform (Kotlin/Swift) code or from a
   WebView don't appear in `get_network`.
 - **Retention is bounded.** Each category keeps its own fixed window (3,000
-  logs, 1,000 exceptions, 1,000 network, 1,000 frames, 500 system). Frames roll
-  over fastest, at roughly 17 seconds of 60fps. `runtime_status` reports what is
-  retained, what was evicted, and the oldest event still held.
+  logs, 2,000 state, 1,000 exceptions, 1,000 network, 1,000 frames, 1,000
+  rebuilds, 500 navigation, 500 system). Frames roll over fastest — about 17
+  seconds at 60fps, and measured at 4 minutes under a 10fps workload.
+  `runtime_status` reports what is retained and what was evicted, and once
+  eviction starts every diagnosis carries a note saying so, so a truncated
+  window is never presented as a whole session.
 - The dashboard binds to `127.0.0.1` by default. Change `DASHBOARD_HOST` only on a
   network you trust — runtime data is served unauthenticated.
 
@@ -266,6 +274,14 @@ getting a silently partial picture. Add patterns with
 `FLUTTER_LAMP_REDACT_EXTRA`, or disable entirely with `FLUTTER_LAMP_REDACT=off`
 for a local-only session.
 
+**The VM Service credential is scrubbed unconditionally.** The path segment of a
+VM Service URI authorises `evaluate` — arbitrary Dart execution in the app being
+observed — and an app can print its own URI to its console, which a web target
+does on startup. That token is removed from captured text wherever it appears,
+and unlike everything above it is **not** governed by `FLUTTER_LAMP_REDACT=off`:
+that switch exists so you can read your own app's headers and log text, not so
+the server will hand out the key to the app it is attached to.
+
 **The dashboard is not exposed to other pages.** Binding to loopback does not
 protect a WebSocket — browsers exempt WebSocket from the same-origin policy, so
 without a check any page you have open could connect to
@@ -283,11 +299,14 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 ## Roadmap
 
 Shipped: VM connect, logs, exceptions (with stacks), network, frames, widget
-tree, memory, timeline, diagnosis, live dashboard.
+tree, memory, timeline, route awareness, rebuild attribution, state-management
+activity, diagnosis, live dashboard, and an evaluation suite that replays
+recorded sessions to check the diagnosis against apps that actually misbehaved.
 
-Next: deeper correlation (memory/timeline into `diagnose_runtime`), CPU
-sampling & leak heuristics, Riverpod/Bloc state, navigation, knowledge graph,
-auto-fixes. See [`docs/Phases.md`](docs/Phases.md).
+Next: deeper correlation (memory/timeline into `diagnose_runtime`), CPU sampling
+& leak heuristics, knowledge graph, auto-fixes. See
+[`docs/Phases.md`](docs/Phases.md) and
+[`docs/Observability-Roadmap.md`](docs/Observability-Roadmap.md).
 
 ## Development
 
