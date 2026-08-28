@@ -330,6 +330,7 @@ Docs live in [`docs/`](docs/):
 | [AI Agent Integration](docs/AI-Agent-Integration.md) | The investigation protocol agents should follow |
 | [Improvement Plan](docs/Improvement-Plan.md) | Current audit and prioritized backlog |
 | [Observability Roadmap](docs/Observability-Roadmap.md) | Architecture target, phases, and explicit rejections |
+| [Data path](docs/Data-Path.md) | Where runtime events actually flow, and what is observable |
 | [Releasing](docs/Releasing.md) | How versions are staged, tagged and published |
 | [Design](docs/Design.md) | Dashboard visual and interaction spec |
 | [Implementation Notes](docs/Implementation-Notes.md) | Non-obvious things learned building it |
