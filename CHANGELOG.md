@@ -100,6 +100,24 @@ below the confidence threshold trips status and band with false confidence still
 at 0% - abstention and confident wrongness scored apart, which is the whole
 point of the metric.
 
+### Verified
+
+- **A 25-minute session, past every ring capacity.** Every recorded incident is
+  under a minute and reports `evicted: 0`, so retention had never been exercised
+  against a real app — and the frame ring holds 1,000 events, roughly 100 seconds
+  at 10fps. Held a session for 25 minutes, sampling every 60s: frames cap at
+  1,000 at minute 4, eviction climbs to 6,168 frames and 5,167 state events by
+  minute 25, and from the moment it starts the diagnosis carries the retention
+  note. Truncation is not silent. The diagnosis stayed stable across 75 tool
+  calls with no drift.
+
+  Two things it does not show, stated because the run looks more conclusive than
+  it is. The jank ratio held at 31% throughout, but the workload is uniform — so
+  this shows the mechanism survives eviction, not that the ratio would reflect a
+  session whose behaviour changed once the denominator wraps. And the probe for
+  the server's own memory returned nothing, so there is no data on process
+  growth over the run.
+
 ### Added - verification
 
 - **`probe/sweep-live.mjs`** — calls every read-only tool against a running app

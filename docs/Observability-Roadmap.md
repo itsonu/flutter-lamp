@@ -200,10 +200,15 @@ Still open:
   cause and which is symptom is genuinely arguable.
 - A recorded incident for the demotion itself — an incidental exception with no
   competing hypothesis. Unit-tested, not recorded.
-- Re-recording `jank-with-incidental-framework-error` on a device. It was
-  captured over loopback because receipt-time stamping made adb ordering
-  unusable; that cause is fixed, so the caveat in its `capturedFrom` is now
-  removable by re-recording rather than by editing the file.
+- ~~Re-recording `jank-with-incidental-framework-error` on a device.~~ Attempted
+  and deliberately not done. The transport reason is gone — with app-clock
+  stamping the overflow now arrives live and in order over adb — but the device
+  turns out to have no on-budget baseline for the incident to argue from. On
+  A015 an ordinary tick of this workload costs 14.4ms elapsed against a 16.7ms
+  budget, so 44-56% of the frames around the error miss budget regardless, at a
+  mean 21.0ms elapsed for 12.1ms of build. The claim being pinned is that frames
+  at the moment of the error were healthy, and a target with 2ms of headroom
+  cannot demonstrate that about anything. Its `capturedFrom` now says so.
 - ~~Tool calls and tokens per diagnosis.~~ DONE. `costMeter` counts calls and
   response bytes per session, surfaced on `runtime_status`; the measured
   per-tool figures are in `docs/AI-Agent-Integration.md`. Bytes are counted and
