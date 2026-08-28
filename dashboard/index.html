@@ -90,7 +90,11 @@
   nav .badge { font-family: var(--mono); font-size: var(--fs-meta); color: var(--muted); margin-left: 6px; }
   nav .badge.alert { color: var(--red); }
 
-  main { flex: 1; overflow: auto; padding: var(--s6) var(--s4) var(--s8); }
+  /* The browser's own scroll anchoring adjusts scrollTop when content is
+     inserted above the viewport. That is the right default for a document, but
+     here it fought the explicit row anchoring and silently pushed a
+     following-the-newest view off the top. This code owns the behaviour. */
+  main { flex: 1; overflow: auto; overflow-anchor: none; padding: var(--s6) var(--s4) var(--s8); }
   .wrap { max-width: 1180px; margin: 0 auto; }
   .tab { display: none; } .tab.active { display: block; }
 
@@ -171,6 +175,13 @@
   .detail .stack { color: #ffa198; }
 
   /* ---- tables ---------------------------------------------------------- */
+  /* Pinned-stream affordance. Sticky rather than fixed so it belongs to the
+     view it controls, and it exists only while the stream is actually pinned. */
+  .jump { position: sticky; bottom: var(--s3); display: flex; justify-content: center;
+          margin-top: var(--s3); pointer-events: none; }
+  .jump button { pointer-events: auto; background: var(--panel2); border-color: var(--accent);
+                 color: var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+
   .scroll-x { overflow-x: auto; }
   table.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-label); }
   table.tbl th { text-align: left; color: var(--muted); font-weight: 500; font-size: var(--fs-meta);
@@ -245,6 +256,8 @@
     events: [], status: { connected: false, isolateId: null, wsUri: null },
     telemetry: null, paused: false, active: "Overview",
     expanded: new Set(), filter: "all", query: "",
+    // Pinned vs following the newest entry, and when the reader pinned it.
+    following: true, followFrom: null,
     wsState: "connecting", booted: false,
     lastEventAt: null, lastMessageAt: null,
   };
@@ -361,10 +374,65 @@
   // ---- render loop ----
   function loop(){ if (dirty && !state.paused){ render(); dirty = false; } }
   setInterval(loop, 200);
-  // Relative times ("3s ago") go stale with no event to trigger a redraw.
-  setInterval(() => { dirty = true; }, 1000);
+  // Relative times ("3s ago") go stale with no event to trigger a redraw — but
+  // only two views show them. Activity shows absolute timestamps, so ticking it
+  // every second rebuilt a 400-row list for nothing and threw away the caret
+  // and the reader's scroll position each time.
+  setInterval(() => { if (state.active === "Overview" || state.active === "Diagnostics") dirty = true; }, 1000);
+
+  /**
+   * Keep the reader's place across a re-render.
+   *
+   * Measured before this existed: with the app producing frames, the row a
+   * reader was looking at moved 2,416px down the page in six seconds. New
+   * entries are prepended, so every arrival pushes what is being read further
+   * away. Scroll position alone is not the anchor — the row is.
+   *
+   * The same capture restores the search caret, which was being reset to the
+   * end of the string on every keystroke because the input node is rebuilt.
+   */
+  function captureAnchor(){
+    if (state.active !== "Activity") return null;
+    const a = panels.Activity, q = a.querySelector("#aq");
+    const input = (q && document.activeElement === q) ? { start: q.selectionStart, end: q.selectionEnd } : null;
+    let anchor = null;
+    if (!state.following) {
+      for (const r of a.querySelectorAll(".arow")) {
+        const y = r.getBoundingClientRect().top;
+        if (y >= 0) { anchor = { id: r.dataset.x, offset: y }; break; }
+      }
+    }
+    return { input, anchor };
+  }
+  function restoreAnchor(cap){
+    if (!cap) return;
+    const a = panels.Activity;
+    if (cap.input) {
+      const q = a.querySelector("#aq");
+      // Restore the exact selection, not the end of the string: forcing the
+      // caret to the end made it impossible to correct a typo mid-word.
+      if (q) { q.focus(); q.setSelectionRange(cap.input.start, cap.input.end); }
+    }
+    if (cap.anchor) {
+      const el = a.querySelector('.arow[data-x="' + CSS.escape(cap.anchor.id) + '"]');
+      if (el) main.scrollTop += el.getBoundingClientRect().top - cap.anchor.offset;
+    }
+  }
+
+  // Following = pinned to the newest entry. Scrolling away stops the stream
+  // moving under you; scrolling back to the top resumes following. This is how
+  // a console behaves, which is the behaviour people already expect.
+  main.addEventListener("scroll", () => {
+    if (state.active !== "Activity") return;
+    const atTop = main.scrollTop < 40;
+    if (atTop === state.following) return;
+    state.following = atTop;
+    state.followFrom = atTop ? null : Date.now();
+    dirty = true;
+  }, { passive: true });
 
   function render(){
+    const cap = captureAnchor();
     renderChips();
     const t = state.telemetry;
     const impaired = t && state.status.connected ? t.collectors.filter(c => c.status !== "active").length : 0;
@@ -379,6 +447,7 @@
     });
     ({ Overview: renderOverview, Activity: renderActivity,
        Performance: renderPerformance, Diagnostics: renderDiagnostics }[state.active])(panels[state.active]);
+    restoreAnchor(cap);
   }
 
   // ---- system state ------------------------------------------------------
@@ -740,7 +809,18 @@
       h += '<div class="note">Individual calls are kept for the most recent window only; <b>' +
            t.mcp.cost.calls.toLocaleString()+'</b> calls have been made this session in total. ' +
            'Diagnostics carries the full per-tool breakdown.</div>';
+
+    // Only while pinned, and it says what arrived while you were reading.
+    if (!state.following) {
+      const fresh = state.followFrom ? rows.filter(a => a.at > state.followFrom).length : 0;
+      h += '<div class="jump"><button id="jumpTop">' +
+        (fresh ? fresh + " new " + (fresh === 1 ? "entry" : "entries") + " — jump to latest" : "Jump to latest") +
+        '</button></div>';
+    }
     p.innerHTML = h;
+
+    const jt = p.querySelector("#jumpTop");
+    if (jt) jt.onclick = () => { main.scrollTop = 0; state.following = true; state.followFrom = null; dirty = true; render(); };
 
     // A search set by a drill-through belongs to the view it drilled into.
     // Carrying it across a filter change hid every row and looked like an empty
@@ -750,7 +830,6 @@
     });
     const q = p.querySelector("#aq");
     q.oninput = () => { state.query = q.value; dirty = true; render(); };
-    if (state.query && document.activeElement !== q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
     const cl = p.querySelector("#aclear"); if (cl) cl.onclick = () => { state.query = ""; dirty = true; render(); };
     p.querySelectorAll(".arow.clickable").forEach(r => r.onclick = () => {
       const id = r.dataset.x;
