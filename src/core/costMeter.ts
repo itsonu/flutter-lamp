@@ -42,10 +42,16 @@ export interface ToolCall {
 }
 
 /**
- * How many recent calls to keep. Enough to answer "what did the agent just do";
- * small enough that the dashboard payload stays trivial.
+ * How many recent calls to keep.
+ *
+ * The dashboard merges these into one activity stream beside runtime events. At
+ * 25 a busy session showed 25 individual calls next to thousands of events,
+ * which reads as "there were 25 calls" — silent truncation is worse than a
+ * smaller window honestly labelled. 200 keeps the payload around 12kB, and the
+ * payload is diffed before it is pushed, so an idle dashboard still sends
+ * nothing.
  */
-const RECENT_CAP = 25;
+const RECENT_CAP = 200;
 
 export interface CostReport {
   calls: number;

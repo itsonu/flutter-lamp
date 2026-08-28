@@ -49,11 +49,11 @@ test("cost resets per session", () => {
 
 test("recent calls are newest first and capped", () => {
   costMeter.reset();
-  for (let i = 0; i < 40; i++) costMeter.record("t" + i, 10, i, false);
+  for (let i = 0; i < 300; i++) costMeter.record("t" + i, 10, i, false);
   const r = costMeter.report();
-  assert.equal(r.recent[0].tool, "t39", "newest first");
-  assert.ok(r.recent.length <= 25, "capped so the dashboard payload stays small");
-  assert.ok(r.recent.length >= 20, "keeps enough to answer 'what just happened'");
+  assert.equal(r.recent[0].tool, "t299", "newest first");
+  assert.ok(r.recent.length <= 200, "capped so the dashboard payload stays small");
+  assert.equal(r.recent.length, 200, "keeps a window big enough that the activity stream is not silently truncated");
 });
 
 test("average duration is derivable, not just the slowest", () => {

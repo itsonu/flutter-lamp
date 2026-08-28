@@ -4,168 +4,297 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Flutter Lamp — Runtime Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
+  /*
+   * System font rather than a webfont: this dashboard is served from loopback
+   * by a local developer tool, and a Google Fonts <link> fails exactly when the
+   * machine is offline — the case where a local tool most needs to work. The
+   * platform font also ships optical sizing and tracking tables already.
+   */
   :root {
     --bg: #0d1117; --panel: #161b22; --panel2: #1c2128; --border: #30363d;
-    --text: #e6edf3; --muted: #8b949e; --accent: #42a5f5; --accent2: #13b9fd;
-    --green: #3fb950; --yellow: #d29922; --orange: #db6d28; --red: #f85149;
-    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-    --sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --border-soft: #21262d;
+    --text: #e6edf3; --text2: #b6c0cb; --muted: #8b949e;
+    --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; --red: #f85149;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    /* One spacing scale. Every gap below is a step on it, never an ad-hoc value. */
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px; --s8: 32px;
+
+    /* Five type sizes. Tracking is size-specific: large text reads too loose as
+       it grows, small caps read too tight — a single letter-spacing is wrong
+       somewhere. Leading tightens as size grows. */
+    --fs-metric: 20px; --fs-body: 13px; --fs-label: 12px; --fs-meta: 11px;
+
+    --radius: 8px;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
-  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; display: flex; flex-direction: column; height: 100vh; }
-  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  .brand { font-weight: 600; letter-spacing: .3px; }
-  .brand b { color: var(--accent); }
-  .status { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 0 3px rgba(255,255,255,.03); }
-  .dot.on { background: var(--green); } .dot.off { background: var(--red); } .dot.wait { background: var(--yellow); }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans); font-size: var(--fs-body); line-height: 1.45;
+    display: flex; flex-direction: column; height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- chrome ---------------------------------------------------------- */
+  /* Translucent, so content scrolls under it and the chrome reads as a layer
+     above the data rather than a strip carved out of the page. */
+  header {
+    display: flex; align-items: center; gap: var(--s4);
+    padding: var(--s2) var(--s4);
+    background: rgba(22, 27, 34, 0.82);
+    backdrop-filter: blur(20px) saturate(160%);
+    border-bottom: 1px solid var(--border-soft);
+    flex-wrap: wrap; row-gap: var(--s2);
+    position: relative; z-index: 3;
+  }
+  .brand { font-weight: 600; font-size: var(--fs-body); letter-spacing: -0.01em; white-space: nowrap; }
+  .brand b { color: var(--accent); font-weight: 600; }
+
+  /* The three states that are genuinely independent. One badge could never say
+     "the app is gone but MCP is serving an agent", which is a real and common
+     state, so there are three. */
+  .chips { display: flex; gap: var(--s3); align-items: center; cursor: pointer; padding: var(--s1) var(--s2);
+           border-radius: var(--radius); border: 1px solid transparent; flex-wrap: wrap; }
+  .chips:hover { border-color: var(--border); background: var(--panel2); }
+  .chip { display: inline-flex; align-items: center; gap: 6px;
+          font-size: var(--fs-meta); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .chip b { font-weight: 500; letter-spacing: 0.02em; text-transform: none; font-size: var(--fs-label); }
   .spacer { flex: 1; }
-  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
-  button, select, input { font-family: var(--sans); font-size: 13px; color: var(--text); background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
-  button { cursor: pointer; } button:hover { border-color: var(--accent); }
-  button.active { border-color: var(--accent); color: var(--accent); }
-  input[type=text] { min-width: 160px; }
-  nav { display: flex; gap: 4px; padding: 8px 12px 0; background: var(--panel); border-bottom: 1px solid var(--border); overflow-x: auto; }
-  nav button { border: none; border-bottom: 2px solid transparent; background: none; border-radius: 0; padding: 8px 12px; color: var(--muted); white-space: nowrap; }
+  .controls { display: flex; gap: var(--s2); flex-wrap: wrap; }
+
+  button, select, input {
+    font-family: var(--sans); font-size: var(--fs-label); color: var(--text);
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px;
+  }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  /* Feedback on press, not on release — waiting for the click to land feels dead. */
+  button:active { transform: scale(0.97); }
+  button, .chips, .arow.clickable, .fnd.clickable { transition: transform 90ms ease-out, background-color 90ms ease-out; }
+  button.on { border-color: var(--accent); color: var(--accent); }
+  input[type=text] { min-width: 150px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  nav { display: flex; gap: var(--s1); padding: 0 var(--s3); background: var(--panel);
+        border-bottom: 1px solid var(--border); overflow-x: auto; position: relative; z-index: 2; }
+  nav button { border: none; background: none; border-radius: 0; padding: var(--s3);
+               border-bottom: 2px solid transparent; color: var(--muted); white-space: nowrap;
+               font-size: var(--fs-body); }
+  nav button:hover { border-color: transparent; border-bottom-color: var(--border); color: var(--text2); }
   nav button.active { color: var(--text); border-bottom-color: var(--accent); }
-  nav .badge { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-left: 6px; }
-  main { flex: 1; overflow: auto; padding: 16px; }
+  nav button:active { transform: none; }
+  nav .badge { font-family: var(--mono); font-size: var(--fs-meta); color: var(--muted); margin-left: 6px; }
+  nav .badge.alert { color: var(--red); }
+
+  main { flex: 1; overflow: auto; padding: var(--s6) var(--s4) var(--s8); }
+  .wrap { max-width: 1180px; margin: 0 auto; }
   .tab { display: none; } .tab.active { display: block; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
-  .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
-  .card .v { font-family: var(--mono); font-size: 26px; margin-top: 6px; }
-  .card .sub { color: var(--muted); font-family: var(--mono); font-size: 12px; margin-top: 4px; }
-  .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
-  .row { display: grid; align-items: start; gap: 10px; padding: 6px 8px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12.5px; }
-  .row:hover { background: var(--panel); }
-  .log-row { grid-template-columns: 90px 70px 90px 1fr; }
-  .net-row { grid-template-columns: 60px 1fr 60px 80px; cursor: pointer; }
-  .exc-row { grid-template-columns: 1fr; cursor: pointer; }
-  .tl-row { grid-template-columns: 96px 90px 1fr; }
-  .t { color: var(--muted); }
-  .sev-debug { color: var(--muted); } .sev-info { color: var(--accent); } .sev-warning { color: var(--yellow); }
-  .sev-error { color: var(--red); } .sev-critical { color: #ff7b72; font-weight: 600; }
-  .badge-cat { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; }
-  .cat-log { background: rgba(66,165,245,.15); color: var(--accent); }
-  .cat-exception { background: rgba(248,81,73,.15); color: var(--red); }
-  .cat-frame { background: rgba(210,153,34,.15); color: var(--yellow); }
-  .cat-network { background: rgba(63,185,80,.15); color: var(--green); }
-  .cat-system { background: rgba(139,148,158,.15); color: var(--muted); }
-  .detail { grid-column: 1 / -1; background: var(--panel2); border-radius: 8px; padding: 10px; margin-top: 6px; white-space: pre-wrap; word-break: break-word; color: var(--muted); }
-  .detail b { color: var(--text); }
-  pre.stack { margin: 0; white-space: pre-wrap; word-break: break-word; color: #ffa198; font-size: 12px; }
-  .msg { white-space: pre-wrap; word-break: break-word; }
-  .status-2xx { color: var(--green); } .status-4xx { color: var(--yellow); } .status-5xx { color: var(--red); }
-  canvas { width: 100%; height: 200px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
-  .chart-label { color: var(--muted); font-family: var(--mono); font-size: 12px; margin: 14px 0 6px; }
-  .empty { color: var(--muted); padding: 30px; text-align: center; font-family: var(--mono); }
-  .placeholder { border: 1px dashed var(--border); border-radius: 10px; padding: 40px; text-align: center; color: var(--muted); }
-  label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
-  /* Subsystem states. Deliberately NOT a binary green/red: "pull only" and
-     "not available" are facts about the architecture, not failures, and a red
-     dot next to them would read as something being broken. */
-  .sub-row { display: grid; grid-template-columns: 190px 132px 1fr; gap: 10px; align-items: baseline;
-             padding: 9px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12.5px; }
-  .sub-row .name { color: var(--text); }
-  .sub-row .why { color: var(--muted); word-break: break-word; }
-  .st { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: .4px; }
-  .st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
-  .st-active, .st-connected, .st-receiving { color: var(--green); }
-  .st-receiving { color: var(--accent); }
-  .st-idle { color: var(--muted); }
-  .st-pull, .st-degraded { color: var(--yellow); }
-  .st-na { color: var(--muted); }
-  .st-na::before { background: none; box-shadow: inset 0 0 0 1px var(--muted); }
-  .st-down { color: var(--red); }
-  h3.sec { font-size: 12px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted);
-           margin: 22px 0 8px; font-weight: 600; }
-  h3.sec:first-child { margin-top: 0; }
-  pre.topo { font-family: var(--mono); font-size: 12px; color: var(--muted); background: var(--panel);
-             border: 1px solid var(--border); border-radius: 10px; padding: 14px; overflow-x: auto; margin: 0; }
-  pre.topo b { color: var(--accent); font-weight: 500; }
-  table.tbl { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
-  table.tbl th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase;
-                 letter-spacing: .5px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
-  table.tbl td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+
+  /* ---- section rhythm -------------------------------------------------- */
+  h2.sec {
+    font-size: var(--fs-meta); text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); font-weight: 600; margin: var(--s8) 0 var(--s3);
+  }
+  h2.sec:first-child { margin-top: 0; }
+  h2.sec .hint { text-transform: none; letter-spacing: 0; font-weight: 400; opacity: .8; margin-left: var(--s2); }
+
+  /* Containers are reserved for the places that genuinely group something.
+     Everything else is a row or a table. */
+  .block { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+
+  /* ---- status vocabulary (one set of names, used on every view) --------- */
+  .st { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-meta);
+        letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+  .st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  .s-ok { color: var(--green); }
+  .s-recv { color: var(--accent); }
+  .s-warn { color: var(--yellow); }
+  .s-err { color: var(--red); }
+  .s-idle { color: var(--muted); }
+  .s-na { color: var(--muted); }
+  .s-na::before { background: none; box-shadow: inset 0 0 0 1px currentColor; }
+
+  /* ---- status rows ----------------------------------------------------- */
+  .srow { display: grid; grid-template-columns: 168px 116px 1fr; gap: var(--s3);
+          align-items: baseline; padding: var(--s2) var(--s4); border-bottom: 1px solid var(--border-soft); }
+  .srow:last-child { border-bottom: none; }
+  .srow .n { color: var(--text); font-weight: 500; }
+  .srow .w { color: var(--muted); font-size: var(--fs-label); }
+  .srow .w code, .srow .w b { font-family: var(--mono); color: var(--text2); font-weight: 400; }
+  .srow.head { border-bottom: 1px solid var(--border); }
+  .srow.head .n { font-weight: 600; }
+
+  /* ---- metric strip (replaces six equal cards) ------------------------- */
+  .stats { display: flex; flex-wrap: wrap; gap: var(--s6) var(--s8); padding: var(--s4); }
+  .stat { min-width: 92px; }
+  .stat .k { font-size: var(--fs-meta); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+  .stat .v { font-family: var(--mono); font-size: var(--fs-metric); line-height: 1.1; letter-spacing: -0.02em;
+             margin-top: var(--s1); color: var(--text); }
+  .stat .v.none { font-family: var(--sans); font-size: var(--fs-body); letter-spacing: 0; color: var(--muted); line-height: 1.5; }
+  .stat .s { font-size: var(--fs-meta); color: var(--muted); margin-top: 2px; }
+
+  /* ---- findings -------------------------------------------------------- */
+  .fnd { display: grid; grid-template-columns: 18px 1fr auto; gap: var(--s3);
+         padding: var(--s3) var(--s4); border-bottom: 1px solid var(--border-soft); align-items: start; }
+  .fnd:last-child { border-bottom: none; }
+  .fnd.clickable { cursor: pointer; }
+  .fnd.clickable:hover { background: var(--panel2); }
+  .fnd .mk { font-size: var(--fs-body); line-height: 1.4; }
+  .fnd .ttl { font-weight: 500; }
+  .fnd .why { color: var(--muted); font-size: var(--fs-label); margin-top: 2px; }
+  .fnd .ev { color: var(--text2); font-size: var(--fs-label); font-family: var(--mono); margin-top: var(--s1); word-break: break-word; }
+  .fnd .go { color: var(--accent); font-size: var(--fs-meta); white-space: nowrap; padding-top: 3px; }
+  .f-err .mk { color: var(--red); } .f-warn .mk { color: var(--yellow); }
+  .f-blind .mk { color: var(--muted); } .f-ok .mk { color: var(--green); }
+
+  /* ---- activity stream ------------------------------------------------- */
+  .filters { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; margin-bottom: var(--s3); }
+  .arow { display: grid; grid-template-columns: 92px 76px 1fr auto; gap: var(--s3);
+          padding: 5px var(--s3); border-bottom: 1px solid var(--border-soft); align-items: baseline;
+          font-size: var(--fs-label); }
+  .arow.clickable { cursor: pointer; }
+  .arow.clickable:hover { background: var(--panel2); }
+  .arow .ts { font-family: var(--mono); color: var(--muted); font-size: var(--fs-meta); }
+  .arow .src { font-size: var(--fs-meta); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .arow .msg { font-family: var(--mono); word-break: break-word; color: var(--text2); }
+  .arow .meta { font-family: var(--mono); font-size: var(--fs-meta); color: var(--muted); white-space: nowrap; }
+  .arow.sev-error .msg, .arow.sev-critical .msg { color: #ffa198; }
+  .arow.sev-warning .msg { color: #e3b341; }
+  .detail { background: var(--panel2); border-radius: 6px; padding: var(--s3);
+            margin: var(--s2) var(--s3); white-space: pre-wrap; word-break: break-word;
+            color: var(--muted); font-family: var(--mono); font-size: var(--fs-label); }
+  .detail b { color: var(--text); font-weight: 500; }
+  .detail .stack { color: #ffa198; }
+
+  /* ---- tables ---------------------------------------------------------- */
+  .scroll-x { overflow-x: auto; }
+  table.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-label); }
+  table.tbl th { text-align: left; color: var(--muted); font-weight: 500; font-size: var(--fs-meta);
+                 text-transform: uppercase; letter-spacing: 0.06em; padding: var(--s2) var(--s3);
+                 border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.tbl td { padding: var(--s2) var(--s3); border-bottom: 1px solid var(--border-soft);
+                 font-family: var(--mono); white-space: nowrap; }
+  table.tbl tr:last-child td { border-bottom: none; }
+  table.tbl td.name { color: var(--text); }
   table.tbl td.num, table.tbl th.num { text-align: right; }
-  .finding { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; border-bottom: 1px solid var(--border);
-             font-family: var(--mono); font-size: 12.5px; }
-  .finding.click { cursor: pointer; } .finding.click:hover { background: var(--panel); }
-  .finding .go { color: var(--accent); font-size: 11px; margin-left: auto; white-space: nowrap; }
-  .finding .mark { flex: none; }
-  .warn .mark { color: var(--yellow); } .bad .mark { color: var(--red); } .ok .mark { color: var(--green); }
-  .blind .mark { color: var(--muted); }
-  .note { color: var(--muted); font-size: 12px; font-family: var(--mono); margin-top: 10px; line-height: 1.5; }
-  @media (max-width: 640px) { .log-row { grid-template-columns: 70px 60px 1fr; } .log-row .src { display: none; } }
+  table.tbl tr.clickable { cursor: pointer; }
+  table.tbl tr.clickable:hover td { background: var(--panel2); }
+  table.tbl td.bad { color: var(--red); }
+  table.tbl td.good { color: var(--green); }
+
+  canvas { width: 100%; height: 180px; background: var(--panel); border: 1px solid var(--border);
+           border-radius: var(--radius); display: block; }
+  .empty { color: var(--muted); padding: var(--s8) var(--s4); text-align: center; font-size: var(--fs-label); line-height: 1.6; }
+  .empty b { color: var(--text2); font-weight: 500; }
+  .note { color: var(--muted); font-size: var(--fs-label); margin-top: var(--s3); line-height: 1.55; }
+  .note b { color: var(--text2); font-weight: 500; }
+  code { font-family: var(--mono); color: var(--text2); }
+
+  /* ---- responsive ------------------------------------------------------ */
+  /* The explanation column carries the meaning; it must never be squeezed to a
+     sliver, so below this width the rows stack instead of holding a grid. */
+  @media (max-width: 760px) {
+    .srow { grid-template-columns: 1fr; gap: var(--s1); padding: var(--s3); }
+    .arow { grid-template-columns: 80px 1fr; }
+    .arow .src, .arow .meta { grid-column: 2; }
+    .stats { gap: var(--s4) var(--s6); }
+    main { padding: var(--s4) var(--s3) var(--s8); }
+  }
+
+  /* ---- user preferences ------------------------------------------------ */
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+    button:active { transform: none; }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    header { background: var(--panel); backdrop-filter: none; }
+  }
+  @media (prefers-contrast: more) {
+    :root { --muted: #aab4bf; --border: #4a545f; --border-soft: #3a434d; }
+    header { background: var(--panel); backdrop-filter: none; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <div class="brand">Flutter <b>Lamp</b> · Runtime</div>
-  <div class="status"><span id="dot" class="dot off"></span><span id="statusText">disconnected</span></div>
+  <div class="brand">Flutter <b>Lamp</b></div>
+  <div class="chips" id="chips" role="button" tabindex="0" title="Open Diagnostics"></div>
   <div class="spacer"></div>
   <div class="controls">
-    <button id="pauseBtn">⏸ Pause</button>
-    <button id="clearBtn">🗑 Clear view</button>
-    <button id="exportBtn">⬇ Export JSON</button>
+    <button id="pauseBtn">Pause</button>
+    <button id="clearBtn">Clear view</button>
+    <button id="exportBtn">Export JSON</button>
   </div>
 </header>
-<nav id="tabs"></nav>
-<main id="main"></main>
+<nav id="tabs" role="tablist"></nav>
+<main id="main"><div class="wrap" id="wrap"></div></main>
 
 <script>
 (() => {
-  const TABS = ["Overview","Logs","Network","Exceptions","Timeline","Performance","MCP","Inspector","Diagnostics"];
+  // Four destinations, one per question the audit found had no home:
+  // what is happening · show me the events · is rendering healthy ·
+  // what is actually wired up. Logs/Network/Exceptions/Timeline/MCP were nine
+  // peers with no hierarchy; three of them rendered the same empty sentence.
+  const TABS = ["Overview","Activity","Performance","Diagnostics"];
   const CAP = 5000;
   const state = {
-    events: [], status: { connected: false, isolateId: null, wsUri: null }, paused: false,
-    active: "Overview", expanded: new Set(),
-    // Everything the server knows about itself: tool-call accounting, collector
-    // health, the connected agent. Null until the first message — and null is
-    // rendered as "unknown", never as zero.
-    telemetry: null,
-    wsState: "connecting",
-    // Set by a finding on Overview; consumed once by the tab it points at, so a
-    // finding can hand the reader the exact evidence behind it.
-    pendingQuery: {},
+    events: [], status: { connected: false, isolateId: null, wsUri: null },
+    telemetry: null, paused: false, active: "Overview",
+    expanded: new Set(), filter: "all", query: "",
+    wsState: "connecting", booted: false,
+    lastEventAt: null, lastMessageAt: null,
   };
   let dirty = true, socket = null, backoff = 1000;
 
   // ---- DOM scaffolding ----
   const nav = document.getElementById("tabs");
+  const wrap = document.getElementById("wrap");
   const main = document.getElementById("main");
   const panels = {};
   TABS.forEach(name => {
     const b = document.createElement("button");
-    b.textContent = name; b.dataset.tab = name;
+    b.dataset.tab = name;
+    b.setAttribute("role", "tab");
     b.innerHTML = name + ' <span class="badge" id="badge-'+name+'"></span>';
     b.onclick = () => setTab(name);
     nav.appendChild(b);
     const p = document.createElement("section");
     p.className = "tab"; p.id = "tab-" + name;
-    main.appendChild(p); panels[name] = p;
+    wrap.appendChild(p); panels[name] = p;
   });
-  function setTab(name){ state.active = name; dirty = true;
-    [...nav.children].forEach(c => c.classList.toggle("active", c.dataset.tab===name));
+  function setTab(name){
+    state.active = name; dirty = true;
+    [...nav.children].forEach(c => {
+      const on = c.dataset.tab === name;
+      c.classList.toggle("active", on);
+      c.setAttribute("aria-selected", String(on));
+    });
     Object.entries(panels).forEach(([n,p]) => p.classList.toggle("active", n===name));
-    render(true);
+    main.scrollTop = 0;
+    render();
   }
 
   // ---- controls ----
   const pauseBtn = document.getElementById("pauseBtn");
-  pauseBtn.onclick = () => { state.paused = !state.paused; pauseBtn.textContent = state.paused ? "▶ Resume" : "⏸ Pause"; pauseBtn.classList.toggle("active", state.paused); if(!state.paused){dirty=true;render(true);} };
-  document.getElementById("clearBtn").onclick = () => { state.events = []; state.expanded.clear(); dirty = true; render(true); };
+  pauseBtn.onclick = () => {
+    state.paused = !state.paused;
+    pauseBtn.textContent = state.paused ? "Resume" : "Pause";
+    pauseBtn.classList.toggle("on", state.paused);
+    if(!state.paused){ dirty = true; render(); }
+  };
+  document.getElementById("clearBtn").onclick = () => { state.events = []; state.expanded.clear(); dirty = true; render(); };
   document.getElementById("exportBtn").onclick = () => {
     const blob = new Blob([JSON.stringify(state.events, null, 2)], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
     a.download = "flutter-runtime-" + Date.now() + ".json"; a.click(); URL.revokeObjectURL(a.href);
   };
+  const chips = document.getElementById("chips");
+  chips.onclick = () => setTab("Diagnostics");
+  chips.onkeydown = (e) => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setTab("Diagnostics"); } };
 
   // ---- websocket + auto reconnect ----
   function connect(){
@@ -174,529 +303,636 @@
     // handshake requires it, so a cross-origin tab cannot open the stream.
     const token = encodeURIComponent(window.__LAMP_TOKEN__ || "");
     socket = new WebSocket(proto + "://" + location.host + "/ws?t=" + token);
-    socket.onopen = () => { backoff = 1000; state.wsState = "open"; setConn("wait", "connected to dashboard"); };
+    socket.onopen = () => { backoff = 1000; state.wsState = "open"; dirty = true; };
     socket.onmessage = (m) => {
       const msg = JSON.parse(m.data);
       state.lastMessageAt = Date.now();
-      if (msg.type === "snapshot") { state.events = msg.events || []; state.status = msg.status; state.telemetry = msg.telemetry || null; }
-      else if (msg.type === "event") { state.events.push(msg.event); if (state.events.length > CAP) state.events.splice(0, state.events.length - CAP); state.lastEventAt = Date.now(); }
-      else if (msg.type === "status") { state.status = msg.status; }
-      else if (msg.type === "telemetry") { state.telemetry = msg.telemetry; }
-      else if (msg.type === "cleared") { state.events = []; }
-      updateConn(); dirty = true;
+      state.booted = true;
+      if (msg.type === "snapshot") {
+        state.events = msg.events || [];
+        state.status = msg.status;
+        state.telemetry = msg.telemetry || null;
+        // Seeded from the snapshot, not left null. Reporting "last event never"
+        // beside a list of events was a factual bug in the one row that
+        // certifies the stream works.
+        const last = state.events[state.events.length - 1];
+        if (last) state.lastEventAt = last.timestamp;
+      }
+      else if (msg.type === "event") {
+        state.events.push(msg.event);
+        if (state.events.length > CAP) state.events.splice(0, state.events.length - CAP);
+        state.lastEventAt = msg.event.timestamp;
+      }
+      else if (msg.type === "status") state.status = msg.status;
+      else if (msg.type === "telemetry") state.telemetry = msg.telemetry;
+      else if (msg.type === "cleared") { state.events = []; state.lastEventAt = null; }
+      dirty = true;
     };
-    socket.onclose = () => { state.wsState = "closed"; setConn("off", "reconnecting…"); setTimeout(connect, backoff); backoff = Math.min(backoff*1.7, 10000); dirty = true; };
+    socket.onclose = () => {
+      state.wsState = "closed"; dirty = true;
+      setTimeout(connect, backoff); backoff = Math.min(backoff*1.7, 10000);
+    };
     socket.onerror = () => socket.close();
   }
-  function setConn(cls, text){ const d=document.getElementById("dot"); d.className="dot "+cls; document.getElementById("statusText").textContent = text; }
-  function updateConn(){ const s = state.status; if (s.connected) setConn("on", "VM " + (s.isolateId||"") + " · " + (s.wsUri||"")); else setConn("off", "app not connected"); }
 
   // ---- helpers ----
   const byCat = (c) => state.events.filter(e => e.category === c);
   const fmtTime = (ts) => { const d = new Date(ts); return d.toLocaleTimeString([], {hour12:false}) + "." + String(d.getMilliseconds()).padStart(3,"0"); };
   const esc = (s) => String(s==null?"":s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
-  const el = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; };
-
-  // ---- render loop (throttled, paused-aware) ----
-  // setInterval, NOT requestAnimationFrame: rAF is paused when the tab isn't
-  // painting (backgrounded / headless), which would freeze the live view.
-  function loop(){ if (dirty && !state.paused){ render(false); dirty = false; } }
-  setInterval(loop, 200);
-  // These tabs show "last seen 12s ago" style values, which go stale on their
-  // own with no event to trigger a redraw. Nothing else needs a wall clock.
-  const CLOCK_TABS = new Set(["Overview","MCP","Diagnostics"]);
-  setInterval(() => { if (CLOCK_TABS.has(state.active)) dirty = true; }, 1000);
-  function render(force){
-    const t = state.telemetry;
-    const impaired = t ? t.collectors.filter(c => c.status !== "active").length : 0;
-    TABS.forEach(n => { const b = document.getElementById("badge-"+n); if(!b) return;
-      const counts = { Logs: byCat("log").length, Network: byCat("network").length,
-        Exceptions: byCat("exception").length, Timeline: state.events.length,
-        // Blank, not 0, while telemetry is unknown — see fmtCount.
-        MCP: t ? t.mcp.cost.calls : "", Diagnostics: impaired ? "⚠"+impaired : "" };
-      b.textContent = counts[n] != null ? counts[n] : ""; });
-    const r = { Overview: renderOverview, Logs: renderLogs, Network: renderNetwork, Exceptions: renderExceptions,
-      Timeline: renderTimeline, Performance: renderPerformance, MCP: renderMcp,
-      Inspector: renderInspector, Diagnostics: renderDiagnostics }[state.active];
-    if (r) r(panels[state.active]);
-  }
-
-  // ---- honest-state helpers ----
-  // The rule these encode: absence of evidence is not zero. A value the server
-  // has not reported renders as "unknown"; a category nothing can observe
-  // renders as "unobservable"; only a measured zero renders as 0.
-  const st = (cls, text) => '<span class="st st-'+cls+'">'+text+'</span>';
   const fmtBytes = (n) => n < 1024 ? n+" B" : n < 1048576 ? (n/1024).toFixed(1)+" kB" : (n/1048576).toFixed(2)+" MB";
   const ago = (ts) => { if(ts==null) return "never";
     const s = Math.max(0, Math.round((Date.now()-ts)/1000));
     return s < 60 ? s+"s ago" : s < 3600 ? Math.round(s/60)+"m ago" : Math.round(s/3600)+"h ago"; };
-  /** Which collector, if any, owns a category — so an empty tab can say why. */
+  const dur = (ms) => { const s = Math.max(0, Math.round(ms/1000));
+    return s < 60 ? s+"s" : s < 3600 ? Math.floor(s/60)+"m "+(s%60)+"s" : Math.floor(s/3600)+"h "+Math.round(s%3600/60)+"m"; };
+  const st = (cls, text) => '<span class="st s-'+cls+'">'+text+'</span>';
+  // The collector stamps `janky` itself; re-deriving it here would let the
+  // dashboard and the diagnosis engine disagree about the same frame.
+  const isJanky = (e) => e.data.janky === true;
+  const JANK_BUDGET_MS = 16.7; // the fixed 60fps budget the collector applies
+
   const CATEGORY_COLLECTOR = { log:"logs", exception:"exceptions", frame:"frames", network:"network",
     navigation:"navigation", rebuild:"rebuilds", state:"state" };
   function collectorFor(category){
     const t = state.telemetry; if(!t) return null;
     return t.collectors.find(c => c.name === CATEGORY_COLLECTOR[category]) || null;
   }
-  /**
-   * Why a list is empty. Three different facts share one appearance, and only
-   * one of them means "nothing happened":
-   *   - a filter is hiding everything
-   *   - the collector cannot see this category on this target (blind)
-   *   - the collector is watching and has genuinely seen nothing
-   */
-  function emptyWhy(category, query, nothingText){
-    if (query) return "no matches for that filter";
-    if (!state.status.connected) return "not connected — nothing has been observed";
-    const c = collectorFor(category);
-    if (!c) return nothingText;
-    if (c.status === "unavailable")
-      return "unobservable on this target — " + esc(c.detail || "this collector reports it cannot see " + category) +
-             "<br/>An empty list here is a blind spot, not a clean result.";
-    if (c.status === "degraded")
-      return "partially observable — " + esc(c.detail || "this collector is degraded") +
-             "<br/>Some events in this category may never arrive.";
-    return nothingText + " · collector active and watching";
+
+  // ---- render loop ----
+  function loop(){ if (dirty && !state.paused){ render(); dirty = false; } }
+  setInterval(loop, 200);
+  // Relative times ("3s ago") go stale with no event to trigger a redraw.
+  setInterval(() => { dirty = true; }, 1000);
+
+  function render(){
+    renderChips();
+    const t = state.telemetry;
+    const impaired = t && state.status.connected ? t.collectors.filter(c => c.status !== "active").length : 0;
+    const att = attention();
+    const bad = att.filter(f => f.sev === "err" || f.sev === "warn").length;
+    const jank = byCat("frame").filter(isJanky).length;
+    const counts = { Overview: bad || "", Activity: state.events.length || "",
+                     Performance: jank || "", Diagnostics: impaired || "" };
+    TABS.forEach(n => { const b = document.getElementById("badge-"+n); if(!b) return;
+      b.textContent = counts[n] === "" ? "" : counts[n];
+      b.classList.toggle("alert", (n==="Overview" && bad>0) || (n==="Diagnostics" && impaired>0));
+    });
+    ({ Overview: renderOverview, Activity: renderActivity,
+       Performance: renderPerformance, Diagnostics: renderDiagnostics }[state.active])(panels[state.active]);
   }
 
-  /** Jump to a tab carrying the evidence behind a finding. */
-  function drillTo(tab, query){ state.pendingQuery[tab] = query == null ? "" : query; setTab(tab); }
-  /** Apply a pending drill-down query to a tab's search box, once. */
-  function takeQuery(tab, input){
-    if(!(tab in state.pendingQuery)) return;
-    input.value = state.pendingQuery[tab]; delete state.pendingQuery[tab];
+  // ---- system state ------------------------------------------------------
+  // Five states that vary independently. Collapsing them into one badge is what
+  // made the old header say "app not connected" while MCP served 239 calls.
+  function systemState(){
+    const s = state.status, t = state.telemetry;
+    const cost = t ? t.mcp.cost : null;
+    return {
+      runtime: s.connected
+        ? { cls:"ok", label:"CONNECTED", why:"isolate <code>"+esc(s.isolateId||"?")+"</code>" +
+            (s.clockOffsetMs!=null ? " · VM clock offset <code>"+s.clockOffsetMs+"ms</code>" : "") }
+        : s.reconnecting
+          ? { cls:"warn", label:"RECONNECTING", why:"attempt "+(s.reconnectAttempt||1)+" — the VM Service is not answering yet" }
+          : { cls:"err", label:"DISCONNECTED", why:"no Flutter app attached — call <code>connect_vm</code>" },
+      vm: s.connected
+        ? { cls:"ok", label:"REACHABLE", why:"streams subscribed" }
+        : { cls:"na", label:"UNREACHABLE", why:"nothing to subscribe to while the app is gone" },
+      mcp: t
+        ? { cls:"ok", label:"ACTIVE", why:"pid <code>"+t.server.pid+"</code> · v"+esc(t.server.version)+
+            " · up "+dur(Date.now()-t.server.startedAt)+" — it hosts this page, so it cannot report otherwise" }
+        : { cls:"idle", label:"UNKNOWN", why:"no telemetry received from the server yet" },
+      agent: t && t.mcp.client
+        ? { cls:"ok", label:"CONNECTED",
+            why:"<b>"+esc(t.mcp.client.name)+"</b>"+(t.mcp.client.version ? " v"+esc(t.mcp.client.version) : "")+
+                " · handshake "+ago(t.mcp.client.initializedAt)+" — self-reported, not authenticated" }
+        : { cls:"idle", label:"NONE", why:"no MCP client has completed the handshake" },
+      tools: cost
+        ? (cost.calls === 0
+            ? { cls:"idle", label:"NO CALLS", why:"the agent has not invoked a tool this session" }
+            : cost.errors
+              ? { cls:"warn", label:"FAILING", why:cost.errors+" of "+cost.calls+" calls returned an error" }
+              : { cls:"recv", label:"HEALTHY", why:cost.calls+" calls · no errors · last "+
+                  ago(cost.recent.length?cost.recent[0].at:null) })
+        : { cls:"idle", label:"UNKNOWN", why:"no telemetry yet" },
+      stream: state.wsState === "open"
+        ? { cls:"recv", label:"RECEIVING", why:"last event "+ago(state.lastEventAt)+" · last server message "+ago(state.lastMessageAt) }
+        : { cls:"err", label:"DISCONNECTED", why:"the dashboard WebSocket closed — retrying" },
+    };
   }
 
-  // ---- Overview ----
-  function computeFps(){ const f = byCat("frame").slice(-30); if(!f.length) return null;
-    const avg = f.reduce((s,e)=>s+(e.data.elapsedMs||0),0)/f.length; return avg>0 ? Math.min(1000/avg, 120) : null; }
-  function memEvent(){ const m = byCat("system").filter(e=>e.data && e.data.heapUsageMB!=null); return m.length ? m[m.length-1] : null; }
-  function latestMem(){ const e = memEvent(); return e ? e.data : null; }
-  // The collector already decides what jank is (Flutter.Frame vs the 60fps
-  // budget) and stamps `janky` on the event. Re-deriving it here with a second
-  // threshold would let the dashboard and the diagnosis engine disagree about
-  // the same frame, so this only reads the flag.
-  const JANK_MS = 16.7; // shown as the budget; not used to classify
-  const isJanky = (e) => e.data.janky === true;
+  function renderChips(){
+    const sys = systemState();
+    chips.innerHTML =
+      '<span class="chip">Runtime '+st(sys.runtime.cls, '<b>'+sys.runtime.label.toLowerCase()+'</b>')+'</span>' +
+      '<span class="chip">MCP '+st(sys.mcp.cls, '<b>'+sys.mcp.label.toLowerCase()+'</b>')+'</span>' +
+      '<span class="chip">Stream '+st(sys.stream.cls, '<b>'+sys.stream.label.toLowerCase()+'</b>')+'</span>';
+  }
 
+  // ---- derived analysis --------------------------------------------------
   /**
-   * What is abnormal, and the evidence behind it.
+   * Which tools fail and which never do.
    *
-   * Every finding is derived from events actually in the store — none is
-   * inferred from configuration, and none is stated for a category that could
-   * not be observed. Blind spots are findings of their own, because an empty
-   * tab that nothing could have filled must not read as "clean".
+   * The per-tool counts already separate them exactly: on a disconnected target
+   * every runtime-dependent tool fails and every tool that does not touch the
+   * runtime has zero errors. That partition is the evidence — no extra
+   * instrumentation is needed to say something useful about it. What is NOT
+   * recorded is each call's failure reason, so the relationship stays a
+   * correlation and is labelled as one wherever it is shown.
    */
-  function findings(){
-    const out = [], t = state.telemetry;
-    const frames = byCat("frame"), exceptions = byCat("exception"), network = byCat("network");
+  function toolPartition(){
+    const t = state.telemetry;
+    if(!t || !t.mcp.cost.calls) return null;
+    const tools = t.mcp.cost.byTool;
+    const clean = tools.filter(x => x.errors === 0);
+    const failing = tools.filter(x => x.errors > 0);
+    const sum = (a, k) => a.reduce((n, x) => n + x[k], 0);
+    return { clean, failing,
+      cleanCalls: sum(clean,"calls"), failCalls: sum(failing,"calls"),
+      errors: sum(failing,"errors"), calls: t.mcp.cost.calls };
+  }
 
-    const janky = frames.filter(e => (e.data.elapsedMs||0) > JANK_MS);
-    if (janky.length) {
-      const worst = janky.reduce((a,b) => (b.data.elapsedMs > a.data.elapsedMs ? b : a));
-      const pct = Math.round(janky.length/frames.length*100);
-      out.push({ cls:"warn", mark:"⚠", text: janky.length+" of "+frames.length+" frames over the "+JANK_MS+"ms budget ("+pct+"%)",
-                 go:"Performance", tab:"Timeline", q:"(jank)" });
-      if (worst.data.elapsedMs >= JANK_MS*4)
-        out.push({ cls:"bad", mark:"⚠", text:"worst frame "+worst.data.elapsedMs.toFixed(1)+"ms — "+(worst.data.elapsedMs/JANK_MS).toFixed(0)+"× the budget",
-                   go:"Timeline", tab:"Timeline", q:"Frame #"+(worst.data.number ?? "") });
+  function frameStats(){
+    const f = byCat("frame"); if(!f.length) return null;
+    const ms = f.map(e => e.data.elapsedMs || 0).sort((a,b) => a-b);
+    const pct = (p) => ms[Math.min(ms.length-1, Math.floor(ms.length * p))];
+    return { n: f.length, p50: pct(.5), p95: pct(.95), p99: pct(.99), max: ms[ms.length-1],
+             janky: f.filter(isJanky).length,
+             worst: f.slice().sort((a,b) => b.data.elapsedMs - a.data.elapsedMs).slice(0,6) };
+  }
+
+  function memEvent(){ const m = byCat("system").filter(e=>e.data && e.data.heapUsageMB!=null); return m.length ? m[m.length-1] : null; }
+
+  /**
+   * What needs attention, with the evidence behind it.
+   *
+   * Every entry is derived from events or telemetry actually present. Blind
+   * spots and dropped history are entries of their own: an empty view that
+   * nothing could have filled must not read as clean.
+   */
+  function attention(){
+    const out = [], t = state.telemetry, s = state.status;
+    const push = (sev, mk, title, why, ev, action) => out.push({sev, mk, title, why, ev, action});
+
+    if (!s.connected) {
+      const gaveUp = state.events.some(e => e.category==="system" && /Gave up reconnecting/.test(e.message));
+      const diag = state.events.filter(e => e.category==="system" && /^Why the VM Service/.test(e.message)).pop();
+      // "Never attached" and "was attached and lost" are different situations
+      // and lead to different next actions. The store says which: a connect
+      // event exists only in the second.
+      const wasAttached = state.events.some(e => e.category==="system" && /^(Connected|Reconnected) to VM Service/.test(e.message));
+      push("err", "●", wasAttached ? "Flutter app disconnected" : "No Flutter app is attached",
+        gaveUp ? "Reconnection was attempted and abandoned. Nothing new can be observed until connect_vm runs against a fresh URI."
+               : s.reconnecting ? "A reconnect is in flight — attempt " + (s.reconnectAttempt||1) + "."
+               : wasAttached ? "The connection was lost. Evidence already captured stays available; nothing new arrives."
+               : "Nothing has been observed this session. Call connect_vm to attach one.",
+        diag ? esc(diag.message) : null,
+        { tab:"Activity", filter:"runtime" });
     }
 
-    // Grouped by message, because ten repeats of one bug is one finding.
-    const sig = new Map();
-    exceptions.forEach(e => { const k = e.message.slice(0,80); sig.set(k, (sig.get(k)||0)+1); });
-    [...sig.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([k,n]) =>
-      out.push({ cls:"bad", mark:"✕", text:(n>1? n+"× ":"")+k, go:"Exceptions", tab:"Exceptions", q:k.slice(0,40) }));
+    const p = toolPartition();
+    if (p && p.errors) {
+      // Only claim the runtime explains the failures when the partition is
+      // clean AND the runtime is actually gone. Otherwise state the count.
+      const explained = !s.connected && p.clean.length > 0 && p.failing.length > 0;
+      push("warn", "▲", p.errors + " of " + p.calls + " MCP tool calls failed",
+        explained
+          ? "MCP itself is operational. Failures are confined to the " + p.failing.length +
+            " tools that read the runtime; the " + p.clean.length + " that do not have never failed."
+          : "Failures are spread across " + p.failing.length + " tool" + (p.failing.length>1?"s":"") + ".",
+        explained
+          ? esc(p.clean.map(x=>x.tool).join(", ")) + " — 0 errors in " + p.cleanCalls + " calls<br/>" +
+            esc(p.failing.map(x=>x.tool).join(", ")) + " — " + p.errors + " errors in " + p.failCalls + " calls"
+          : esc(p.failing.map(x=>x.tool+" "+x.errors+"/"+x.calls).join(" · ")),
+        { tab:"Diagnostics" });
+      if (explained)
+        push("blind", "○", "That link is a correlation, not a proven cause",
+          "The failure reason is not recorded per call, so the runtime being unavailable explains the pattern but has not been demonstrated.",
+          null, null);
+    }
 
-    const failed = network.filter(e => e.data.error || (e.data.statusCode||0) >= 400);
+    const fs = frameStats();
+    if (fs && fs.janky) {
+      const pctJank = Math.round(fs.janky / fs.n * 100);
+      push(pctJank >= 10 ? "warn" : "blind", pctJank >= 10 ? "▲" : "○",
+        fs.janky + " of " + fs.n + " frames over budget (" + pctJank + "%)",
+        "Measured against a fixed " + JANK_BUDGET_MS + "ms budget (60fps)." +
+          (fs.p50 < 10 ? " This target's median frame is " + fs.p50.toFixed(1) + "ms, which suggests a faster display — so this count is conservative." : ""),
+        "p95 " + fs.p95.toFixed(1) + "ms · p99 " + fs.p99.toFixed(1) + "ms · max " + fs.max.toFixed(1) + "ms",
+        { tab:"Performance" });
+    }
+
+    const sig = new Map();
+    byCat("exception").forEach(e => { const k = e.message.slice(0,90); sig.set(k, (sig.get(k)||0)+1); });
+    [...sig.entries()].sort((a,b)=>b[1]-a[1]).slice(0,4).forEach(([k,n]) =>
+      push("err", "●", (n>1 ? n+"× " : "") + k, "Captured from the Flutter framework's error reporting.", null,
+        { tab:"Activity", filter:"exception", query:k.slice(0,40) }));
+
+    const net = byCat("network"), failed = net.filter(e => e.data.error || (e.data.statusCode||0) >= 400);
     if (failed.length)
-      out.push({ cls:"bad", mark:"✕", text:failed.length+" of "+network.length+" HTTP requests failed",
-                 go:"Network", tab:"Timeline", q:"→ " });
+      push("err", "●", failed.length + " of " + net.length + " HTTP requests failed",
+        "Status 400 or above, or a transport error.", null, { tab:"Activity", filter:"network" });
 
     if (t) {
-      if (t.mcp.cost.errors)
-        out.push({ cls:"warn", mark:"⚠", text:t.mcp.cost.errors+" of "+t.mcp.cost.calls+" MCP tool calls returned an error",
-                   go:"MCP", tab:"MCP" });
-      t.collectors.filter(c => c.status !== "active").forEach(c =>
-        out.push({ cls:"blind", mark:"○", text:c.name+" is "+c.status+" — an empty "+c.name+" tab proves nothing here",
-                   go:"Diagnostics", tab:"Diagnostics" }));
-      const evicted = Object.values(t.retention.evicted).reduce((a,b)=>a+b,0);
-      if (evicted)
-        out.push({ cls:"blind", mark:"○", text:evicted.toLocaleString()+" events dropped — the buffer is full, so history before that is gone",
-                   go:"Diagnostics", tab:"Diagnostics" });
+      if (s.connected) t.collectors.filter(c => c.status !== "active").forEach(c =>
+        push("blind", "○", c.name + " is " + c.status,
+          "An empty " + c.name + " view proves nothing on this target.", esc(c.detail||""), { tab:"Diagnostics" }));
+      const ev = Object.values(t.retention.evicted).reduce((a,b)=>a+b,0);
+      if (ev)
+        push("blind", "○", ev.toLocaleString() + " events dropped",
+          "The ring buffer filled, so history before that point is gone.", null, { tab:"Diagnostics" });
     }
     return out;
   }
 
+  /** The one-line reason behind {@link emptyKind}, for a stat's sub-label. */
+  function collectorWhy(category){
+    if (!state.status.connected) return "requires a connected app";
+    const c = collectorFor(category);
+    return c && c.detail ? c.detail.split(".")[0] : "not observable on this target";
+  }
+
+  /** Which flavour of "nothing here" applies to a category. */
+  function emptyKind(category){
+    if (!state.status.connected) return "not connected";
+    const c = collectorFor(category);
+    if (c && c.status === "unavailable") return "unobservable on this target";
+    if (c && c.status === "degraded") return "partially observable";
+    return "0 observed";
+  }
+
+  // ---- Overview ----------------------------------------------------------
   function renderOverview(p){
-    const s = state.status, fps = computeFps(), mem = latestMem(), t = state.telemetry;
+    if (!state.booted) { p.innerHTML = '<div class="block"><div class="empty">Connecting to the dashboard stream…</div></div>'; return; }
+    const s = state.status, t = state.telemetry, sys = systemState();
+    const att = attention();
+    const bad = att.filter(f => f.sev === "err").length;
+    const warn = att.filter(f => f.sev === "warn").length;
+    const health = bad ? ["err","NEEDS ATTENTION"] : warn ? ["warn","DEGRADED"] : ["ok","HEALTHY"];
+    const row = (n, x, w) => '<div class="srow"><span class="n">'+n+'</span>'+st(x.cls,x.label)+'<span class="w">'+(w!=null?w:x.why)+'</span></div>';
+
+    let h = '<h2 class="sec">System</h2><div class="block">';
+    h += '<div class="srow head"><span class="n">Overall</span>' + st(health[0], health[1]) +
+         '<span class="w">' + (att.length ? att.length + " finding" + (att.length>1?"s":"") + " below"
+                                          : "nothing abnormal in what is observable") + '</span></div>';
+    h += row("Flutter app", sys.runtime) + row("VM Service", sys.vm) + row("MCP server", sys.mcp) +
+         row("Agent", sys.agent) + row("Tool execution", sys.tools) + row("Dashboard stream", sys.stream);
+    h += '</div>';
+
+    h += '<h2 class="sec">Attention</h2>';
+    h += att.length ? '<div class="block">' + att.map((f,i) =>
+        '<div class="fnd f-'+f.sev+(f.action?' clickable':'')+'" data-a="'+i+'">' +
+        '<span class="mk">'+f.mk+'</span><span><span class="ttl">'+esc(f.title)+'</span>' +
+        (f.why ? '<div class="why">'+esc(f.why)+'</div>' : '') +
+        (f.ev ? '<div class="ev">'+f.ev+'</div>' : '') + '</span>' +
+        (f.action ? '<span class="go">'+f.action.tab+' →</span>' : '<span></span>') + '</div>').join("") + '</div>'
+      : '<div class="block"><div class="fnd f-ok"><span class="mk">✓</span><span class="ttl">' +
+        (s.connected ? "Nothing abnormal in what is observable" : "Not connected — nothing has been observed") +
+        '</span><span></span></div></div>';
+
+    // A compact strip, not six equal boxes. Health is not a metric, and CPU is
+    // permanently unavailable — both were cards, and CPU owned an entire row.
+    const fs = frameStats(), mem = memEvent();
     const c = {}; state.events.forEach(e => c[e.category]=(c[e.category]||0)+1);
-    const found = findings();
-    const frames = byCat("frame"), janky = frames.filter(isJanky);
-    const worst = frames.length ? frames.reduce((a,b)=>(b.data.elapsedMs>a.data.elapsedMs?b:a)) : null;
-    const bad = found.filter(f => f.cls === "bad" || f.cls === "warn").length;
-    const health = !s.connected ? ["st-down","NOT CONNECTED","no app attached"]
-      : bad ? ["st-degraded","DEGRADED", bad+" finding"+(bad>1?"s":"")]
-      : ["st-active","HEALTHY","nothing abnormal in what is observable"];
+    const stale = (sub) => s.connected ? sub : sub + " · before the disconnect";
+    const stat = (k,v,sub,none) => '<div class="stat"><div class="k">'+k+'</div><div class="v'+(none?' none':'')+'">'+v+'</div><div class="s">'+(sub||"")+'</div></div>';
+    h += '<h2 class="sec">Session</h2><div class="block"><div class="stats">';
+    h += stat("Events", state.events.length.toLocaleString(),
+      Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>k+" "+v).join(" · ") || "none captured");
+    h += t ? stat("Tool calls", t.mcp.cost.calls.toLocaleString(),
+        (t.mcp.cost.errors ? t.mcp.cost.errors+" failed" : "no errors") + " · " + fmtBytes(t.mcp.cost.responseBytes))
+      : stat("Tool calls","unknown","no telemetry yet",true);
+    // A count is only shown when the count is a measurement. With no runtime
+    // attached nothing could have been counted, and printing 0 there is the
+    // exact substitution of a zero for a missing reading that this rules out.
+    const observed = (label, cat, n, sub) => n > 0
+      ? stat(label, n.toLocaleString(), sub)
+      : stat(label, emptyKind(cat) === "0 observed" ? "0" : emptyKind(cat),
+             emptyKind(cat) === "0 observed" ? "collector active and watching" : collectorWhy(cat),
+             emptyKind(cat) !== "0 observed");
+    h += observed("Exceptions", "exception", byCat("exception").length, "see Attention");
+    h += fs ? stat("Frames", fs.n.toLocaleString(), stale(fs.janky+" over budget · p95 "+fs.p95.toFixed(1)+"ms"))
+            : stat("Frames", s.connected ? "none yet" : "unavailable",
+                s.connected ? "Flutter renders only on change" : "requires a connected app", true);
+    h += mem ? stat("Heap", mem.data.heapUsageMB+" MB", stale("cap "+mem.data.heapCapacityMB+" MB"))
+             : stat("Heap", s.connected ? "not sampled" : "unavailable",
+                 s.connected ? "polled while this page is open" : "requires a connected app", true);
+    h += observed("Network", "network", byCat("network").length, "requests observed");
+    h += '</div></div>';
 
-    // A reading taken before the app went away is still a real reading, but it
-    // describes a session that has ended. Showing it unqualified next to a
-    // "not connected" health badge invites it to be read as current.
-    const stale = (sub, ts) => s.connected ? sub : sub + " · from before the disconnect" + (ts ? " ("+ago(ts)+")" : "");
-    const lastFrameAt = frames.length ? frames[frames.length-1].timestamp : null;
-    const lastMemAt = memEvent() ? memEvent().timestamp : null;
-
-    // Memory is polled, not pushed. Before the first sample there is no number —
-    // and "0 MB" for a running app would be a lie, not a reading.
-    const memCard = mem
-      ? { v: mem.heapUsageMB + " MB", sub: stale("cap "+mem.heapCapacityMB+" MB · external "+mem.externalUsageMB+" MB", lastMemAt) }
-      : s.connected
-        ? { v: '<span style="color:var(--muted);font-size:17px">not sampled yet</span>', sub: "polled every 2s while this page is open" }
-        : { v: '<span style="color:var(--muted);font-size:17px">unavailable</span>', sub: "requires a connected app" };
-    // Flutter renders nothing when nothing changes, so no frames is a normal
-    // state for an idle app — not a stalled one. Say which it is.
-    const fpsCard = fps != null
-      ? { v: fps.toFixed(0), sub: stale("~"+(1000/fps).toFixed(1)+"ms/frame over the last "+Math.min(frames.length,30)+" frames", lastFrameAt) }
-      : { v: '<span style="color:var(--muted);font-size:17px">no frames</span>',
-          sub: s.connected ? "Flutter renders only on change — an idle app is silent here" : "requires a connected app" };
-
-    const card = (k,v,sub) => '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="sub">'+(sub||"")+'</div></div>';
-    let h = '<h3 class="sec">Runtime session</h3><div class="grid">';
-    h += card("Health", '<span class="st '+health[0]+'" style="font-size:15px">'+health[1]+'</span>', health[2]);
-    h += card("Events", state.events.length.toLocaleString(),
-      Object.entries(c).map(([k,v])=>k+":"+v).join(" · ") || "none captured yet");
-    h += card("FPS", fpsCard.v, fpsCard.sub);
-    h += card("Memory", memCard.v, memCard.sub);
-    h += card("Worst frame", worst ? worst.data.elapsedMs.toFixed(1)+"ms" : '<span style="color:var(--muted);font-size:17px">—</span>',
-      worst ? stale(janky.length+" over budget of "+frames.length, lastFrameAt) : "no frames observed");
-    h += card("CPU", '<span style="color:var(--muted);font-size:17px">not available</span>', "the VM Service does not sample it");
-    h += '</div>';
-
-    h += '<h3 class="sec">MCP</h3><div class="grid">';
-    if (t) {
-      h += card("Agent", t.mcp.client ? esc(t.mcp.client.name) : '<span style="color:var(--muted);font-size:17px">not initialized</span>',
-        t.mcp.client ? (t.mcp.client.version ? "v"+esc(t.mcp.client.version) : "no version sent")+" · self-reported" : "no client has completed the handshake");
-      h += card("Tool calls", t.mcp.cost.calls, t.mcp.cost.errors+" error"+(t.mcp.cost.errors===1?"":"s")+" · "+fmtBytes(t.mcp.cost.responseBytes)+" returned");
-      h += card("Last tool activity", t.mcp.cost.recent.length ? esc(t.mcp.cost.recent[0].tool) : '<span style="color:var(--muted);font-size:17px">none</span>',
-        t.mcp.cost.recent.length ? ago(t.mcp.cost.recent[0].at)+" · "+t.mcp.cost.recent[0].ms+"ms" : "no tool called this session");
-    } else {
-      h += card("MCP", '<span style="color:var(--muted);font-size:17px">unknown</span>', "no telemetry received yet");
-    }
-    h += '</div>';
-
-    h += '<h3 class="sec">Findings</h3>';
-    h += found.length
-      ? '<div>' + found.map((f,i) =>
-          '<div class="finding '+f.cls+(f.tab?' click':'')+'" data-f="'+i+'"><span class="mark">'+f.mark+'</span>'+
-          '<span>'+esc(f.text)+'</span>'+(f.tab?'<span class="go">'+f.go+' →</span>':'')+'</div>').join("") + '</div>'
-      : '<div class="finding ok"><span class="mark">✓</span><span>'+
-        (s.connected ? "nothing abnormal in what is observable" : "not connected — nothing has been observed")+'</span></div>';
-    h += '<div class="note">Findings describe what was <b>observed</b>. Adjacency in time is measured; cause is not — '+
-      'see Diagnostics for what this session could and could not see.</div>';
+    const recent = activityModel().slice(0, 8);
+    h += '<h2 class="sec">Recent activity <span class="hint">newest first</span></h2>';
+    h += recent.length ? '<div class="block">' + recent.map(a => activityRow(a, false)).join("") + '</div>'
+                       : '<div class="block"><div class="empty">No activity recorded yet.</div></div>';
     p.innerHTML = h;
-    p.querySelectorAll(".finding.click").forEach(node => node.onclick = () => {
-      const f = found[Number(node.dataset.f)]; drillTo(f.tab, f.q);
+    p.querySelectorAll(".fnd.clickable").forEach(n => n.onclick = () => {
+      const a = att[Number(n.dataset.a)].action;
+      if (a.filter) state.filter = a.filter;
+      state.query = a.query != null ? a.query : "";
+      setTab(a.tab);
     });
   }
 
-  // ---- Logs ----
-  function ensureFilters(p, id, html){ let f = p.querySelector("#"+id); if(!f){ p.innerHTML=""; f = el('<div class="filters" id="'+id+'"></div>'); f.innerHTML = html; p.appendChild(f); p.appendChild(el('<div id="'+id+'-list"></div>')); } return f; }
-  function renderLogs(p){
-    ensureFilters(p, "logf",
-      '<input type="text" id="logSearch" placeholder="search logs…" />' +
-      '<select id="logSev"><option value="">all severities</option><option>debug</option><option>info</option><option>warning</option><option>error</option><option>critical</option></select>' +
-      '<select id="logSrc"><option value="">all sources</option><option>Stdout</option><option>Stderr</option><option>Logging</option></select>' +
-      '<label class="chk"><input type="checkbox" id="logAuto" checked/> auto-scroll</label>');
-    takeQuery("Logs", p.querySelector("#logSearch"));
-    const q = (p.querySelector("#logSearch").value||"").toLowerCase();
-    const sev = p.querySelector("#logSev").value, src = p.querySelector("#logSrc").value;
-    const auto = p.querySelector("#logAuto").checked;
-    if(!p.querySelector("#logSearch").oninput){ ["logSearch","logSev","logSrc"].forEach(i=>{ const e=p.querySelector("#"+i); e.oninput=e.onchange=()=>{dirty=true;render(true);}; }); }
-    const list = p.querySelector("#logf-list");
-    let rows = byCat("log");
-    if(sev) rows = rows.filter(e=>e.severity===sev);
-    if(src) rows = rows.filter(e=>e.source===src);
-    if(q) rows = rows.filter(e=>e.message.toLowerCase().includes(q));
-    rows = rows.slice(-500);
-    list.innerHTML = rows.length ? rows.map(e =>
-      '<div class="row log-row"><span class="t">'+fmtTime(e.timestamp)+'</span>'+
-      '<span class="sev-'+e.severity+'">'+e.severity+'</span>'+
-      '<span class="src t">'+esc(e.source)+'</span>'+
-      '<span class="msg">'+esc(e.message)+'</span></div>').join("") : '<div class="empty">'+emptyWhy("log", q, "no logs captured")+'</div>';
-    if(auto) list.parentElement.scrollTop = 999999, main.scrollTop = main.scrollHeight;
+  // ---- Activity ----------------------------------------------------------
+  // One stream. Logs, Network, Exceptions, Timeline and the MCP call log were
+  // five destinations the reader had to merge mentally; three of them rendered
+  // the same empty sentence when the app was gone.
+  const RETRY_RE = /^(Reconnecting in |Reconnect attempt \d+ failed)/;
+
+  function activityModel(){
+    const out = [];
+    for (const e of state.events)
+      out.push({ at: e.timestamp, src: e.category, sev: e.severity, label: e.message, ev: e, id: "ev-"+e.id });
+    const t = state.telemetry;
+    if (t) for (const c of t.mcp.cost.recent)
+      out.push({ at: c.at, src: "mcp", sev: c.isError ? "error" : "info", label: c.tool,
+                 meta: c.ms+"ms · "+fmtBytes(c.bytes), call: c, id: "mcp-"+c.at+"-"+c.tool });
+    out.sort((a,b) => b.at - a.at);
+
+    // Collapse reconnect churn. Eight attempts produced sixteen rows — 55% of
+    // the whole timeline for one incident — burying the events that explain it.
+    // The attempts stay, one disclosure away.
+    const rolled = [];
+    for (let i = 0; i < out.length; i++) {
+      if (!(out[i].src === "system" && RETRY_RE.test(out[i].label))) { rolled.push(out[i]); continue; }
+      let j = i;
+      while (j < out.length && out[j].src === "system" && RETRY_RE.test(out[j].label)) j++;
+      const run = out.slice(i, j);
+      const attempts = run.filter(r => /^Reconnect attempt/.test(r.label)).length;
+      rolled.push({ at: run[0].at, src: "system", sev: "warning",
+        label: "Reconnect — " + attempts + " attempt" + (attempts===1?"":"s") + " failed over " + dur(run[0].at - run[run.length-1].at),
+        meta: run.length + " rows", run, id: "run-"+run[run.length-1].at });
+      i = j - 1;
+    }
+    return rolled;
   }
 
-  // ---- Network ----
-  function renderNetwork(p){
-    ensureFilters(p, "netf", '<input type="text" id="netSearch" placeholder="filter by url / method…" />');
-    if(!p.querySelector("#netSearch").oninput) p.querySelector("#netSearch").oninput=()=>{dirty=true;render(true);};
-    takeQuery("Network", p.querySelector("#netSearch"));
-    const q = (p.querySelector("#netSearch").value||"").toLowerCase();
-    const list = p.querySelector("#netf-list");
-    let rows = byCat("network");
-    if(q) rows = rows.filter(e=>(e.data.uri+" "+e.data.method).toLowerCase().includes(q));
-    rows = rows.slice(-300).reverse();
-    list.innerHTML = rows.length ? rows.map(e => {
-      const d = e.data, st = d.statusCode, cls = st>=500?"status-5xx":st>=400?"status-4xx":st?"status-2xx":"", id = "net-"+e.id;
-      const open = state.expanded.has(id);
-      let html = '<div class="row net-row" data-x="'+id+'">'+
-        '<span>'+esc(d.method)+'</span><span class="msg">'+esc(d.uri)+'</span>'+
-        '<span class="'+cls+'">'+(d.error?"ERR":(st||"—"))+'</span>'+
-        '<span class="t">'+(d.durationMs!=null?d.durationMs+"ms":"—")+'</span></div>';
-      if(open){ html += '<div class="detail">'+
-        (d.error?'<b>Error:</b> '+esc(d.error)+"\n":"")+
-        '<b>Status:</b> '+(st||"—")+" "+esc(d.responseReason||"")+"\n"+
-        '<b>Duration:</b> '+(d.durationMs!=null?d.durationMs+"ms":"—")+"\n"+
-        '<b>Request headers:</b>\n'+esc(fmtHeaders(d.requestHeaders))+"\n"+
-        '<b>Response headers:</b>\n'+esc(fmtHeaders(d.responseHeaders))+'</div>'; }
-      return html;
-    }).join("") : '<div class="empty">'+emptyWhy("network", q, "no HTTP requests observed")+'</div>';
-    list.querySelectorAll(".net-row").forEach(r => r.onclick = () => toggle(r.dataset.x));
+  const FILTERS = [["all","All"],["runtime","Runtime"],["mcp","MCP"],["error","Errors"],
+                   ["log","Logs"],["network","Network"],["exception","Exceptions"],["frame","Frames"]];
+
+  function matchesFilter(a){
+    switch(state.filter){
+      case "all": return true;
+      case "mcp": return a.src === "mcp";
+      case "error": return a.sev === "error" || a.sev === "critical";
+      case "runtime": return a.src !== "mcp";
+      default: return a.src === state.filter;
+    }
+  }
+
+  function activityRow(a, interactive = true){
+    const open = state.expanded.has(a.id);
+    const expandable = !!(a.ev || a.call || a.run);
+    let h = '<div class="arow sev-'+a.sev+(interactive && expandable ? ' clickable' : '')+'" data-x="'+a.id+'">' +
+      '<span class="ts">'+fmtTime(a.at)+'</span>' +
+      '<span class="src">'+esc(a.src)+'</span>' +
+      '<span class="msg">'+esc(a.label)+'</span>' +
+      '<span class="meta">'+(a.meta ? esc(a.meta) : "")+'</span></div>';
+    if (open && interactive) h += '<div class="detail">'+detailFor(a)+'</div>';
+    return h;
+  }
+
+  function detailFor(a){
+    if (a.run)
+      return '<b>Every attempt, oldest first:</b>\n' +
+        a.run.slice().reverse().map(r => "  " + fmtTime(r.at) + "  " + esc(r.label)).join("\n");
+    if (a.call)
+      return '<b>Tool:</b> ' + esc(a.call.tool) + '\n<b>Duration:</b> ' + a.call.ms + 'ms\n' +
+        '<b>Response:</b> ' + fmtBytes(a.call.bytes) + '\n<b>Outcome:</b> ' + (a.call.isError ? 'error' : 'ok') +
+        (a.call.isError ? '\n\nThe failure reason is not recorded per call, so this row cannot say why it failed.' : '');
+    const d = a.ev.data || {};
+    if (a.src === "network") {
+      const code = d.statusCode;
+      return (d.error ? '<b>Error:</b> '+esc(d.error)+"\n" : "") +
+        '<b>Status:</b> '+(code||"—")+" "+esc(d.responseReason||"")+"\n" +
+        '<b>Duration:</b> '+(d.durationMs!=null?d.durationMs+"ms":"—")+"\n" +
+        '<b>Request headers:</b>\n'+esc(fmtHeaders(d.requestHeaders))+"\n" +
+        '<b>Response headers:</b>\n'+esc(fmtHeaders(d.responseHeaders));
+    }
+    if (a.src === "exception")
+      return (d.widget?'<b>Widget:</b> '+esc(d.widget)+"\n":"") + (d.library?'<b>Library:</b> '+esc(d.library)+"\n":"") +
+        (d.type?'<b>Type:</b> '+esc(d.type)+"\n":"") + '<b>Stack trace:</b>\n' +
+        (d.stackTrace?'<span class="stack">'+esc(d.stackTrace)+'</span>':"  (no stack captured)");
+    const keys = Object.keys(d);
+    return '<b>Source:</b> '+esc(a.ev.source)+'\n<b>Severity:</b> '+esc(a.ev.severity)+
+      (keys.length ? '\n\n'+keys.map(k=>"  "+k+": "+esc(JSON.stringify(d[k]))).join("\n") : '\n\n  (no structured data)');
   }
   function fmtHeaders(h){ if(!h) return "  (fetched only for failed/slow requests)"; return Object.entries(h).map(([k,v])=>"  "+k+": "+v).join("\n")||"  (none)"; }
 
-  // ---- Exceptions ----
-  function renderExceptions(p){
-    ensureFilters(p, "excf", '<input type="text" id="excSearch" placeholder="filter exceptions…" />');
-    if(!p.querySelector("#excSearch").oninput) p.querySelector("#excSearch").oninput=()=>{dirty=true;render(true);};
-    takeQuery("Exceptions", p.querySelector("#excSearch"));
-    const q = (p.querySelector("#excSearch").value||"").toLowerCase();
-    const list = p.querySelector("#excf-list");
-    let rows = byCat("exception");
-    if(q) rows = rows.filter(e=>e.message.toLowerCase().includes(q));
-    rows = rows.slice(-200).reverse();
-    list.innerHTML = rows.length ? rows.map(e => {
-      const d = e.data, id = "exc-"+e.id, open = state.expanded.has(id);
-      let html = '<div class="row exc-row" data-x="'+id+'"><span><span class="t">'+fmtTime(e.timestamp)+'</span>  <span class="sev-'+e.severity+'">'+esc(e.message)+'</span>'+
-        (d.library?'  <span class="t">['+esc(d.library)+']</span>':"")+'</span></div>';
-      if(open){ html += '<div class="detail">'+
-        (d.widget?'<b>Widget:</b> '+esc(d.widget)+"\n":"")+
-        (d.type?'<b>Type:</b> '+esc(d.type)+"\n":"")+
-        '<b>Stack trace:</b>\n'+(d.stackTrace?'<pre class="stack">'+esc(d.stackTrace)+'</pre>':"  (no stack captured)")+'</div>'; }
-      return html;
-    }).join("") : '<div class="empty">'+emptyWhy("exception", q, "no exceptions captured")+'</div>';
-    list.querySelectorAll(".exc-row").forEach(r => r.onclick = () => toggle(r.dataset.x));
+  function renderActivity(p){
+    let rows = activityModel().filter(matchesFilter);
+    if (state.query) { const q = state.query.toLowerCase(); rows = rows.filter(a => a.label.toLowerCase().includes(q)); }
+    const shown = rows.slice(0, 400);
+
+    let h = '<div class="filters">' +
+      FILTERS.map(([k,label]) => '<button class="fbtn'+(state.filter===k?' on':'')+'" data-f="'+k+'">'+label+'</button>').join("") +
+      '<input type="text" id="aq" placeholder="search…" value="'+esc(state.query)+'" />' +
+      (state.query ? '<button id="aclear">clear</button>' : '') + '</div>';
+
+    h += shown.length
+      ? '<div class="block">' + shown.map(a => activityRow(a)).join("") + '</div>' +
+        (rows.length > shown.length ? '<div class="note">Showing the newest '+shown.length+' of '+rows.length+' matching entries.</div>' : '')
+      : '<div class="block"><div class="empty">' + activityEmpty() + '</div></div>';
+    if (state.query && shown.length)
+      h += '<div class="note">Filtered to entries matching <b>'+esc(state.query)+'</b>.</div>';
+
+    const t = state.telemetry;
+    if (t && state.filter === "mcp" && t.mcp.cost.calls > t.mcp.cost.recent.length)
+      h += '<div class="note">Individual calls are kept for the most recent window only; <b>' +
+           t.mcp.cost.calls.toLocaleString()+'</b> calls have been made this session in total. ' +
+           'Diagnostics carries the full per-tool breakdown.</div>';
+    p.innerHTML = h;
+
+    // A search set by a drill-through belongs to the view it drilled into.
+    // Carrying it across a filter change hid every row and looked like an empty
+    // category rather than an active filter.
+    p.querySelectorAll(".fbtn").forEach(b => b.onclick = () => {
+      state.filter = b.dataset.f; state.query = ""; dirty = true; render();
+    });
+    const q = p.querySelector("#aq");
+    q.oninput = () => { state.query = q.value; dirty = true; render(); };
+    if (state.query && document.activeElement !== q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+    const cl = p.querySelector("#aclear"); if (cl) cl.onclick = () => { state.query = ""; dirty = true; render(); };
+    p.querySelectorAll(".arow.clickable").forEach(r => r.onclick = () => {
+      const id = r.dataset.x;
+      if (state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
+      dirty = true; render();
+    });
   }
 
-  // ---- Timeline ----
-  function renderTimeline(p){
-    ensureFilters(p, "tlf", '<input type="text" id="tlSearch" placeholder="search all events…" />');
-    if(!p.querySelector("#tlSearch").oninput) p.querySelector("#tlSearch").oninput=()=>{dirty=true;render(true);};
-    takeQuery("Timeline", p.querySelector("#tlSearch"));
-    const q = (p.querySelector("#tlSearch").value||"").toLowerCase();
-    const list = p.querySelector("#tlf-list");
-    let rows = state.events.slice();
-    if(q) rows = rows.filter(e=>e.message.toLowerCase().includes(q));
-    rows = rows.slice(-500).reverse();
-    list.innerHTML = rows.length ? rows.map(e =>
-      '<div class="row tl-row"><span class="t">'+fmtTime(e.timestamp)+'</span>'+
-      '<span><span class="badge-cat cat-'+e.category+'">'+e.category+'</span></span>'+
-      '<span class="msg sev-'+e.severity+'">'+esc(e.message)+'</span></div>').join("") : '<div class="empty">no events</div>';
+  function activityEmpty(){
+    if (state.query) return "No entries match <b>" + esc(state.query) + "</b>.";
+    if (state.filter === "mcp") return "<b>No MCP tool calls yet.</b> The agent has not invoked a tool this session.";
+    if (state.filter === "all" || state.filter === "runtime") return state.status.connected
+      ? "<b>Nothing yet.</b> Flutter emits no frames or logs while the app is idle."
+      : "<b>Not connected.</b> Nothing has been observed this session.";
+    const kind = emptyKind(state.filter), c = collectorFor(state.filter);
+    if (kind === "unobservable on this target")
+      return "<b>Unobservable on this target.</b><br/>" + esc(c.detail||"") +
+             "<br/>An empty view here is a blind spot, not a clean result.";
+    if (kind === "partially observable")
+      return "<b>Partially observable.</b><br/>" + esc(c.detail||"") + "<br/>Some events may never arrive.";
+    if (kind === "not connected") return "<b>Not connected.</b> Nothing has been observed this session.";
+    return "<b>0 observed.</b> The collector is active and watching.";
   }
 
-  // ---- Performance (canvas charts) ----
+  // ---- Performance -------------------------------------------------------
   function renderPerformance(p){
-    if(!p.querySelector("#frameChart")){ p.innerHTML =
-      '<div class="chart-label">Frame time (ms) — red line = 16.7ms 60fps budget</div><canvas id="frameChart"></canvas>'+
-      '<div class="chart-label">Heap memory (MB)</div><canvas id="memChart"></canvas>'; }
-    drawChart(p.querySelector("#frameChart"), byCat("frame").slice(-120).map(e=>e.data.elapsedMs||0), { budget: 16.7, color: "#42a5f5" });
+    const fs = frameStats();
+    let h = '<h2 class="sec">Frame timing</h2>';
+    if (!fs) {
+      h += '<div class="block"><div class="empty">' +
+        (state.status.connected
+          ? "<b>No frames observed.</b><br/>Flutter renders only when something changes, so an idle app is silent here — this is not a stall."
+          : "<b>Not connected.</b><br/>Frame timing requires an attached app.") + '</div></div>';
+      p.innerHTML = h; return;
+    }
+    const stat = (k,v,sub) => '<div class="stat"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="s">'+(sub||"")+'</div></div>';
+    h += '<div class="block"><div class="stats">' +
+      stat("Frames", fs.n.toLocaleString(), "captured this session") +
+      stat("p50", fs.p50.toFixed(1)+"ms") + stat("p95", fs.p95.toFixed(1)+"ms") +
+      stat("p99", fs.p99.toFixed(1)+"ms") + stat("Max", fs.max.toFixed(1)+"ms") +
+      stat("Over budget", fs.janky, Math.round(fs.janky/fs.n*100)+"% of frames") +
+      '</div></div>';
+    h += '<div class="note">Budget is a fixed <b>'+JANK_BUDGET_MS+'ms</b> (60fps), applied by the frame collector.' +
+      (fs.p50 < 10 ? ' This target\'s median frame is <b>'+fs.p50.toFixed(1)+'ms</b>, which suggests a display faster than 60Hz — against its real budget more frames would count as late, so the figure above is conservative.' : '') +
+      '</div>';
+
+    h += '<h2 class="sec">Frame time <span class="hint">last 120 frames · dashed line marks the '+JANK_BUDGET_MS+'ms budget</span></h2>' +
+      '<canvas id="frameChart"></canvas>';
+    h += '<h2 class="sec">Heap <span class="hint">sampled while this page is open</span></h2><canvas id="memChart"></canvas>';
+
+    h += '<h2 class="sec">Worst frames</h2><div class="block"><div class="scroll-x"><table class="tbl">' +
+      '<thead><tr><th>Frame</th><th class="num">Total</th><th class="num">Build</th><th class="num">Raster</th><th>When</th><th></th></tr></thead><tbody>' +
+      fs.worst.map(e => '<tr class="clickable" data-f="'+esc("Frame #"+(e.data.number!=null?e.data.number:""))+'">' +
+        '<td class="name">#'+(e.data.number!=null?e.data.number:"?")+'</td>' +
+        '<td class="num'+(isJanky(e)?' bad':'')+'">'+e.data.elapsedMs.toFixed(1)+'ms</td>' +
+        '<td class="num">'+(e.data.buildMs!=null?e.data.buildMs.toFixed(1)+"ms":"—")+'</td>' +
+        '<td class="num">'+(e.data.rasterMs!=null?e.data.rasterMs.toFixed(1)+"ms":"—")+'</td>' +
+        '<td>'+fmtTime(e.timestamp)+'</td><td style="color:var(--accent)">Activity →</td></tr>').join("") +
+      '</tbody></table></div></div>';
+    p.innerHTML = h;
+
+    drawChart(p.querySelector("#frameChart"), byCat("frame").slice(-120).map(e=>e.data.elapsedMs||0), { budget: JANK_BUDGET_MS, color: "#58a6ff" });
     drawChart(p.querySelector("#memChart"), byCat("system").filter(e=>e.data&&e.data.heapUsageMB!=null).slice(-120).map(e=>e.data.heapUsageMB), { color: "#3fb950" });
+    p.querySelectorAll("tr.clickable").forEach(r => r.onclick = () => {
+      state.filter = "frame"; state.query = r.dataset.f; setTab("Activity");
+    });
   }
+
   function drawChart(cv, data, opts){
     const dpr = window.devicePixelRatio||1, w = cv.clientWidth, h = cv.clientHeight;
     cv.width = w*dpr; cv.height = h*dpr; const ctx = cv.getContext("2d"); ctx.scale(dpr,dpr);
     ctx.clearRect(0,0,w,h);
-    if(!data.length){ ctx.fillStyle="#8b949e"; ctx.font="12px monospace"; ctx.fillText("no data yet", 12, 24); return; }
-    const max = Math.max(opts.budget||0, ...data)*1.15 || 1, pad = 8;
+    ctx.font = "11px ui-monospace, monospace";
+    if(!data.length){ ctx.fillStyle="#8b949e"; ctx.fillText("no data yet", 12, 24); return; }
+    const max = Math.max(opts.budget||0, ...data)*1.15 || 1, pad = 10;
     const x = i => pad + (i/(Math.max(data.length-1,1)))*(w-2*pad);
     const y = v => h-pad - (v/max)*(h-2*pad);
-    if(opts.budget){ ctx.strokeStyle="rgba(248,81,73,.6)"; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(pad,y(opts.budget)); ctx.lineTo(w-pad,y(opts.budget)); ctx.stroke(); ctx.setLineDash([]); }
+    if(opts.budget){ ctx.strokeStyle="rgba(248,81,73,.5)"; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(pad,y(opts.budget)); ctx.lineTo(w-pad,y(opts.budget)); ctx.stroke(); ctx.setLineDash([]); }
     ctx.strokeStyle = opts.color; ctx.lineWidth = 1.5; ctx.beginPath();
     data.forEach((v,i)=>{ i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)); }); ctx.stroke();
-    ctx.fillStyle = opts.color; ctx.font = "11px monospace";
-    ctx.fillText("max " + max.toFixed(1) + " · last " + (data[data.length-1]||0).toFixed(1), pad, 14);
+    ctx.fillStyle = "#8b949e";
+    ctx.fillText("max " + max.toFixed(1) + " · last " + (data[data.length-1]||0).toFixed(1), pad, 16);
   }
 
-  // ---- Inspector ----
-  // Widget inspection is pull-based by design: get_widget_tree and
-  // get_selected_widget are RPCs against the Flutter Inspector, and nothing
-  // pushes a tree into the store. Rather than promise a live view that does not
-  // exist, this says which links are real and which are not implemented.
-  function renderInspector(p){
-    const s = state.status, t = state.telemetry;
-    const called = (name) => t && t.mcp.cost.byTool.find(x => x.tool === name);
-    const capability = (name, cls, label, why) => subRow(name, cls, label, why);
-    let h = '<h3 class="sec">Widget inspection</h3><div>';
-    if (!s.connected) {
-      h += capability("Widget tree", "down", "UNAVAILABLE", "requires a connected app in a debug build");
-      h += capability("Selected widget", "down", "UNAVAILABLE", "requires a connected app in a debug build");
-    } else {
-      const tree = called("get_widget_tree"), sel = called("get_selected_widget");
-      h += capability("Widget tree", "pull", "PULL ONLY",
-        "MCP <b>get_widget_tree</b> — " + (tree ? tree.calls+" call"+(tree.calls>1?"s":"")+" this session, last "+ago(tree.lastAt) : "not called this session"));
-      h += capability("Selected widget", "pull", "PULL ONLY",
-        "MCP <b>get_selected_widget</b> — " + (sel ? sel.calls+" call"+(sel.calls>1?"s":"")+" this session, last "+ago(sel.lastAt) : "not called this session"));
-    }
-    h += capability("Live tree stream", "na", "NOT IMPLEMENTED",
-      "no VM Service stream pushes widget trees; a live view would have to poll, and nothing does");
-    h += capability("Live state stream", "na", "NOT IMPLEMENTED",
-      "state activity is captured as events (see the state collector in Diagnostics), but provider values are not readable");
-    h += '</div>';
-    h += '<div class="note">Debug builds only — the Inspector service extension does not exist in profile or release builds. '+
-      'Results are returned to the agent that asked for them; they are not stored, so this page has nothing to render.</div>';
-    p.innerHTML = h;
-  }
-
-  // ---- MCP activity ----
-  // Drawn entirely from the server's own cost meter, which wraps tool
-  // registration — so a tool cannot be added without being counted. One quirk
-  // worth knowing: a response is measured after its handler returns, so a
-  // status tool never includes itself in the numbers it reports.
-  function renderMcp(p){
-    const t = state.telemetry;
-    if(!t){ p.innerHTML = '<div class="empty">waiting for server telemetry…</div>'; return; }
-    const cost = t.mcp.cost, c = t.mcp.client;
-    let h = "";
-
-    h += '<h3 class="sec">Client</h3>';
-    h += '<div class="grid">' + (c
-      ? '<div class="card"><div class="k">Agent</div><div class="v">'+esc(c.name)+'</div>'+
-        '<div class="sub">'+(c.version?"v"+esc(c.version):"no version sent")+' · handshake '+ago(c.initializedAt)+'</div></div>'
-      : '<div class="card"><div class="k">Agent</div><div class="v" style="color:var(--muted)">not initialized</div>'+
-        '<div class="sub">no MCP client has completed the handshake</div></div>') +
-      '<div class="card"><div class="k">Transport</div><div class="v">stdio</div>'+
-      '<div class="sub">exactly one peer — a second agent would be a second server</div></div>' +
-      '<div class="card"><div class="k">Server</div><div class="v">v'+esc(t.server.version)+'</div>'+
-      '<div class="sub">pid '+t.server.pid+' · up '+ago(t.server.startedAt).replace(" ago","")+'</div></div>' +
-      '</div>';
-
-    h += '<h3 class="sec">This session</h3>';
-    h += '<div class="grid">' +
-      '<div class="card"><div class="k">Tool calls</div><div class="v">'+cost.calls+'</div>'+
-      '<div class="sub">'+(cost.calls-cost.errors)+' ok · '+cost.errors+' error'+(cost.errors===1?'':'s')+'</div></div>' +
-      '<div class="card"><div class="k">Response bytes</div><div class="v">'+fmtBytes(cost.responseBytes)+'</div>'+
-      '<div class="sub">≈'+cost.estimatedTokens.toLocaleString()+' tokens — bytes/4, an estimate</div></div>' +
-      '<div class="card"><div class="k">Distinct tools</div><div class="v">'+cost.byTool.length+'</div>'+
-      '<div class="sub">counts reset on every connect</div></div>' +
-      '</div>';
-
-    h += '<h3 class="sec">Recent calls</h3>';
-    h += cost.recent.length
-      ? '<div>' + cost.recent.map(r =>
-          '<div class="row tl-row"><span class="t">'+fmtTime(r.at)+'</span>'+
-          '<span'+(r.isError?' class="sev-error"':'')+'>'+esc(r.tool)+'</span>'+
-          '<span class="t">'+r.ms+'ms · '+fmtBytes(r.bytes)+(r.isError?' · error':'')+'</span></div>').join("") + '</div>'
-      : '<div class="empty">no tool calls yet this session</div>';
-
-    if (cost.byTool.length) {
-      h += '<h3 class="sec">By tool</h3>';
-      h += '<table class="tbl"><thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Errors</th>'+
-        '<th class="num">Avg</th><th class="num">Slowest</th><th class="num">Bytes</th><th>Last</th></tr></thead><tbody>' +
-        cost.byTool.map(r => '<tr><td>'+esc(r.tool)+'</td><td class="num">'+r.calls+'</td>'+
-          '<td class="num"'+(r.errors?' style="color:var(--red)"':'')+'>'+r.errors+'</td>'+
-          '<td class="num">'+Math.round(r.totalMs/r.calls)+'ms</td><td class="num">'+r.slowestMs+'ms</td>'+
-          '<td class="num">'+fmtBytes(r.bytes)+'</td><td class="t">'+ago(r.lastAt)+'</td></tr>').join("") +
-        '</tbody></table>';
-    }
-    h += '<div class="note">Only the most recent calls are kept individually; the table above is the full session total. '+
-      'What the agent did with a response is not observable from here.</div>';
-    p.innerHTML = h;
-  }
-
-  // ---- Diagnostics: what this process is, and what it can see ----
-  // Every row here is a fact the server reported or the page can observe about
-  // itself. Nothing is asserted from configuration: a URL existing is not a
-  // connection, and a subsystem that has produced nothing says so rather than
-  // showing a zero that reads as "measured zero".
-  function subRow(name, cls, label, why){
-    return '<div class="sub-row"><span class="name">'+esc(name)+'</span>'+st(cls, label)+
-      '<span class="why">'+why+'</span></div>';
-  }
-  const COLLECTOR_STATE = { active: ["active","ACTIVE"], degraded: ["degraded","DEGRADED"], unavailable: ["na","UNAVAILABLE"] };
+  // ---- Diagnostics -------------------------------------------------------
+  // Topology, subsystem health, what this build can inspect, and what nothing
+  // here can see. Every status is derived from reported state; none is drawn.
+  const COLL_STATE = { active: ["ok","ACTIVE"], degraded: ["warn","DEGRADED"], unavailable: ["na","UNAVAILABLE"] };
 
   function renderDiagnostics(p){
-    const s = state.status, t = state.telemetry;
-    let h = "";
+    const s = state.status, t = state.telemetry, sys = systemState();
+    const row = (n, x, w) => '<div class="srow"><span class="n">'+n+'</span>'+st(x.cls,x.label)+'<span class="w">'+(w!=null?w:x.why)+'</span></div>';
+    let h = '';
 
-    h += '<h3 class="sec">Topology — measured, not assumed</h3>';
-    h += '<pre class="topo">' +
-      'Flutter app  ──ws──►  Collectors  ──►  <b>RuntimeStore</b>  ──┬──►  MCP tools  ──►  agent\n' +
-      '                                       (one instance)      │      (stdio)\n' +
-      '                                                           └──►  Dashboard WS  ──►  this page\n\n' +
-      'One process holds both. The MCP tools do not receive this stream — they own it:\n' +
-      'the collectors run inside the MCP server and write the store the dashboard reads.\n' +
-      'Verified by calling an MCP tool and observing its event arrive on this socket.' +
-      '</pre>';
-
-    h += '<h3 class="sec">System</h3><div>';
-    h += s.connected
-      ? subRow("Flutter runtime", "active", "ACTIVE",
-          "isolate " + esc(s.isolateId||"?") + (s.clockOffsetMs!=null ? " · VM clock offset "+s.clockOffsetMs+"ms" : " · clock offset not yet observed"))
-      : subRow("Flutter runtime", "down", "NOT CONNECTED", "no VM Service attached — call connect_vm");
-    if (t) {
-      const r = t.retention, retained = Object.values(r.retained).reduce((a,b)=>a+b,0);
-      const evicted = Object.values(r.evicted).reduce((a,b)=>a+b,0);
-      h += subRow("Runtime store", "active", "ACTIVE",
-        retained.toLocaleString()+" events retained" + (evicted ? " · "+evicted.toLocaleString()+" evicted (ring full)" : " · nothing evicted") +
-        (r.oldestEventMs ? " · oldest "+ago(r.oldestEventMs) : ""));
-    } else {
-      h += subRow("Runtime store", "idle", "UNKNOWN", "no telemetry received from the server yet");
-    }
-    h += state.wsState === "open"
-      ? subRow("Dashboard stream", "connected", "CONNECTED",
-          "last event " + ago(state.lastEventAt) + " · last server message " + ago(state.lastMessageAt))
-      : subRow("Dashboard stream", "down", "DISCONNECTED", "WebSocket closed — retrying");
-
-    if (t) {
-      h += subRow("MCP server", "active", "ACTIVE",
-        "pid "+t.server.pid+" · v"+esc(t.server.version)+" · started "+ago(t.server.startedAt)+
-        " — same process as this dashboard, so this cannot report otherwise");
-      const cost = t.mcp.cost;
-      h += cost.calls > 0
-        ? subRow("MCP tool activity", "receiving", "RECEIVING",
-            cost.calls+" calls · "+cost.errors+" errors · last "+ago(cost.recent.length?cost.recent[0].at:null))
-        : subRow("MCP tool activity", "idle", "NO CALLS YET", "the agent has not invoked a tool this session");
-      const c = t.mcp.client;
-      h += c
-        ? subRow("Agent client", "connected", "IDENTIFIED",
-            esc(c.name) + (c.version ? " " + esc(c.version) : " (no version sent)") +
-            " · handshake " + ago(c.initializedAt) + " — self-reported, not authenticated")
-        : subRow("Agent client", "idle", "NOT INITIALIZED", "no MCP client has completed the handshake");
-    }
+    h += '<h2 class="sec">Topology <span class="hint">measured, not assumed</span></h2><div class="block">';
+    h += row("Flutter app", sys.runtime);
+    h += row("↳ VM Service", sys.vm);
+    h += row("↳ Collectors", s.connected ? {cls:"ok",label:"SUBSCRIBED"} : {cls:"idle",label:"IDLE"},
+      s.connected ? "attached to the isolate's streams"
+                  : "no runtime attached — the health below is the last value each collector reported");
+    h += t ? row("Runtime store", {cls:"ok",label:"ACTIVE"},
+        Object.values(t.retention.retained).reduce((a,b)=>a+b,0).toLocaleString()+" events retained · " +
+        (Object.values(t.retention.evicted).reduce((a,b)=>a+b,0) || "none")+" evicted" +
+        (t.retention.oldestEventMs ? " · oldest "+ago(t.retention.oldestEventMs) : ""))
+      : row("Runtime store", {cls:"idle",label:"UNKNOWN"}, "no telemetry yet");
+    h += row("↳ MCP tools", sys.mcp, "read the same store directly — one process, no bridge between them");
+    h += row("↳ Dashboard stream", sys.stream);
     h += '</div>';
 
-    h += '<h3 class="sec">Collectors</h3><div>';
-    if (!t) h += '<div class="empty">no telemetry yet</div>';
+    h += '<h2 class="sec">MCP</h2><div class="block">';
+    h += row("Server process", sys.mcp);
+    h += row("Agent connection", sys.agent);
+    h += row("Runtime dependency", s.connected ? {cls:"ok",label:"AVAILABLE"} : {cls:"na",label:"UNAVAILABLE"},
+      s.connected ? "tools that read the app can reach it" : "tools that read the app cannot reach it");
+    h += row("Tool execution", sys.tools);
+    h += '</div>';
+
+    const part = toolPartition();
+    if (part) {
+      h += '<div class="block" style="margin-top:var(--s3)"><div class="scroll-x"><table class="tbl">' +
+        '<thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Errors</th><th class="num">Avg</th>' +
+        '<th class="num">Slowest</th><th class="num">Response</th><th>Last</th><th></th></tr></thead><tbody>' +
+        t.mcp.cost.byTool.map(r => '<tr class="clickable" data-t="'+esc(r.tool)+'"><td class="name">'+esc(r.tool)+'</td>' +
+          '<td class="num">'+r.calls+'</td>' +
+          '<td class="num '+(r.errors?'bad':'good')+'">'+r.errors+'</td>' +
+          '<td class="num">'+Math.round(r.totalMs/r.calls)+'ms</td><td class="num">'+r.slowestMs+'ms</td>' +
+          '<td class="num">'+fmtBytes(r.bytes)+'</td><td>'+ago(r.lastAt)+'</td>' +
+          '<td style="color:var(--accent)">Activity →</td></tr>').join("") +
+        '</tbody></table></div></div>';
+      if (part.clean.length && part.failing.length)
+        h += '<div class="note">The split is exact: <b>'+part.clean.length+'</b> tool'+(part.clean.length>1?'s':'')+
+          ' never failed across '+part.cleanCalls+' calls, while <b>'+part.failing.length+'</b> runtime-dependent tool'+
+          (part.failing.length>1?'s':'')+' account for every one of the '+part.errors+' failures. ' +
+          'The per-call failure reason is not recorded, so this is a correlation rather than a proven cause.</div>';
+    }
+
+    h += '<h2 class="sec">Collectors</h2><div class="block">';
+    if (!t) h += '<div class="empty">No telemetry received yet.</div>';
     else h += t.collectors.map(c => {
-      const [cls, label] = COLLECTOR_STATE[c.status] || ["idle", String(c.status).toUpperCase()];
-      const why = (c.detail ? esc(c.detail)+" · " : "") + c.eventsRetained.toLocaleString() + " events" +
-        (c.lastEventMs ? " · last "+ago(c.lastEventMs) : " · none seen");
-      return subRow(c.name, cls, label, why);
+      const [cls, label] = s.connected ? (COLL_STATE[c.status] || ["idle", String(c.status).toUpperCase()])
+                                       : ["idle", "IDLE"];
+      const why = (!s.connected ? "no runtime attached · " : (c.detail ? esc(c.detail)+" · " : "")) +
+        c.eventsRetained.toLocaleString()+" events" + (c.lastEventMs ? " · last "+ago(c.lastEventMs) : " · none seen");
+      return '<div class="srow"><span class="n">'+esc(c.name)+'</span>'+st(cls,label)+'<span class="w">'+why+'</span></div>';
     }).join("");
     h += '</div>';
 
-    h += '<h3 class="sec">Not observable</h3><div>';
-    h += subRow("Widget tree", "pull", "PULL ONLY",
-      "get_widget_tree / get_selected_widget are RPCs. Nothing pushes trees into the store, so there is no stream to render.");
-    h += subRow("CPU", "na", "NOT AVAILABLE", "the Dart VM Service does not sample CPU");
-    h += subRow("Other MCP clients", "na", "NOT AVAILABLE",
-      "the transport is stdio: exactly one peer, the process that spawned this one. A second agent would be a second server with its own store.");
-    h += subRow("Agent behaviour", "na", "NOT AVAILABLE",
-      "tool calls are counted; what the model concluded from a result never reaches this process");
-    h += subRow("Causality", "na", "NOT AVAILABLE",
-      "events carry time, not cause. Adjacency is measured; any cause shown elsewhere is inferred and labelled as such.");
+    // Inspector folded in: it was a capability list, which is what this page is.
+    h += '<h2 class="sec">Inspection <span class="hint">pull-based — nothing streams a widget tree</span></h2><div class="block">';
+    const called = (n) => t && t.mcp.cost.byTool.find(x => x.tool === n);
+    const wt = called("get_widget_tree"), sel = called("get_selected_widget");
+    const pullRow = (name, tool, rec) => row(name, s.connected ? {cls:"warn",label:"PULL ONLY"} : {cls:"na",label:"UNAVAILABLE"},
+      s.connected ? "MCP <code>"+tool+"</code> — " + (rec ? rec.calls+" call"+(rec.calls>1?"s":"")+" this session, last "+ago(rec.lastAt)
+                                                          : "not called this session")
+                  : "requires a connected app in a debug build");
+    h += pullRow("Widget tree", "get_widget_tree", wt);
+    h += pullRow("Selected widget", "get_selected_widget", sel);
+    h += row("Live tree stream", {cls:"na",label:"NOT IMPLEMENTED"},
+      "no VM Service stream pushes widget trees; a live view would have to poll, and nothing does");
     h += '</div>';
 
-    if (t && t.unobservable.length) {
+    h += '<h2 class="sec">Not observable <span class="hint">stated, so an empty view is never mistaken for a clean one</span></h2><div class="block">';
+    h += row("CPU", {cls:"na",label:"UNAVAILABLE"}, "the Dart VM Service does not sample it");
+    h += row("Other MCP clients", {cls:"na",label:"UNAVAILABLE"},
+      "the transport is stdio: exactly one peer, the process that spawned this one. A second agent would be a second server with its own store.");
+    h += row("Agent behaviour", {cls:"na",label:"UNAVAILABLE"},
+      "tool calls are counted; what the model concluded from a result never reaches this process");
+    h += row("Causality", {cls:"na",label:"UNAVAILABLE"},
+      "events carry time, not cause. Adjacency is measured; anything stated as a cause elsewhere is labelled as inferred.");
+    h += '</div>';
+
+    if (t && t.unobservable.length)
       h += '<div class="note">Empty because nothing could see them, not because nothing happened: <b>' +
-        t.unobservable.map(esc).join(", ") + '</b>. Reading those tabs as "clean" would be wrong.</div>';
-    }
+        t.unobservable.map(esc).join(", ") + '</b>.</div>';
     p.innerHTML = h;
+    p.querySelectorAll("tr.clickable").forEach(r => r.onclick = () => {
+      state.filter = "mcp"; state.query = r.dataset.t; setTab("Activity");
+    });
   }
 
-  function toggle(id){ if(state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id); dirty=true; render(true); }
-
   // ---- boot ----
-  setTab("Overview"); updateConn(); connect();
+  setTab("Overview"); connect();
 })();
 </script>
 </body>
