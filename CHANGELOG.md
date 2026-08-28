@@ -6,6 +6,14 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-08-28
+
+A minor release, not a patch: `Diagnosis` gains fields and two tools gain output.
+It also carries a security fix — **0.18.1 and earlier can leak the VM Service
+credential into tool output when the observed app logs its own debug-service URI,
+which a web target does on startup.** That token authorises `evaluate`, so
+upgrade rather than pin.
+
 ### Added - Phase D, evaluation
 
 The diagnosis engine is now measured against recorded sessions instead of only
@@ -1184,6 +1192,8 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.19.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.19.0
+[0.18.1]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.18.1
 [0.18.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.18.0
 [0.17.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.17.0
 [0.16.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.16.0
