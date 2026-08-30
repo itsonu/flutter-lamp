@@ -5,8 +5,10 @@ colors:
   ground: "#0d1117"
   surface: "#161b22"
   surface-recessed: "#1c2128"
-  rule: "#30363d"
-  rule-soft: "#21262d"
+  rule-strong: "#666c73"
+  rule: "#3d444d"
+  rule-soft: "#2b323a"
+  hover: "#232932"
   text: "#e6edf3"
   text-secondary: "#b6c0cb"
   text-muted: "#8b949e"
@@ -141,8 +143,10 @@ A near-neutral dark ground with four signal hues that only ever mean state.
 - **Ground** (`#0d1117`): Page background. The only true backdrop.
 - **Surface** (`#161b22`): Blocks, the header, the nav strip. One step up from ground.
 - **Surface Recessed** (`#1c2128`): Expanded detail panes, controls, hover states. Reads as *inside* a surface, not above it.
-- **Rule** (`#30363d`): Block borders, table header dividers, control strokes.
-- **Rule Soft** (`#21262d`): Row dividers inside a block, header underline. Present but not counted.
+- **Rule Strong** (`#666c73`): the boundary of a *control* — buttons, inputs, filter chips, the header chip group on hover. **3.05:1 against `--panel2`**, which is what WCAG 1.4.11 asks of a component boundary.
+- **Rule** (`#3d444d`): structural edges — block borders, canvases, the table header underline (1.92:1 against the page). Visible, deliberately not a control.
+- **Rule Soft** (`#2b323a`): row dividers inside a block. Present, not counted.
+- **Hover** (`#232932`): pointer feedback only. Distinct from `--panel2`, which is a surface tint; using the surface tint for hover made the row under the pointer change by 1.07:1, effectively nothing.
 - **Text** (`#e6edf3`): Primary values, row names, active tab.
 - **Text Secondary** (`#b6c0cb`): Activity messages and inline code — legible without competing with primary values.
 - **Text Muted** (`#8b949e`): Labels, explanations, timestamps, all `.sub` and `.why` copy.
@@ -168,6 +172,13 @@ Four hues, six states. These are the entire state vocabulary and are used identi
 *unobservable*. These are different facts and must never share a glyph, even
 when both render grey. This is the visual expression of PRODUCT.md's third
 principle.
+
+**The Three-Boundary Rule.** Boundaries come in exactly three weights and each
+one means something: a *control* takes `--rule-strong` and clears 3:1; a
+*structural* edge takes `--rule`; a *separator between rows* takes
+`--rule-soft`. Raising them all to the control weight would make an instrument
+panel shout, and leaving them all at the separator weight is what put every
+boundary at 1.33:1.
 
 **The Four-Hue Rule.** No fifth accent. If a new state needs distinguishing, it
 earns a new *word* in the status vocabulary, not a new colour. The palette's
@@ -286,8 +297,10 @@ means something.
 
 ### Filter chips
 
-Buttons in the `.filters` row. Identical geometry to a button; the selected one
-carries `.on`. They wrap naturally and are never truncated.
+Buttons in the `.filters` row carrying `aria-pressed`. Identical geometry to a
+button; the selected one carries `.on`. The first four scope the source and the
+rest pick a category — a `--s4` gap marks the boundary, rather than a divider, a
+heading or a second colour. They wrap naturally and are never truncated.
 
 ### Blocks (containers)
 
@@ -312,7 +325,7 @@ Rule).
 
 ### Activity rows
 
-Four columns, `12.5px` mono message. Severity tints only the message text, not
+Four columns, `12px` mono message (`--fs-label`). Severity tints only the message text, not
 the row. Expandable rows take `cursor: pointer` and a `--panel2` hover; the
 expanded `.detail` is a recessed pane with `pre-wrap` text, `--text` bold keys
 and `--trace-red` stack traces.
@@ -420,6 +433,10 @@ evidence — a worst-frame row opens Activity filtered to that frame number.
 Changing a filter clears a drill-through's search, because carrying it across
 made a populated category look empty.
 
+**Findings are ordered most severe first**, from the severity already assigned;
+nothing is invented to rank them. A caveat that qualifies the finding above it
+inherits that finding's rank so the pair stays together.
+
 **Findings carry the remedy when the evidence already contains one.** The VM
 Service diagnosis event holds concrete transport advice in `data.transport`;
 the finding renders it verbatim. Remediation is never synthesised — if the
@@ -441,6 +458,10 @@ untouched, and a reload restores what it still retains.
 **Export events** downloads that same browser buffer — not MCP tool telemetry,
 not diagnoses, not anything already evicted. The full session export is the
 `export_session` MCP tool. The button is named and titled for that scope.
+
+**Nav badges name themselves.** Four badges carried three different meanings —
+findings, events, frames over budget, impaired collectors — with nothing saying
+which. The number stays; each now carries a title and an accessible label.
 
 **Counts name their window.** *Events in view* and *Frames in view* are the
 browser's buffer; Diagnostics reports what the store retains. The two differ

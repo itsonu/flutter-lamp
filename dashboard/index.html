@@ -12,8 +12,15 @@
    * platform font also ships optical sizing and tracking tables already.
    */
   :root {
-    --bg: #0d1117; --panel: #161b22; --panel2: #1c2128; --border: #30363d;
-    --border-soft: #21262d;
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2128;
+    /* control boundary — 3.05:1 on --panel2, clears WCAG 1.4.11 */
+    --rule-strong: #666c73;
+    /* structural edge — blocks, canvases, table header underline (1.76:1) */
+    --border: #3d444d;
+    /* separator between rows inside a block (1.33:1) — present, not counted */
+    --border-soft: #2b323a;
+    /* pointer feedback; distinct from --panel2, which is a surface tint */
+    --hover: #232932;
     --text: #e6edf3; --text2: #b6c0cb; --muted: #8b949e;
     --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; --red: #f85149;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -58,7 +65,7 @@
      state, so there are three. */
   .chips { display: flex; gap: var(--s3); align-items: center; cursor: pointer; padding: var(--s1) var(--s2);
            border-radius: var(--radius); border: 1px solid transparent; flex-wrap: wrap; }
-  .chips:hover { border-color: var(--border); background: var(--panel2); }
+  .chips:hover { border-color: var(--rule-strong); background: var(--hover); }
   .chip { display: inline-flex; align-items: center; gap: 6px;
           font-size: var(--fs-meta); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
   .chip b { font-weight: 500; letter-spacing: 0.02em; text-transform: none; font-size: var(--fs-label); }
@@ -67,7 +74,7 @@
 
   button, select, input {
     font-family: var(--sans); font-size: var(--fs-label); color: var(--text);
-    background: var(--panel2); border: 1px solid var(--border); border-radius: 6px;
+    background: var(--panel2); border: 1px solid var(--rule-strong); border-radius: 6px;
     padding: 5px 10px;
   }
   button { cursor: pointer; }
@@ -94,7 +101,7 @@
   nav button { border: none; background: none; border-radius: 0; padding: var(--s3);
                border-bottom: 2px solid transparent; color: var(--muted); white-space: nowrap;
                font-size: var(--fs-body); }
-  nav button:hover { border-color: transparent; border-bottom-color: var(--border); color: var(--text2); }
+  nav button:hover { border-color: transparent; border-bottom-color: var(--rule-strong); color: var(--text2); }
   nav button.active { color: var(--text); border-bottom-color: var(--accent); }
   nav button:active { transform: none; }
   nav .badge { font-family: var(--mono); font-size: var(--fs-meta); color: var(--muted); margin-left: 6px; }
@@ -133,7 +140,7 @@
   .s-na::before { background: none; box-shadow: inset 0 0 0 1px currentColor; }
 
   /* ---- status rows ----------------------------------------------------- */
-  .srow { display: grid; grid-template-columns: 168px 116px 1fr; gap: var(--s3);
+  .srow { display: grid; grid-template-columns: 168px 124px 1fr; gap: var(--s3);
           align-items: baseline; padding: var(--s2) var(--s4); border-bottom: 1px solid var(--border-soft); }
   .srow:last-child { border-bottom: none; }
   .srow .n { color: var(--text); font-weight: 500; }
@@ -156,7 +163,7 @@
          padding: var(--s3) var(--s4); border-bottom: 1px solid var(--border-soft); align-items: start; }
   .fnd:last-child { border-bottom: none; }
   .fnd.clickable { cursor: pointer; }
-  .fnd.clickable:hover { background: var(--panel2); }
+  .fnd.clickable:hover { background: var(--hover); }
   .fnd .mk { font-size: var(--fs-body); line-height: 1.4; }
   .fnd .ttl { font-weight: 500; }
   .fnd .why { color: var(--muted); font-size: var(--fs-label); margin-top: 2px; }
@@ -167,11 +174,15 @@
 
   /* ---- activity stream ------------------------------------------------- */
   .filters { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; margin-bottom: var(--s3); }
+  /* The first four chips scope the source; the rest pick a category. A gap says
+     so without a divider, a heading, or a second colour. */
+  .fbtn.group-2 { margin-left: var(--s4); }
+  #aq { margin-left: var(--s4); }
   .arow { display: grid; grid-template-columns: 92px 76px 1fr auto; gap: var(--s3);
           padding: 5px var(--s3); border-bottom: 1px solid var(--border-soft); align-items: baseline;
           font-size: var(--fs-label); }
   .arow.clickable { cursor: pointer; }
-  .arow.clickable:hover { background: var(--panel2); }
+  .arow.clickable:hover { background: var(--hover); }
   .arow.clickable:focus-visible { outline-offset: -2px; }
   .fnd.clickable:focus-visible { outline-offset: -2px; }
   .arow .ts { font-family: var(--mono); color: var(--muted); font-size: var(--fs-meta); }
@@ -205,7 +216,7 @@
   table.tbl td.name { color: var(--text); }
   table.tbl td.num, table.tbl th.num { text-align: right; }
   table.tbl tr.clickable { cursor: pointer; }
-  table.tbl tr.clickable:hover td { background: var(--panel2); }
+  table.tbl tr.clickable:hover td { background: var(--hover); }
   table.tbl td.bad { color: var(--red); }
   table.tbl td.good { color: var(--green); }
 
@@ -220,6 +231,10 @@
   /* ---- responsive ------------------------------------------------------ */
   /* The explanation column carries the meaning; it must never be squeezed to a
      sliver, so below this width the rows stack instead of holding a grid. */
+  @media (max-width: 620px) {
+    nav button { padding: var(--s3) var(--s2); }
+    nav .badge { margin-left: var(--s1); }
+  }
   @media (max-width: 760px) {
     .srow { grid-template-columns: 1fr; gap: var(--s1); padding: var(--s3); }
     .arow { grid-template-columns: 80px 1fr; }
@@ -241,7 +256,8 @@
     header { background: var(--panel); backdrop-filter: none; }
   }
   @media (prefers-contrast: more) {
-    :root { --muted: #aab4bf; --border: #4a545f; --border-soft: #3a434d; }
+    :root { --muted: #aab4bf; --rule-strong: #8b949e; --border: #6a7077;
+            --border-soft: #4a525c; --hover: #2b323a; }
     header { background: var(--panel); backdrop-filter: none; }
   }
 </style>
@@ -527,10 +543,21 @@
     const att = attention();
     const bad = att.filter(f => f.sev === "err" || f.sev === "warn").length;
     const jank = byCat("frame").filter(isJanky).length;
-    const counts = { Overview: bad || "", Activity: state.events.length || "",
-                     Performance: jank || "", Diagnostics: impaired || "" };
+    // Four badges previously carried three different meanings with nothing
+    // saying which. The number is kept — it is genuinely useful — and each one
+    // now names itself to the pointer and to assistive tech.
+    const counts = {
+      Overview:    [bad,                    bad === 1 ? "finding" : "findings"],
+      Activity:    [state.events.length,     "events in view"],
+      Performance: [jank,                    "frames over budget"],
+      Diagnostics: [impaired,                impaired === 1 ? "collector impaired" : "collectors impaired"],
+    };
     TABS.forEach(n => { const b = document.getElementById("badge-"+n); if(!b) return;
-      b.textContent = counts[n] === "" ? "" : counts[n];
+      const [v, noun] = counts[n];
+      b.textContent = v ? v.toLocaleString() : "";
+      b.title = v ? v.toLocaleString() + " " + noun : "";
+      if (v) b.setAttribute("aria-label", v.toLocaleString() + " " + noun);
+      else b.removeAttribute("aria-label");
       b.classList.toggle("alert", (n==="Overview" && bad>0) || (n==="Diagnostics" && impaired>0));
     });
     ({ Overview: renderOverview, Activity: renderActivity,
@@ -683,6 +710,7 @@
         push("blind", "○", "That link is a correlation, not a proven cause",
           "The failure reason is not recorded per call, so the runtime being unavailable explains the pattern but has not been demonstrated.",
           null, null);
+      if (explained) out[out.length - 1].pinTo = out.length - 2;
     }
 
     const fs = frameStats();
@@ -716,7 +744,14 @@
         push("blind", "○", ev.toLocaleString() + " events dropped",
           "The ring buffer filled, so history before that point is gone.", null, { tab:"Diagnostics" });
     }
-    return out;
+    // Most severe first. A caveat that qualifies the finding above it has to
+    // stay attached to it, so it inherits that finding's rank rather than
+    // sinking to the bottom of the list.
+    const RANK = { err: 0, warn: 1, blind: 2, ok: 3 };
+    return out
+      .map((f, i) => ({ f, i, rank: f.pinTo != null ? out[f.pinTo].sev : f.sev }))
+      .sort((a, b) => (RANK[a.rank] - RANK[b.rank]) || (a.i - b.i))
+      .map((x) => x.f);
   }
 
   /** The one-line reason behind {@link emptyKind}, for a stat's sub-label. */
@@ -878,6 +913,9 @@
                    ["toolfail","Tool failures"],["exception","Exceptions"],
                    ["log","Logs"],["network","Network"],["frame","Frames"]];
 
+  /** Where the source-scope chips end and the category chips begin. */
+  const SOURCE_FILTERS = 4;
+
   /** Human wording for each filter, used by the active-filter summary. */
   const FILTER_LABEL = Object.fromEntries(FILTERS);
 
@@ -949,7 +987,8 @@
     const shown = rows.slice(0, 400);
 
     let h = '<div class="filters">' +
-      FILTERS.map(([k,label]) => '<button class="fbtn'+(state.filter===k?' on':'')+'" data-f="'+k+'">'+label+'</button>').join("") +
+      FILTERS.map(([k,label],i) => '<button class="fbtn'+(state.filter===k?' on':'')+(i===SOURCE_FILTERS?' group-2':'')+
+        '" data-f="'+k+'" aria-pressed="'+(state.filter===k)+'">'+label+'</button>').join("") +
       '<input type="text" id="aq" aria-label="Search activity entries" placeholder="search…" value="'+esc(state.query)+'" />' +
       (state.query ? '<button id="aclear">clear</button>' : '') + '</div>';
 
