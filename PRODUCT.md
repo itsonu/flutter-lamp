@@ -150,6 +150,10 @@ should not regress:
   its dot, and a live region announces runtime, MCP, stream and view-paused
   transitions.
 
-Known gap, stated rather than implied: non-text contrast (control borders and
-hover feedback) is below the 3:1 of WCAG 1.4.11. Text contrast passes AA
-throughout.
+- **Non-text contrast.** The boundary of a control clears 3:1 (WCAG 1.4.11);
+  structural edges and row separators are deliberately quieter, because a card
+  edge is not a component boundary and text carries the content there. Text
+  contrast passes AA throughout.
+- **Filter, tab and search state lives in the URL**, so a filtered view can be
+  reloaded, bookmarked or handed to someone else, and a drill-through is
+  reversible with the browser's own Back button rather than a bespoke control.

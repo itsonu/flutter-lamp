@@ -271,7 +271,7 @@
   <div class="spacer"></div>
   <div class="controls">
     <button id="pauseBtn">Pause</button>
-    <button id="clearBtn">Clear view</button>
+    <button id="clearBtn" title="Empties this browser's buffer only. The server's store is untouched — reload to restore whatever it still retains.">Clear view</button>
     <button id="exportBtn" title="Downloads the runtime events held in this browser only — not MCP tool telemetry, diagnoses or anything already evicted. The full session export is the export_session MCP tool.">Export events</button>
   </div>
 </header>
@@ -323,7 +323,47 @@
     p.setAttribute("aria-labelledby", "tabbtn-" + name);
     wrap.appendChild(p); panels[name] = p;
   });
-  function setTab(name){
+  /**
+   * Tab, filter and search live in the location hash.
+   *
+   * Two things fall out of that, both free. A filtered view can be reloaded,
+   * bookmarked or pasted to someone else — for a tool kept open beside an
+   * editor for hours that was the cheapest efficiency win left. And a
+   * drill-through pushes a history entry, so the browser's own Back button
+   * reverses it; a bespoke back control would be a second, less familiar way to
+   * do something every user already knows how to do.
+   */
+  function syncUrl(mode){
+    if (mode === "none") return;
+    const parts = [state.active];
+    // Filter and search only mean something on Activity. Carrying them into
+    // #Overview/system would imply Overview is filtered, which it is not.
+    if (state.active === "Activity") {
+      if (state.filter !== "all" || state.query) parts.push(state.filter);
+      if (state.query) parts.push(encodeURIComponent(state.query));
+    }
+    const hash = "#" + parts.join("/");
+    if (hash === location.hash) return;
+    history[mode === "push" ? "pushState" : "replaceState"](null, "", hash);
+  }
+
+  /** Read the hash into state and return the tab it names. */
+  function applyUrl(){
+    // Each segment is decoded on its own: decoding the whole string first would
+    // turn an encoded slash inside the search term into a segment separator.
+    const raw = location.hash.replace(/^#/, "").split("/");
+    const tab = TABS.includes(raw[0]) ? raw[0] : "Overview";
+    // A hash naming a filter for another tab is ignored rather than applied.
+    const named = tab === "Activity" && raw[1] && FILTERS.some(([k]) => k === raw[1]);
+    state.filter = named ? raw[1] : "all";
+    state.query = named && raw[2] ? decodeURIComponent(raw[2]) : "";
+    state.cursor = null;
+    return tab;
+  }
+
+  window.addEventListener("popstate", () => setTab(applyUrl(), "none"));
+
+  function setTab(name, mode){
     state.active = name; dirty = true;
     [...nav.children].forEach(c => {
       const on = c.dataset.tab === name;
@@ -334,6 +374,7 @@
     });
     Object.entries(panels).forEach(([n,p]) => p.classList.toggle("active", n===name));
     main.scrollTop = 0;
+    syncUrl(mode || "replace");
     render();
   }
 
@@ -844,7 +885,7 @@
       if (a.filter) state.filter = a.filter;
       state.query = a.query != null ? a.query : "";
       state.cursor = null;
-      setTab(a.tab);
+      setTab(a.tab, "push");
     };
     p.querySelectorAll(".fnd.clickable").forEach(n => {
       n.onclick = () => go(n);
@@ -1025,13 +1066,18 @@
     // Carrying it across a filter change hid every row and looked like an empty
     // category rather than an active filter.
     p.querySelectorAll(".fbtn").forEach(b => b.onclick = () => {
-      state.filter = b.dataset.f; state.query = ""; dirty = true; render();
+      state.filter = b.dataset.f; state.query = ""; state.cursor = null;
+      syncUrl("replace"); dirty = true; render();
     });
     const q = p.querySelector("#aq");
-    q.oninput = () => { state.query = q.value; dirty = true; render(); };
-    const cl = p.querySelector("#aclear"); if (cl) cl.onclick = () => { state.query = ""; dirty = true; render(); };
+    q.oninput = () => { state.query = q.value; syncUrl("replace"); dirty = true; render(); };
+    const cl = p.querySelector("#aclear");
+    if (cl) cl.onclick = () => { state.query = ""; syncUrl("replace"); dirty = true; render(); };
     const fc = p.querySelector("#fclear");
-    if (fc) fc.onclick = () => { state.filter = "all"; state.query = ""; state.cursor = null; dirty = true; render(); };
+    if (fc) fc.onclick = () => {
+      state.filter = "all"; state.query = ""; state.cursor = null;
+      syncUrl("replace"); dirty = true; render();
+    };
     const rowEls = [...p.querySelectorAll(".arow.clickable")];
     // Exactly one row is a tab stop. Keep the cursor on a row that still exists
     // after a re-render, otherwise the list becomes unreachable by keyboard.
@@ -1068,6 +1114,10 @@
   }
 
   function activityEmpty(){
+    // Ahead of every category message: if the reader emptied the buffer, that
+    // is the explanation, and it is the one that needs the reassurance.
+    if (state.cleared && !state.events.length)
+      return "<b>View cleared.</b> The server's store is untouched — reload to restore whatever it still retains.";
     if (state.query) return "No entries match <b>" + esc(state.query) + "</b>.";
     if (state.filter === "mcp") return "<b>No MCP tool calls yet.</b> The agent has not invoked a tool this session.";
     if (state.filter === "toolfail") return "<b>No failed tool calls.</b> Every MCP call this session returned successfully.";
@@ -1128,7 +1178,7 @@
     drawChart(p.querySelector("#frameChart"), byCat("frame").slice(-120).map(e=>e.data.elapsedMs||0), { budget: JANK_BUDGET_MS, color: "#58a6ff" });
     drawChart(p.querySelector("#memChart"), byCat("system").filter(e=>e.data&&e.data.heapUsageMB!=null).slice(-120).map(e=>e.data.heapUsageMB), { color: "#3fb950" });
     p.querySelectorAll("tr.clickable").forEach(r => {
-      const go = () => { state.filter = "frame"; state.query = r.dataset.f; state.cursor = null; setTab("Activity"); };
+      const go = () => { state.filter = "frame"; state.query = r.dataset.f; state.cursor = null; setTab("Activity", "push"); };
       r.onclick = go;
       const b = r.querySelector("button.lnk");
       if (b) { b.onclick = (e) => { e.stopPropagation(); go(); };
@@ -1248,7 +1298,7 @@
         t.unobservable.map(esc).join(", ") + '</b>.</div>';
     p.innerHTML = h;
     p.querySelectorAll("tr.clickable").forEach(r => {
-      const go = () => { state.filter = "mcp"; state.query = r.dataset.t; state.cursor = null; setTab("Activity"); };
+      const go = () => { state.filter = "mcp"; state.query = r.dataset.t; state.cursor = null; setTab("Activity", "push"); };
       r.onclick = go;
       const b = r.querySelector("button.lnk");
       if (b) { b.onclick = (e) => { e.stopPropagation(); go(); };
@@ -1257,7 +1307,7 @@
   }
 
   // ---- boot ----
-  setTab("Overview"); connect();
+  setTab(applyUrl(), "replace"); connect();
 })();
 </script>
 </body>

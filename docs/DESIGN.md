@@ -452,6 +452,15 @@ entries, trimmed oldest-first — so a sufficiently long pause **can** evict
 entries client-side. The UI says this in the paused row. Do not document or
 imply that nothing is lost while paused.
 
+**Tab, filter and search live in the location hash** (`#Activity/mcp/get_frames`),
+so a filtered view can be reloaded, bookmarked or handed to someone else. A
+drill-through *pushes* a history entry, so the browser's own Back button
+reverses it — a bespoke back control would be a second, less familiar way to do
+something every user already knows. Refinements of the current view (changing a
+filter, typing in search) *replace* instead, so they never fill the history.
+Filter and search appear in the hash only on Activity, because `#Overview/system`
+would imply Overview is filtered.
+
 **Clear view** empties the browser's buffer only. The server's store is
 untouched, and a reload restores what it still retains.
 
