@@ -13,9 +13,9 @@ Status of each phase. Detail on what is planned next, and why, lives in
 | 6 | Memory — Dart heap, capacity, external | Shipped |
 | 8 | AI diagnosis — evidence-anchored `diagnose_runtime` with confidence | Shipped (early) |
 | 12 | Live browser dashboard | Shipped |
-| 7 | Correlation engine — fold memory, timeline and frames into diagnosis | Planned |
-| — | Evidence intelligence — stable IDs, temporal correlation, `runtime_health`, `what_changed`, `explain_diagnosis` | Planned |
-| — | Navigation intelligence — current route, transitions, route-scoped evidence | Planned |
+| 7 | Correlation engine — fold memory, timeline and frames into diagnosis | Partly shipped — memory, frames, network, route and state activity are correlated into `diagnose_performance`; the **VM timeline is not**, because it is fetched on demand and never stored, so GC pauses stay unobservable |
+| — | Evidence intelligence — stable IDs, temporal correlation, `runtime_health`, `what_changed`, `explain_diagnosis` | Shipped |
+| — | Navigation intelligence — current route, transitions, route-scoped evidence | Shipped |
 | — | State management — Riverpod and Provider activity correlation; Bloc observable through provider | Shipped |
 | — | Session recording — versioned export for bug reports and offline analysis | Shipped |
 | 9 | Knowledge graph over runtime evidence | Exploratory |

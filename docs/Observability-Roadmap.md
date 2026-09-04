@@ -148,7 +148,7 @@ today only network carries one, so there is nothing to join.
 Done, in `eval/` and `src/eval/`:
 
 - **Golden incidents** — recorded sessions with expected cause, evidence ids and
-  a confidence band, including a negative where `unknown` is correct. Three so
+  a confidence band, including a negative where `unknown` is correct. Eight so
   far. Two deliberately straddle the jank threshold (19.4% must stay unknown,
   20.0% must be diagnosed) so they pin the boundary rather than two unrelated
   points. The other two are a ranking pair: an uncaught `StateError` with a stack
