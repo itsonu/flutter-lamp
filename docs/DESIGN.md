@@ -476,6 +476,12 @@ which. The number stays; each now carries a title and an accessible label.
 browser's buffer; Diagnostics reports what the store retains. The two differ
 routinely and the labels say why.
 
+**The frame budget comes from the server, not from a second copy here.** The
+page previously held its own `16.7` literal, which was correct only while the
+server's was. It now reads the budget the collector actually classified against,
+including its provenance (`assumed` or `configured`), and falls back to the same
+assumed value only before telemetry arrives.
+
 **Charts report the observed maximum, never the drawing ceiling.** The plotting
 area is padded 15% above the data so the series does not touch the top edge;
 that padded number is not a measurement and is never printed. The caption gives

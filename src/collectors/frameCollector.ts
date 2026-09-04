@@ -2,15 +2,20 @@ import { eventTime, type Collector } from "./collector.js";
 import type { RuntimeStore } from "../core/runtimeStore.js";
 import type { Severity } from "../core/events.js";
 import type { VmService } from "../vm/vmService.js";
-
-/** 60fps frame budget in microseconds. Above this a frame is "janky". */
-const FRAME_BUDGET_US = 16_667;
+import { frameBudgetUs } from "../core/frameBudget.js";
 
 /**
  * Frame timings from the `Extension` stream, extensionKind "Flutter.Frame".
  * Each event reports build/raster/total elapsed in microseconds. We classify
- * severity by how far the frame blew past the 60fps budget so jank surfaces
- * in severity-filtered queries and the diagnosis engine.
+ * severity by how far the frame blew past the budget so jank surfaces in
+ * severity-filtered queries and the diagnosis engine. The budget is one
+ * assumption held in `core/frameBudget.ts`, not a literal repeated here — and
+ * it is an assumption: the VM Service does not report the display refresh rate.
+ *
+ * `startTime` and `vsyncOverhead` are stored when the event carries them.
+ * Nothing reads them yet; they are what a future derivation of the real refresh
+ * period would need, and discarding them is why that derivation is currently
+ * impossible from recorded evidence.
  */
 export class FrameCollector implements Collector {
   readonly name = "frames";
@@ -30,11 +35,12 @@ export class FrameCollector implements Collector {
       const buildUs: number = d.build ?? 0;
       const rasterUs: number = d.raster ?? 0;
 
+      const budgetUs = frameBudgetUs();
       let severity: Severity = "debug";
-      if (elapsedUs > FRAME_BUDGET_US * 2) severity = "error";
-      else if (elapsedUs > FRAME_BUDGET_US) severity = "warning";
+      if (elapsedUs > budgetUs * 2) severity = "error";
+      else if (elapsedUs > budgetUs) severity = "warning";
 
-      const janky = elapsedUs > FRAME_BUDGET_US;
+      const janky = elapsedUs > budgetUs;
       store.add({
         timestamp: eventTime(event),
         source: "Flutter.Frame",
@@ -47,6 +53,12 @@ export class FrameCollector implements Collector {
           buildMs: round2(buildUs / 1000),
           rasterMs: round2(rasterUs / 1000),
           janky,
+          // Present only on targets that report them. Absent is a fact about
+          // the target, so the keys are omitted rather than set to null.
+          ...(typeof d.startTime === "number" ? { startTimeUs: d.startTime } : {}),
+          ...(typeof d.vsyncOverhead === "number"
+            ? { vsyncOverheadMs: round2(d.vsyncOverhead / 1000) }
+            : {}),
         },
       });
     });

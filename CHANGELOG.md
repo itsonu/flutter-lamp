@@ -6,6 +6,44 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed - the frame budget is one assumption, and says so
+
+The 16.67ms jank threshold was a literal in four places and was presented as a
+fact. It is now a single value in `src/core/frameBudget.ts` carrying its own
+provenance, and `diagnose_performance` reports that provenance in
+`limitations` — the dashboard already said it; the MCP output did not, so an
+agent reading a jank finding had no way to know the threshold was assumed.
+
+**Why it is not derived from observed cadence.** That was the intent, and the
+evidence does not support it. Measured against the recorded device sessions:
+stored frame data carries no per-frame start time, so the only clock is event
+arrival; arrival is batched, with a **median inter-frame delta of 0ms** and a
+maximum of 7,703ms in a session where **235 of 239 frame-number pairs were
+consecutive** — the app was rendering continuously and the arrival clock could
+not see it; and `elapsed` is work per frame rather than the vsync period, so a
+low median (p50 8.23ms on that session) is *consistent* with a faster panel
+without demonstrating one. Inferring a refresh rate from any of those would be
+the fabricated certainty this project exists to avoid, so the rate is reported
+as unknown.
+
+- `FLUTTER_LAMP_FRAME_BUDGET_MS` lets a developer supply the fact the runtime
+  cannot. A value outside 1–100ms is rejected with a message rather than
+  silently becoming the default, because a typo should not look like a working
+  configuration.
+- `FrameCollector` now stores `startTimeUs` and `vsyncOverheadMs` **when the
+  event carries them**, omitting the keys otherwise. Nothing reads them yet;
+  discarding them is precisely why the derivation above is impossible from
+  recorded evidence, and keeping them makes it answerable later from data
+  rather than from argument.
+- `cadenceEvidence()` reports whether a target could support the derivation. It
+  deliberately never returns a rate.
+
+Default behaviour is unchanged, and that is auditable: across all eight
+recorded incidents, every one of the 235 `janky` flags still matches the
+16.67ms budget, so no golden was re-recorded. Declaring a 120Hz target
+(`8.33`) would take those 235 to 436 — the knob moves the threshold, and
+nothing declares it today.
+
 ## [0.20.0] - 2026-08-28
 
 The dashboard becomes a runtime observability surface rather than a telemetry

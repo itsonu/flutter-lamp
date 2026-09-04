@@ -3,6 +3,7 @@ import type { RuntimeStore } from "../core/runtimeStore.js";
 import { intervalOf } from "./correlation.js";
 import { routeAtIn } from "./navigation.js";
 import { mean, percentile, round2 } from "./stats.js";
+import { cadenceEvidence, frameBudget } from "../core/frameBudget.js";
 
 export interface RebuildHotspot {
   widget?: string;
@@ -31,7 +32,8 @@ export interface RebuildHotspot {
  * complete one.
  */
 
-const FRAME_BUDGET_MS = 16.67;
+// One assumption, held in one place, carrying its own provenance.
+const FRAME_BUDGET_MS = frameBudget().ms;
 /** Below this many frames, any percentage is noise rather than a signal. */
 const MIN_FRAMES = 20;
 /** A frame is "during" a request if it lands inside the request's span. */
@@ -432,12 +434,38 @@ function sampleConfidence(frameCount: number): number {
   return 0.7;
 }
 
+/**
+ * The frame budget's provenance, as a limitation rather than a footnote.
+ *
+ * The dashboard said this; the MCP output did not, so an agent reading
+ * `diagnose_performance` had no way to know the threshold was assumed. Where
+ * the target's own frames could support a measurement, that is reported too —
+ * without stating a rate, because having the samples is not the same as having
+ * the answer.
+ */
+function budgetLimitation(store: RuntimeStore): string {
+  const b = frameBudget();
+  const base = `Jank is measured against a ${b.ms}ms budget — ${b.detail}.`;
+  if (b.source === "configured") return base;
+  const frames = store.query({ category: "frame", limit: 500 });
+  const ev = cadenceEvidence(frames);
+  const median = frames.length
+    ? percentile(frames.map((f) => (f.data as { elapsedMs?: number }).elapsedMs ?? 0), 50)
+    : null;
+  const conservative =
+    median !== null && median > 0 && median < b.ms / 2
+      ? ` This target's median frame is ${round2(median)}ms, well inside that budget, which is consistent with a display faster than 60Hz — in which case the jank count here is conservative. It is not proof: a 60Hz device doing light work produces the same figure.`
+      : "";
+  return `${base} ${ev.detail}.${conservative} Set FLUTTER_LAMP_FRAME_BUDGET_MS when the target's refresh rate is known.`;
+}
+
 function describeLimitations(
   store: RuntimeStore,
   frameCount: number,
   haveRebuilds: boolean,
 ): string[] {
   const out = [
+    budgetLimitation(store),
     "No CPU sampling. A slow build can be attributed to a widget, but not to a specific function — use the DevTools CPU profiler for that.",
     "GC events are not observable: the VM timeline is fetched on demand and not stored, so garbage-collection pauses cannot be ruled in or out.",
     "Frames are only captured while connected, and older ones roll out of the retention window.",

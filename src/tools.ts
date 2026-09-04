@@ -305,7 +305,10 @@ export function registerTools(server: McpServer): void {
     {
       annotations: ann("get_frames"),
       title: "Get frame timings",
-      description: "Frame build/raster timings. Set onlyJanky to focus on frames over the 16.7ms budget.",
+      description:
+        "Frame build/raster timings. Set onlyJanky to focus on frames over the frame budget — " +
+        "16.67ms (60fps) by default, which is an assumption: the VM Service does not report the " +
+        "display refresh rate. Override with FLUTTER_LAMP_FRAME_BUDGET_MS when the target's rate is known.",
       inputSchema: {
         onlyJanky: z.boolean().default(false),
         limit: z.number().int().positive().max(500).default(50),

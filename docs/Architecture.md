@@ -101,7 +101,7 @@ dashboard can list events without knowing every payload shape.
 | --- | --- | --- |
 | `LogCollector` | `Stdout` / `Stderr` `WriteEvent` (base64, buffered to line boundaries) and the `Logging` stream | push |
 | `ExceptionCollector` | `Extension` stream, `Flutter.Error`; `Debug` stream, `PauseException`. Asks `ext.flutter.inspector.structuredErrors` at start and reports `degraded` when framework errors cannot be posted at all | push |
-| `FrameCollector` | `Extension` stream, `Flutter.Frame`; jank classified against a 16.67ms budget | push |
+| `FrameCollector` | `Extension` stream, `Flutter.Frame`; jank classified against the frame budget from `core/frameBudget.ts` — 16.67ms assumed, overridable with `FLUTTER_LAMP_FRAME_BUDGET_MS` | push |
 | `NetworkCollector` | `ext.dart.io.httpEnableTimelineLogging` at start, `getHttpProfile` on demand; failing requests enriched via `getHttpProfileRequest` | pull |
 | `NavigationCollector` | `Extension` stream, `Flutter.Navigation` — posted by Flutter's own Navigator on push/pop/replace, so no observer is installed in the app | push |
 | `StateCollector` | `Extension` stream, `riverpod:*` / `provider:*` / `bloc:*` — activity and timing only; neither framework exposes values | push |

@@ -6,6 +6,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { connection, unobservableCategories } from "../core/connection.js";
 import { costMeter } from "../core/costMeter.js";
 import { mcpClientInfo } from "../core/mcpClient.js";
+import { frameBudget } from "../core/frameBudget.js";
 import type { RuntimeEvent } from "../core/events.js";
 import { VERSION } from "../version.js";
 
@@ -72,6 +73,10 @@ export function telemetryPayload() {
     unobservable: unobservableCategories(collectors),
     retention: connection.store.retention(),
     counts: connection.store.counts(),
+    // Published so the browser cannot draw a budget line the collector did not
+    // use. The dashboard held its own 16.7ms literal, which was correct only
+    // while the server's was too.
+    frameBudget: frameBudget(),
   };
 }
 

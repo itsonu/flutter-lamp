@@ -3,6 +3,7 @@ import type { RuntimeStore } from "../core/runtimeStore.js";
 import { correlate, timelineAround, type Correlated, type TimelineEntry } from "./correlation.js";
 import { routeAtIn, routeEventAt } from "./navigation.js";
 import { round2 } from "./stats.js";
+import { frameBudget } from "../core/frameBudget.js";
 
 export interface EvidenceItem {
   /** Stable id of the captured event this rests on, e.g. `exc_00142`. */
@@ -293,7 +294,9 @@ function jankHypothesis(all: RuntimeEvent[]): Hypothesis | null {
     kind: "jank",
     priority: 2,
     anchor: worst,
-    summary: `Frame jank detected: ${janky.length}/${frames.length} frames (${pct}%) exceeded the 16.7ms budget.`,
+    summary:
+      `Frame jank detected: ${janky.length}/${frames.length} frames (${pct}%) exceeded the ` +
+      `${frameBudget().ms}ms budget (${frameBudget().source}).`,
     rootCause: `Dropped frames — worst was ${worst.data.elapsedMs}ms (build ${worst.data.buildMs}ms, raster ${worst.data.rasterMs}ms).`,
     strength: Math.min(0.7 + (janky.length >= 10 ? 0.1 : 0), 0.85),
     // Worst frame first. `janky` is most-recent-first, so slicing alone can cite

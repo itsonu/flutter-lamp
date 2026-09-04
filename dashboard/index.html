@@ -479,7 +479,11 @@
   // The collector stamps `janky` itself; re-deriving it here would let the
   // dashboard and the diagnosis engine disagree about the same frame.
   const isJanky = (e) => e.data.janky === true;
-  const JANK_BUDGET_MS = 16.7; // the fixed 60fps budget the collector applies
+  // The budget the server actually classified against, not a second copy of it.
+  // Before telemetry arrives there is nothing to report, so the assumed value
+  // stands in and is labelled the same way the server labels it.
+  const budget = () => (state.telemetry && state.telemetry.frameBudget)
+    || { ms: 16.67, source: "assumed", detail: "assumed 60fps — the VM Service does not report the display refresh rate" };
 
   const CATEGORY_COLLECTOR = { log:"logs", exception:"exceptions", frame:"frames", network:"network",
     navigation:"navigation", rebuild:"rebuilds", state:"state" };
@@ -759,7 +763,7 @@
       const pctJank = Math.round(fs.janky / fs.n * 100);
       push(pctJank >= 10 ? "warn" : "blind", pctJank >= 10 ? "▲" : "○",
         fs.janky + " of " + fs.n + " frames over budget (" + pctJank + "%)",
-        "Measured against a fixed " + JANK_BUDGET_MS + "ms budget (60fps)." +
+        "Measured against a fixed " + budget().ms + "ms budget (60fps)." +
           (fs.p50 < 10 ? " This target's median frame is " + fs.p50.toFixed(1) + "ms, which suggests a faster display — so this count is conservative." : ""),
         "p95 " + fs.p95.toFixed(1) + "ms · p99 " + fs.p99.toFixed(1) + "ms · max " + fs.max.toFixed(1) + "ms",
         { tab:"Performance" });
@@ -1156,11 +1160,11 @@
       stat("p99", fs.p99.toFixed(1)+"ms") + stat("Max", fs.max.toFixed(1)+"ms") +
       stat("Over budget", fs.janky, Math.round(fs.janky/fs.n*100)+"% of frames") +
       '</div></div>';
-    h += '<div class="note">Budget is a fixed <b>'+JANK_BUDGET_MS+'ms</b> (60fps), applied by the frame collector.' +
+    h += '<div class="note">Budget is a fixed <b>'+budget().ms+'ms</b> (60fps), applied by the frame collector.' +
       (fs.p50 < 10 ? ' This target\'s median frame is <b>'+fs.p50.toFixed(1)+'ms</b>, which suggests a display faster than 60Hz — against its real budget more frames would count as late, so the figure above is conservative.' : '') +
       '</div>';
 
-    h += '<h2 class="sec">Frame time <span class="hint">last 120 frames · dashed line marks the '+JANK_BUDGET_MS+'ms budget</span></h2>' +
+    h += '<h2 class="sec">Frame time <span class="hint">last 120 frames · dashed line marks the '+budget().ms+'ms budget</span></h2>' +
       '<canvas id="frameChart"></canvas>';
     h += '<h2 class="sec">Heap <span class="hint">sampled while this page is open</span></h2><canvas id="memChart"></canvas>';
 
@@ -1175,7 +1179,7 @@
       '</tbody></table></div></div>';
     p.innerHTML = h;
 
-    drawChart(p.querySelector("#frameChart"), byCat("frame").slice(-120).map(e=>e.data.elapsedMs||0), { budget: JANK_BUDGET_MS, color: "#58a6ff" });
+    drawChart(p.querySelector("#frameChart"), byCat("frame").slice(-120).map(e=>e.data.elapsedMs||0), { budget: budget().ms, color: "#58a6ff" });
     drawChart(p.querySelector("#memChart"), byCat("system").filter(e=>e.data&&e.data.heapUsageMB!=null).slice(-120).map(e=>e.data.heapUsageMB), { color: "#3fb950" });
     p.querySelectorAll("tr.clickable").forEach(r => {
       const go = () => { state.filter = "frame"; state.query = r.dataset.f; state.cursor = null; setTab("Activity", "push"); };
