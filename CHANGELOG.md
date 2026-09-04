@@ -6,6 +6,131 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-08-28
+
+The dashboard becomes a runtime observability surface rather than a telemetry
+viewer, and one real defect in the tool accounting is fixed. Nine peer tabs
+become four destinations; nothing about the collectors, the store or the MCP
+tool surface changed.
+
+### Fixed - the tool accounting was fabricating a zero
+
+- **A tool call whose handler threw was never counted.** The cost meter wrapped
+  registration and recorded after the handler returned, so the SDK's conversion
+  of a throw into an error result took the call out of the accounting
+  altogether. Measured against a live app: five tools called with no isolate
+  attached, four of them erroring, all four missing — the session reported
+  `0 calls, 0 errors`. A dashboard rendering that would have shown a confident
+  zero while nothing worked. There is a mutation-checked regression test: remove
+  the `catch` and it fails.
+
+### Fixed - readings that were not what they claimed
+
+- **The frame and heap charts printed the drawing ceiling under the word
+  "max".** The plotting area is padded 15% above the data so the series does not
+  touch the top edge, and that padded number was the caption. A frame chart
+  whose real peak was 41.0ms captioned `47.1`; the heap chart captioned a
+  maximum **above the heap capacity it reported four inches higher**, which is
+  physically impossible in a memory tool. The caption now gives the observed
+  maximum, the last value and the sample count. Pinned by a check that runs the
+  shipped drawing code against known data.
+- **`0` was printed where nothing could have been measured.** With no runtime
+  attached, `Exceptions` and `Network` showed a zero rather than naming which
+  kind of nothing applied.
+- **Readings taken before a disconnect looked current.** Frame, heap and network
+  figures kept their live typography beside a `NOT CONNECTED` badge; the
+  staleness stamp reached two of six statistics and now reaches all of them.
+- **`Pause` asserted the stream was `RECEIVING` while every reading behind it
+  was frozen** — byte-identical output measured 19.5 seconds apart while the
+  server processed 32 further tool calls. `STREAM` and `VIEW` are now separate
+  states, because both are true at once.
+- **The dashboard claimed seven collectors were `ACTIVE` with the VM
+  unreachable.** Collector health is last-known and was never invalidated.
+- **"last event never" appeared beside a list of events**, because the
+  last-event time was set on live pushes only and never seeded from the
+  snapshot.
+
+### Fixed - the stream was unusable under load
+
+- **The row you were reading moved 2,416px down the page in six seconds.**
+  Entries are prepended newest-first, so every arrival pushed the thing being
+  read further away, at roughly 400px/s. The stream now anchors on a row rather
+  than on scroll position: at the top it follows, scrolled away it pins and
+  reports what arrived (`N new entries — jump to latest`). Measured after: 0px
+  drift following, 0.2px pinned. The browser's own `overflow-anchor` had to be
+  disabled, because it was fighting the explicit anchor and silently pushing a
+  following view off the top.
+- **A typo could not be corrected in the search field.** The input is rebuilt on
+  every keystroke and a refocus put the caret at the end of the string; caret
+  and selection are now preserved exactly.
+- **Over half the visible stream was the dashboard's own heap poller** — 52-67%
+  of the newest 400 rows, with zero frame, log or network rows visible while
+  hundreds of frames sat captured. Consecutive samples now roll up the way
+  reconnect churn already did, every original one disclosure away.
+- **`Errors` named three unrelated things at once** — MCP tool failures, janky
+  frames and app exceptions — and a 41.8ms frame rendered in the same red as a
+  crash. It is gone; the filters now each return exactly what they say.
+
+### Added - what the process knows about itself
+
+- **Tool-call telemetry reaches the browser.** The cost meter gains per-tool
+  total duration and last-called time plus a window of recent calls, and the
+  dashboard broadcasts it. All of it was already collected and none of it was
+  reachable outside `runtime_status`.
+- **The connected agent is named.** `src/core/mcpClient.ts` reads the
+  `clientInfo` the client sends at `initialize`, so the dashboard can say
+  "Claude Code 2.1.0" instead of asserting that "an agent" is present. Shown as
+  self-reported, because that is what it is.
+- **A `telemetry` message on the dashboard WebSocket** carrying server identity,
+  tool accounting, collector health, unobservable categories and retention.
+  Diffed before sending, so an idle dashboard stays silent.
+
+### Changed - the dashboard
+
+- **Four destinations instead of nine.** Overview (a session report), Activity
+  (one stream with source and category filters), Performance (frame analysis),
+  Diagnostics (topology, health, capability, blind spots). Logs, Network,
+  Exceptions, Timeline and the MCP call log became filters; three of them had
+  been rendering the identical empty sentence in a 120px panel. Inspector became
+  a section of Diagnostics, because it is a capability list.
+- **The header carries three independent states** — runtime, MCP, stream —
+  because a single badge could not express "the app is gone but MCP is serving
+  an agent", which is a real and common state and is why the old header said
+  "app not connected" while 239 tool calls were being served.
+- **Findings state the evidence and, where the evidence contains one, the
+  remedy.** The VM Service diagnosis event carries concrete transport advice;
+  the finding renders it verbatim. Remediation is never synthesised. Findings
+  are ordered most severe first, from the severity already assigned.
+- **Keyboard operable throughout.** 418 interactive elements previously had no
+  keyboard path. The tab strip is one tab stop with arrow-key movement; the
+  activity stream is one tab stop with a roving cursor, so several hundred rows
+  never become several hundred tab stops. Focus survives the re-render.
+- **Tab, filter and search live in the URL**, so a filtered view can be reloaded
+  or shared, and a drill-through is reversed by the browser's own Back button.
+- **Non-text contrast.** Every boundary was one token at 1.33:1. Control
+  boundaries now clear 3:1 (WCAG 1.4.11) while structural edges and row
+  separators stay quiet, because a card edge is not a component boundary.
+- `Export JSON` is now `Export events`, with its scope stated: this browser's
+  buffer, not the session. The full export remains the `export_session` tool.
+
+### Added - documentation
+
+- **`PRODUCT.md`** records the product truth every design pass had been
+  re-deriving: two audiences of equal weight, the positioning, what is
+  observable, what is not, and the principles — including "the dashboard must
+  never imply a fact that the runtime cannot actually observe".
+- **`docs/Data-Path.md`** traces the topology and proves it rather than
+  asserting it: an MCP tool call's own event was observed arriving on the
+  dashboard socket with the same event id.
+- **`docs/DESIGN.md`** replaces `docs/Design.md`, which documented the
+  seven-tab dashboard, Google Fonts and tokens that no longer exist.
+
+### Known limitation, unchanged in this release
+
+The frame budget is a fixed 16.7ms (60fps). On a faster display the jank count
+is conservative, and both the finding and the Performance view say so rather
+than presenting it as absolute.
+
 ## [0.19.1] - 2026-08-28
 
 Documentation only — no runtime change. Published because `README.md` ships
@@ -1227,6 +1352,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.20.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.20.0
 [0.19.1]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.19.1
 [0.19.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.19.0
 [0.18.1]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.18.1
