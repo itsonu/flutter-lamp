@@ -23,6 +23,7 @@ export const CATEGORIES = [
   "network",
   "navigation",
   "state",
+  "timeline",
   "system",
 ] as const;
 
@@ -71,6 +72,7 @@ export const CATEGORY_PREFIX: Record<Category, string> = {
   network: "net",
   navigation: "nav",
   state: "stt",
+  timeline: "tml",
   system: "sys",
 };
 

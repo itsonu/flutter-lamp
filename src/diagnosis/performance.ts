@@ -81,7 +81,7 @@ export function diagnosePerformance(store: RuntimeStore): PerformanceDiagnosis {
   const janky = frames.filter((e) => e.data.janky === true);
   const stats = frameStats(frames, janky);
   const hotspots = rebuildHotspots(all);
-  const limitations = describeLimitations(store, frames.length, hotspots.length > 0);
+  const limitations = describeLimitations(store, frames.length, hotspots.length > 0, all, janky, frames);
 
   if (frames.length < MIN_FRAMES) {
     return {
@@ -121,6 +121,7 @@ export function diagnosePerformance(store: RuntimeStore): PerformanceDiagnosis {
     networkFinding(all, janky),
     routeFinding(all, janky),
     memoryFinding(all, stats),
+    gcFinding(all, janky, frames),
   ].filter((f): f is PerformanceFinding => f !== null);
 
   const dominant = dominantPhase(stats);
@@ -402,6 +403,135 @@ function memoryFinding(all: RuntimeEvent[], stats: FrameStats): PerformanceFindi
   };
 }
 
+// ── GC ──────────────────────────────────────────────────────────────────────
+
+/** Below this many clean frames there is no base rate to compare against. */
+const MIN_CLEAN_FRAMES_FOR_BASE_RATE = 10;
+/**
+ * How much more often GC has to land inside a janky frame than a clean one
+ * before the association is worth stating. A ratio, not a difference, so it
+ * behaves the same whether GC is rare or constant.
+ */
+const GC_ASSOCIATION_RATIO = 2;
+
+/** Epoch span a frame occupied. `Flutter.Frame` posts on completion. */
+function frameSpan(f: RuntimeEvent): [number, number] {
+  const end = f.timestamp;
+  return [end - (Number(f.data.elapsedMs) || 0), end];
+}
+
+/** Epoch span a GC event occupied. Timeline `ts` is the start. */
+function gcSpan(g: RuntimeEvent): [number, number] {
+  return [g.timestamp, g.timestamp + (Number(g.data.durMs) || 0)];
+}
+
+function overlapsAnyGc(f: RuntimeEvent, gc: RuntimeEvent[]): boolean {
+  const [fs, fe] = frameSpan(f);
+  return gc.some((g) => {
+    const [gs, ge] = gcSpan(g);
+    // Strict inequalities: a GC that ends exactly as a frame begins did not
+    // run inside it.
+    return gs < fe && ge > fs;
+  });
+}
+
+/**
+ * Did garbage collection actually land in the janky frames?
+ *
+ * The trap this function exists to avoid: GC overlapping a janky frame is not
+ * evidence that GC caused it. On a busy app the young generation collects
+ * constantly, so *most* frames overlap a GC whether they are late or not.
+ * Overlap only means something measured against how often it happens to frames
+ * that were fine — so the base rate is computed first, and no claim is made
+ * without it.
+ *
+ * Returns null in three distinct situations, and the caller reports each
+ * differently: no GC evidence at all, too few clean frames to establish a base
+ * rate, and a base rate that the janky frames do not exceed. The last one is a
+ * real negative result — GC observed and *not* associated — which is the
+ * answer the diagnosis previously could not give.
+ */
+function gcFinding(all: RuntimeEvent[], janky: RuntimeEvent[], frames: RuntimeEvent[]): PerformanceFinding | null {
+  const gc = all.filter((e) => e.category === "timeline" && e.data.cat === "GC");
+  if (!gc.length || !janky.length) return null;
+
+  const clean = frames.filter((f) => f.data.janky !== true);
+  if (clean.length < MIN_CLEAN_FRAMES_FOR_BASE_RATE) return null;
+
+  const jankyHit = janky.filter((f) => overlapsAnyGc(f, gc)).length;
+  const cleanHit = clean.filter((f) => overlapsAnyGc(f, gc)).length;
+  const jankyRate = jankyHit / janky.length;
+  const cleanRate = cleanHit / clean.length;
+
+  // No GC in any late frame: nothing to claim, and the caller says so.
+  if (jankyHit === 0) return null;
+  // The comparison that turns co-occurrence into evidence. A zero base rate is
+  // the strongest case, not a division by zero.
+  if (cleanRate > 0 && jankyRate < cleanRate * GC_ASSOCIATION_RATIO) return null;
+
+  const pausedMs =
+    Math.round(
+      gc
+        .filter((g) => janky.some((f) => overlapsAnyGc(f, [g])))
+        .reduce((sum, g) => sum + (Number(g.data.durMs) || 0), 0) * 100,
+    ) / 100;
+
+  const ratio = cleanRate > 0 ? (jankyRate / cleanRate).toFixed(1) + "x" : "no clean frame overlapped one";
+  return {
+    claim:
+      `Garbage collection overlapped ${jankyHit}/${janky.length} late frames ` +
+      `(${Math.round(jankyRate * 100)}%) against ${cleanHit}/${clean.length} on-time frames ` +
+      `(${Math.round(cleanRate * 100)}%) — ${ratio}. ${pausedMs}ms of GC ran inside late frames.`,
+    // Capped below the rebuild finding on purpose. This is a rate difference
+    // over one session, not a mechanism: a GC pause inside a late frame is
+    // consistent with having caused it and equally consistent with both being
+    // caused by the same allocation burst.
+    strength: cleanRate === 0 ? 0.7 : 0.6,
+    evidence: gc
+      .filter((g) => janky.some((f) => overlapsAnyGc(f, [g])))
+      .slice(0, 5)
+      .map((g) => g.eventId),
+    fix:
+      "Reduce allocation on this path — cache or reuse objects built per frame, and avoid rebuilding large " +
+      "lists wholesale. The association here is a rate difference, not a demonstrated cause: confirm with the " +
+      "DevTools memory view before optimising.",
+  };
+}
+
+/**
+ * What the GC evidence says when it does not support a finding.
+ *
+ * Three separate facts, and collapsing them would undo the point of storing
+ * timeline events at all: unobservable, insufficient, and observed-but-absent
+ * are different answers.
+ */
+function gcLimitation(all: RuntimeEvent[], janky: RuntimeEvent[], frames: RuntimeEvent[]): string {
+  const gc = all.filter((e) => e.category === "timeline" && e.data.cat === "GC");
+  if (!gc.length)
+    return (
+      "No garbage-collection events were captured, so GC pauses can be neither ruled in nor out. " +
+      "GC recording is enabled at connect and read on demand; an empty result means either no collection " +
+      "happened in the retained window or this target has no VM timeline (a web target does not)."
+    );
+  const clean = frames.filter((f) => f.data.janky !== true);
+  if (!janky.length) return `${gc.length} garbage collections were captured; no frame was late, so there is nothing to associate them with.`;
+  if (clean.length < MIN_CLEAN_FRAMES_FOR_BASE_RATE)
+    return (
+      `${gc.length} garbage collections were captured, but only ${clean.length} on-time frames — too few to ` +
+      "establish how often GC overlaps a frame that was fine. Without that base rate, an overlap with a late " +
+      "frame is a coincidence rather than evidence."
+    );
+  const jankyHit = janky.filter((f) => overlapsAnyGc(f, gc)).length;
+  const cleanHit = clean.filter((f) => overlapsAnyGc(f, gc)).length;
+  if (jankyHit === 0)
+    return `${gc.length} garbage collections were captured and none overlapped a late frame: GC is ruled out for this jank.`;
+  return (
+    `${gc.length} garbage collections were captured. They overlapped ${jankyHit}/${janky.length} late frames ` +
+    `and ${cleanHit}/${clean.length} on-time frames — not a large enough difference to associate GC with this ` +
+    "jank, so it is reported as co-occurrence only."
+  );
+}
+
 // ── Statistics ──────────────────────────────────────────────────────────────
 
 function frameStats(frames: RuntimeEvent[], janky: RuntimeEvent[]): FrameStats {
@@ -463,11 +593,15 @@ function describeLimitations(
   store: RuntimeStore,
   frameCount: number,
   haveRebuilds: boolean,
+  all: RuntimeEvent[] = [],
+  janky: RuntimeEvent[] = [],
+  frames: RuntimeEvent[] = [],
 ): string[] {
   const out = [
     budgetLimitation(store),
+    gcLimitation(all, janky, frames),
     "No CPU sampling. A slow build can be attributed to a widget, but not to a specific function — use the DevTools CPU profiler for that.",
-    "GC events are not observable: the VM timeline is fetched on demand and not stored, so garbage-collection pauses cannot be ruled in or out.",
+
     "Frames are only captured while connected, and older ones roll out of the retention window.",
   ];
   if (!store.counts().state) {

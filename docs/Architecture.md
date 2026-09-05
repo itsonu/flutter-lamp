@@ -105,6 +105,7 @@ dashboard can list events without knowing every payload shape.
 | `NetworkCollector` | `ext.dart.io.httpEnableTimelineLogging` at start, `getHttpProfile` on demand; failing requests enriched via `getHttpProfileRequest` | pull |
 | `NavigationCollector` | `Extension` stream, `Flutter.Navigation` — posted by Flutter's own Navigator on push/pop/replace, so no observer is installed in the app | push |
 | `StateCollector` | `Extension` stream, `riverpod:*` / `provider:*` / `bloc:*` — activity and timing only; neither framework exposes values | push |
+| `TimelineCollector` | `getVMTimeline`; GC completion events only, mapped onto the VM epoch clock via `clockOffsetMs`; adds the GC stream at connect without replacing existing ones | pull |
 | `RebuildCollector` | `Extension` stream, `Flutter.RebuiltWidgets` after enabling `trackRebuildDirtyWidgets`; seeds the id→source table from `widgetLocationIdMap` at startup | push |
 
 Widget tree, selected widget, memory and timeline are **not** collectors — they

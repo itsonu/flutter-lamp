@@ -143,7 +143,7 @@ export function registerTools(server: McpServer): void {
       annotations: ann("connect_vm"),
       title: "Connect to Flutter VM Service",
       description:
-        "Connect to a running Flutter app's Dart VM Service and start collecting runtime data (logs, exceptions, frames, network). Pass the ws:// or http:// URI printed by `flutter run` (line: 'A Dart VM Service ... is available at:'). NOT purely read-only: enables dart:io HTTP timeline logging on the app so network capture works.",
+        "Connect to a running Flutter app's Dart VM Service and start collecting runtime data (logs, exceptions, frames, network). Pass the ws:// or http:// URI printed by `flutter run` (line: 'A Dart VM Service ... is available at:'). NOT purely read-only: enables dart:io HTTP timeline logging on the app so network capture works, and adds the GC stream to the VM timeline recorder so garbage-collection pauses can be correlated with jank. Existing recorded streams are preserved, never replaced.",
       inputSchema: {
         uri: z.string().describe("VM Service URI, e.g. http://127.0.0.1:52719/abcdef=/ or ws://..."),
       },
@@ -715,6 +715,7 @@ export function registerTools(server: McpServer): void {
           "Android device transports via adb, when adb is installed",
           "Dart heap and external memory",
           "VM timeline events (on demand)",
+          "Garbage-collection pauses, stored and correlated against frame timings. Only complete GC events are kept, and only when the VM reports its timeline clock and the VM-to-host offset is known — otherwise they cannot be placed on the same axis as frames and are deliberately not stored",
         ],
         cannotObserve: [
           "Release builds — the VM Service, Inspector and HTTP profiling do not exist there",

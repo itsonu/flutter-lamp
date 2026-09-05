@@ -48,6 +48,12 @@ export const DEFAULT_CAPACITIES: Record<Category, number> = {
   navigation: 500,
   // State-management activity is roughly as frequent as frames on a busy
   // screen — Riverpod posted ~1.4 events/second under the probe app's workload.
+  //
+  // Only GC completion events are stored, not the whole VM timeline. A young
+  // generation collects far more often than a route changes but far less often
+  // than a frame renders, and each entry only has to survive long enough to be
+  // correlated against the frames around it.
+  timeline: 1_000,
   system: 500,
 };
 

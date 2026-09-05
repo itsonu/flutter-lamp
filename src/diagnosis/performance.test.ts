@@ -190,7 +190,17 @@ test("limitations name the blind spots every time", () => {
 
   const { limitations } = diagnosePerformance(store);
   assert.ok(limitations.some((l) => l.includes("No CPU sampling")));
-  assert.ok(limitations.some((l) => l.includes("GC events")));
+  // GC is now storable evidence, so the limitation reports what the evidence
+  // says rather than declaring it unobservable. With no GC captured, the
+  // honest statement is that it can be neither ruled in nor out.
+  assert.ok(
+    limitations.some((l) => /garbage-collection events were captured/.test(l)),
+    "the GC limitation must still be stated, in its evidence-based form",
+  );
+  assert.ok(
+    !limitations.some((l) => l.includes("GC events are not observable")),
+    "the old blanket claim must not survive: GC is observable now",
+  );
   // With no rebuild evidence the tool must say tracking is unavailable — not
   // claim, as it once did, that rebuild counts are impossible in principle.
   assert.ok(limitations.some((l) => l.includes("No widget rebuild data in this session")));

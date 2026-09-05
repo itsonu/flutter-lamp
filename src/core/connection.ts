@@ -10,6 +10,7 @@ import { RuntimeStore } from "./runtimeStore.js";
 import { redactVmServiceUri, setSessionToken } from "./redaction.js";
 import { costMeter } from "./costMeter.js";
 import { StateCollector } from "../collectors/stateCollector.js";
+import { TimelineCollector } from "../collectors/timelineCollector.js";
 import { VmService } from "../vm/vmService.js";
 import { diagnoseUnreachable } from "../vm/adb.js";
 
@@ -40,6 +41,7 @@ export const COLLECTOR_CATEGORY: Record<string, Category> = {
   navigation: "navigation",
   rebuilds: "rebuild",
   state: "state",
+  timeline: "timeline",
 };
 
 /**
@@ -106,6 +108,7 @@ class ConnectionManager {
     new NavigationCollector(),
     new RebuildCollector(),
     new StateCollector(),
+    new TimelineCollector(),
   ];
 
   /** Tunable so tests do not wait on real backoff. */

@@ -137,13 +137,14 @@ test("get_capabilities states what cannot be observed, not just what can", async
     "rebuild",
     "state",
     "system",
+    "timeline",
   ]);
 });
 
 test("runtime_health lists every collector with its health", async () => {
   const health = await callTool("runtime_health");
   const names = health.collectors.map((c: { name: string }) => c.name).sort();
-  assert.deepEqual(names, ["exceptions", "frames", "logs", "navigation", "network", "rebuilds", "state"]);
+  assert.deepEqual(names, ["exceptions", "frames", "logs", "navigation", "network", "rebuilds", "state", "timeline"]);
   for (const c of health.collectors) {
     assert.ok(["active", "degraded", "unavailable"].includes(c.status), `${c.name}: ${c.status}`);
     assert.equal(typeof c.eventsRetained, "number");

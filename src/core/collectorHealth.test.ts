@@ -154,6 +154,7 @@ test("an empty store still reports coverage instead of omitting it", () => {
   const { coverage, status } = diagnose(new RuntimeStore());
   assert.equal(status, "unknown");
   assert.deepEqual(coverage.present, []);
-  assert.equal(coverage.empty.length, 8);
+  // Nine categories: timeline joined when GC pauses became storable evidence.
+  assert.equal(coverage.empty.length, 9);
   assert.equal(coverage.oldestEventMs, null);
 });
