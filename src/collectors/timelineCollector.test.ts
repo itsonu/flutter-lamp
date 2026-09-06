@@ -35,15 +35,17 @@ function fakeVm(o: FakeOpts = {}) {
   return vm as unknown as VmService & { calls: typeof calls };
 }
 
-/** A complete GC event: start at `tsMicros`, running `durMs`. */
-const gcEvent = (tsMicros: number, durMs: number, name = "CollectNewGeneration") => ({
-  name,
-  cat: "GC",
-  ph: "X",
-  ts: tsMicros,
-  dur: durMs * 1000,
-  tid: 1,
-});
+/**
+ * A GC pause as the VM actually emits it: a Begin/End pair, no duration field.
+ *
+ * The first version of these fixtures used `ph: "X"` with a `dur`, matching what
+ * the implementation assumed. A physical device produced 32,313 timeline events
+ * containing no `X` phase at all, so the fixtures were agreeing with the bug.
+ */
+const gcPair = (tsMicros: number, durMs: number, name = "CollectNewGeneration", tid = 1) => [
+  { name, cat: "GC", ph: "B", ts: tsMicros, tid },
+  { name, cat: "GC", ph: "E", ts: tsMicros + durMs * 1000, tid },
+];
 
 test("GC recording is added to the existing streams, never substituted for them", async () => {
   // get_timeline deliberately turns on Dart/Compiler/Embedder. A collector that
@@ -98,7 +100,7 @@ test("events are placed on the VM's epoch clock, not the host's", async () => {
   const vm = fakeVm({
     clockOffsetMs: -839,
     micros: { timestamp: nowMicros },
-    timeline: { traceEvents: [gcEvent(nowMicros - 1_000_000, 4.5)] },
+    timeline: { traceEvents: gcPair(nowMicros - 1_000_000, 4.5) },
   });
   await c.start(vm, store, "isolates/1");
   const before = Date.now();
@@ -127,7 +129,7 @@ test("without a clock offset nothing is stored, and health says why", async () =
   const c = new TimelineCollector();
   const vm = fakeVm({
     clockOffsetMs: null,
-    timeline: { traceEvents: [gcEvent(9_000_000, 3)] },
+    timeline: { traceEvents: gcPair(9_000_000, 3) },
   });
   await c.start(vm, store, "isolates/1");
   await c.refresh(vm, store, "isolates/1");
@@ -141,7 +143,7 @@ test("without the VM's timeline clock nothing is stored, and health says why", a
   const c = new TimelineCollector();
   const vm = fakeVm({
     micros: { timestamp: "nope" },
-    timeline: { traceEvents: [gcEvent(9_000_000, 3)] },
+    timeline: { traceEvents: gcPair(9_000_000, 3) },
   });
   await c.start(vm, store, "isolates/1");
   await c.refresh(vm, store, "isolates/1");
@@ -150,19 +152,26 @@ test("without the VM's timeline clock nothing is stored, and health says why", a
   assert.match(c.health().detail ?? "", /will not report its timeline clock/);
 });
 
-test("only complete GC events are kept", async () => {
+test("only outermost stop-the-world collections are kept", async () => {
   const store = new RuntimeStore();
   const c = new TimelineCollector();
   const vm = fakeVm({
     timeline: {
       traceEvents: [
-        gcEvent(9_000_000, 3),
-        // Not GC.
-        { name: "Frame", cat: "Dart", ph: "X", ts: 9_100_000, dur: 5000, tid: 1 },
-        // GC, but a begin marker: no duration to correlate with.
-        { name: "StartConcurrentMark", cat: "GC", ph: "B", ts: 9_200_000, tid: 1 },
-        // GC complete but missing dur.
-        { name: "Broken", cat: "GC", ph: "X", ts: 9_300_000, tid: 1 },
+        ...gcPair(9_000_000, 3),
+        // Not GC at all.
+        { name: "Frame", cat: "Dart", ph: "B", ts: 9_100_000, tid: 1 },
+        { name: "Frame", cat: "Dart", ph: "E", ts: 9_105_000, tid: 1 },
+        // GC, but concurrent rather than stop-the-world. Measured at up to 63ms
+        // on device; counting it would attribute a stall that never happened.
+        ...gcPair(9_200_000, 40, "ConcurrentMark"),
+        // GC, but a phase nested inside a collection — counting it as well as
+        // its parent double-counts the same pause.
+        ...gcPair(9_300_000, 1.5, "Scavenge"),
+        // An End whose Begin was evicted from the ring buffer: no duration.
+        { name: "CollectOldGeneration", cat: "GC", ph: "E", ts: 9_400_000, tid: 1 },
+        // A collection still running: Begin with no End yet.
+        { name: "CollectOldGeneration", cat: "GC", ph: "B", ts: 9_500_000, tid: 2 },
       ],
     },
   });
@@ -175,7 +184,7 @@ test("only complete GC events are kept", async () => {
 test("refresh is idempotent — the VM returns its whole buffer every read", async () => {
   const store = new RuntimeStore();
   const c = new TimelineCollector();
-  const vm = fakeVm({ timeline: { traceEvents: [gcEvent(9_000_000, 3), gcEvent(9_500_000, 2)] } });
+  const vm = fakeVm({ timeline: { traceEvents: [...gcPair(9_000_000, 3), ...gcPair(9_500_000, 2)] } });
   await c.start(vm, store, "isolates/1");
   await c.refresh(vm, store, "isolates/1");
   await c.refresh(vm, store, "isolates/1");
@@ -186,7 +195,7 @@ test("refresh is idempotent — the VM returns its whole buffer every read", asy
 test("reset clears the dedup set, because monotonic timestamps restart", async () => {
   const store = new RuntimeStore();
   const c = new TimelineCollector();
-  const vm = fakeVm({ timeline: { traceEvents: [gcEvent(1_000, 3)] } });
+  const vm = fakeVm({ timeline: { traceEvents: gcPair(1_000, 3) } });
   await c.start(vm, store, "isolates/1");
   await c.refresh(vm, store, "isolates/1");
   assert.equal(store.counts().timeline, 1);

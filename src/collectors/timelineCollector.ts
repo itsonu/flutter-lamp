@@ -11,17 +11,36 @@ import type { VmService } from "../vm/vmService.js";
  * away, so the diagnosis could only ever say GC pauses "cannot be ruled in or
  * out". Storing them makes both answers possible — including the negative.
  *
- * ## Only GC, and only complete events
+ * ## Only GC, and only the outermost collections
  *
  * The VM will record Dart, Compiler and Embedder streams too. It is not done
  * here: those are the streams that fill the recorder's ~24,500-event buffer and
  * stall it (see `vm/timelineStaleness.ts`), and none of them answers a question
  * the stored evidence cannot already answer. GC is the gap, so GC is the slice.
  *
- * Only `ph: "X"` events are kept. A complete event carries `dur`, which is the
- * pause length — the single fact the correlation needs. `B`/`E` pairs would have
- * to be matched up across the buffer to recover the same number, and an
- * unmatched `B` has no duration at all.
+ * ## What counts as a pause, measured rather than assumed
+ *
+ * Read off a physical device (Android 16, Dart 3.12), a 32,313-event timeline
+ * contained **no `ph: "X"` events at all** — the Dart VM emits `B`/`E` pairs, so
+ * a collector filtering on complete events stores nothing, forever. Durations
+ * are recovered by matching each `E` to the nearest open `B` on the same
+ * (name, thread).
+ *
+ * Not every `cat: "GC"` event is a pause, and treating them as one would inflate
+ * the evidence badly:
+ *
+ * - The names are **nested phases of one collection**, not separate collections.
+ *   In the same capture `Scavenge` measured p50 1.775ms while its parent
+ *   `CollectNewGeneration` measured p50 1.915ms — summing both double-counts the
+ *   same stall.
+ * - `ConcurrentMark` measured p50 8.1ms and max 63ms, and runs *concurrently
+ *   with* the mutator. Calling that a pause would attribute 63ms of jank to work
+ *   that never stopped the app.
+ * - `NotifyIdle` (208 of the 810 GC events in that window) is an idle
+ *   notification, not a collection.
+ *
+ * So only the outermost stop-the-world collections are stored. Everything else
+ * is either nested inside one of them or genuinely concurrent.
  *
  * ## The clock, which is the whole difficulty
  *
@@ -46,6 +65,71 @@ import type { VmService } from "../vm/vmService.js";
  * timestamp is worse than no GC pause: it would be correlated against frames
  * as if it were evidence.
  */
+/**
+ * The names that are stop-the-world collections rather than phases inside one.
+ *
+ * Deliberately a short allow-list rather than "everything with cat GC". Measured
+ * on device, a single `CollectNewGeneration` contains `Prologue`, `Scavenge`,
+ * `IterateIsolateRoots`, `IterateStoreBuffers`, `MournWeakHandles`, `Epilogue`
+ * and more; storing them all would count one 2ms stall a dozen times over. The
+ * two names here are the outermost spans, so each collection contributes its
+ * pause exactly once.
+ *
+ * `ConcurrentMark`, `ParallelMark` and `IncrementalMarkWithSizeBudget` are
+ * excluded on purpose: they overlap the mutator rather than stopping it, and the
+ * largest of them measured 63ms — attributing that to jank would be inventing a
+ * stall the app never suffered.
+ */
+const GC_PAUSE_NAMES = new Set(["CollectNewGeneration", "CollectOldGeneration"]);
+
+interface PauseSpan {
+  name: string;
+  /** Monotonic microseconds at the Begin marker. */
+  ts: number;
+  durMs: number;
+  tid: string;
+}
+
+/**
+ * Recover complete pause spans from the VM's Begin/End markers.
+ *
+ * The Dart VM emits `ph: "B"` and `ph: "E"` with no duration; a span's length is
+ * the difference between a Begin and the End that closes it on the same thread.
+ * Markers are nested, so Begins are kept on a per-(name, thread) stack and each
+ * End closes the most recent one.
+ *
+ * Both halves of an unmatched pair are dropped rather than guessed. The recorder
+ * is a ring buffer, so the oldest Begins get overwritten while their Ends
+ * survive, and a collection still running when we read has a Begin with no End
+ * yet. Inventing a duration for either would put a fabricated pause into the
+ * evidence.
+ */
+function pauseSpans(raw: Array<Record<string, unknown>>): PauseSpan[] {
+  const events = raw
+    .filter((e) => e.cat === "GC" && typeof e.name === "string" && GC_PAUSE_NAMES.has(e.name as string))
+    .filter((e) => typeof e.ts === "number")
+    .sort((a, b) => (a.ts as number) - (b.ts as number));
+
+  const open = new Map<string, number[]>();
+  const out: PauseSpan[] = [];
+  for (const e of events) {
+    const name = e.name as string;
+    const tid = String(e.tid ?? "");
+    const ts = e.ts as number;
+    const key = `${name}|${tid}`;
+    if (e.ph === "B") {
+      const stack = open.get(key) ?? [];
+      stack.push(ts);
+      open.set(key, stack);
+    } else if (e.ph === "E") {
+      const start = open.get(key)?.pop();
+      if (start === undefined) continue; // End whose Begin was evicted.
+      out.push({ name, ts: start, durMs: Math.round(((ts - start) / 1000) * 100) / 100, tid });
+    }
+  }
+  return out;
+}
+
 export class TimelineCollector implements Collector {
   readonly name = "timeline";
   /**
@@ -138,17 +222,11 @@ export class TimelineCollector implements Collector {
     const vmEpochNow = Date.now() + offset;
     let stored = 0;
 
-    for (const e of raw) {
-      if (e.cat !== "GC" || e.ph !== "X") continue;
-      const ts = e.ts;
-      const dur = e.dur;
-      if (typeof ts !== "number" || typeof dur !== "number") continue;
-      const key = `${ts}:${String(e.tid ?? "")}:${String(e.name ?? "")}`;
+    for (const { name, ts, durMs, tid } of pauseSpans(raw)) {
+      const key = `${ts}:${tid}:${name}`;
       if (this.seen.has(key)) continue;
       this.seen.add(key);
 
-      const durMs = Math.round((dur / 1000) * 100) / 100;
-      const name = typeof e.name === "string" ? e.name : "GC";
       store.add({
         // `ts` is the event's START; `dur` runs forward from it. The frame
         // collector stores a completion instant, so the two spans are built
@@ -164,9 +242,9 @@ export class TimelineCollector implements Collector {
         data: {
           name,
           cat: "GC",
-          phase: "X",
+          phase: "B/E",
           durMs,
-          /** Raw monotonic timestamp, kept so the mapping stays auditable. */
+          /** Raw monotonic timestamp of the Begin marker, so the mapping stays auditable. */
           tsMicros: ts,
           /** How `timestamp` was derived, so a reader can check it. */
           clockAnchor: { vmEpochNowMs: vmEpochNow, nowMicros, clockOffsetMs: offset },
