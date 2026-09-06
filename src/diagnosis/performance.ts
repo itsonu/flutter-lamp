@@ -499,6 +499,33 @@ function gcFinding(all: RuntimeEvent[], janky: RuntimeEvent[], frames: RuntimeEv
 }
 
 /**
+ * Fraction of the observed window actually occupied by frame rendering.
+ *
+ * The union of frame spans over the wall-clock window they and the GC events
+ * share. Overlapping frames are counted once. Null when there is no window to
+ * speak of.
+ */
+function frameCoverage(frames: RuntimeEvent[], gc: RuntimeEvent[]): number | null {
+  if (!frames.length || !gc.length) return null;
+  const spans = frames
+    .map((f): [number, number] => [f.timestamp - (Number(f.data.elapsedMs) || 0), f.timestamp])
+    .sort((a, b) => a[0] - b[0]);
+  let covered = 0;
+  let [curS, curE] = spans[0];
+  for (const [s, e] of spans.slice(1)) {
+    if (s > curE) { covered += curE - curS; curS = s; curE = e; }
+    else if (e > curE) curE = e;
+  }
+  covered += curE - curS;
+  const gcStarts = gc.map((g) => g.timestamp);
+  const gcEnds = gc.map((g) => g.timestamp + (Number(g.data.durMs) || 0));
+  const start = Math.min(spans[0][0], ...gcStarts);
+  const end = Math.max(curE, ...gcEnds);
+  const wall = end - start;
+  return wall > 0 ? covered / wall : null;
+}
+
+/**
  * What the GC evidence says when it does not support a finding.
  *
  * Three separate facts, and collapsing them would undo the point of storing
@@ -523,8 +550,24 @@ function gcLimitation(all: RuntimeEvent[], janky: RuntimeEvent[], frames: Runtim
     );
   const jankyHit = janky.filter((f) => overlapsAnyGc(f, gc)).length;
   const cleanHit = clean.filter((f) => overlapsAnyGc(f, gc)).length;
-  if (jankyHit === 0)
-    return `${gc.length} garbage collections were captured and none overlapped a late frame: GC is ruled out for this jank.`;
+  if (jankyHit === 0) {
+    // "Ruled out" is only as strong as the chance GC had to coincide at all.
+    // Flutter renders on change, so frame spans can occupy a tiny fraction of
+    // wall time — measured at 1.02% on a real device during intermittent
+    // scrolling, where even constant GC would be expected to hit a frame less
+    // than once. Reporting a confident negative from that would be the same
+    // overstatement as a confident positive.
+    const cov = frameCoverage(frames, gc);
+    const weak = cov !== null && cov < 0.05;
+    return (
+      `${gc.length} garbage collections were captured and none overlapped a late frame` +
+      (weak
+        ? `. This is weak evidence rather than an exoneration: frames occupied only ` +
+          `${(cov * 100).toFixed(1)}% of the wall-clock window, so a collection had little chance of ` +
+          `landing inside one. Re-run during sustained scrolling or animation to test GC properly.`
+        : `: GC is ruled out for this jank.`)
+    );
+  }
   return (
     `${gc.length} garbage collections were captured. They overlapped ${jankyHit}/${janky.length} late frames ` +
     `and ${cleanHit}/${clean.length} on-time frames — not a large enough difference to associate GC with this ` +

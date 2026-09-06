@@ -153,3 +153,35 @@ test("the finding cites the GC events it rests on", () => {
   assert.ok(f!.strength <= 0.7, `strength ${f!.strength} should stay below the mechanism findings`);
   assert.match(f!.fix, /not a demonstrated cause/);
 });
+
+test("a clean negative from a mostly-idle app is reported as weak, not as an exoneration", () => {
+  // Measured on a physical device: 496 frames averaging 5.88ms over a 37.5s
+  // window occupied 1.02% of wall time. Under a uniform null model the 15 GC
+  // pauses were expected to land inside a frame 0.67 times, and did so once.
+  // Zero overlap with a *late* frame there says almost nothing about GC, so
+  // "ruled out" would be an over-claim in the same family as a false positive.
+  const store = new RuntimeStore();
+  for (let i = 0; i < 40; i++) frame(store, T0 + i * 1_000, 6, i); // 0.6% coverage
+  frame(store, T0 + 41_000, 60, 41); // one late frame, no GC near it
+  for (let i = 0; i < 8; i++) gc(store, T0 + 500 + i * 1_000, 2); // in the gaps
+
+  const lim = limitationsOf(store);
+  assert.match(lim, /none overlapped a late frame/);
+  assert.match(lim, /weak evidence rather than an exoneration/);
+  assert.match(lim, /frames occupied only 0\.\d% of the wall-clock window/);
+  assert.doesNotMatch(lim, /GC is ruled out/, "1% frame coverage cannot exonerate GC");
+  assert.equal(gcClaim(store), null);
+});
+
+test("a clean negative from a continuously-rendering app IS an exoneration", () => {
+  // The other side of the same gate: back-to-back frames leave GC nowhere to
+  // hide, so not overlapping one is a real result. Without this the weak
+  // wording could swallow every negative and the collector would be pointless.
+  const store = new RuntimeStore();
+  for (let i = 0; i < 60; i++) frame(store, T0 + i * 10, 10, i); // ~100% coverage
+  frame(store, T0 + 700, 60, 60);
+  gc(store, T0 + 1_000, 2); // after every frame, overlapping none
+
+  const lim = limitationsOf(store);
+  assert.match(lim, /GC is ruled out for this jank/);
+});
