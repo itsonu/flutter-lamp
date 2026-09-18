@@ -451,10 +451,28 @@ function overlapsAnyGc(f: RuntimeEvent, gc: RuntimeEvent[]): boolean {
  * real negative result — GC observed and *not* associated — which is the
  * answer the diagnosis previously could not give.
  */
-function gcFinding(all: RuntimeEvent[], janky: RuntimeEvent[], frames: RuntimeEvent[]): PerformanceFinding | null {
+/**
+ * The overlap counts and the verdict drawn from them.
+ *
+ * Both the finding and the limitation need this, and when they each computed it
+ * themselves they drifted: the limitation asserted "not a large enough
+ * difference" while the finding was reporting 3.5x in the same payload. One
+ * rule, one place.
+ */
+type GcOverlap = {
+  gc: RuntimeEvent[];
+  clean: RuntimeEvent[];
+  jankyHit: number;
+  cleanHit: number;
+  jankyRate: number;
+  cleanRate: number;
+  /** Clears the base-rate gate: GC lands in late frames disproportionately. */
+  associated: boolean;
+};
+
+function gcOverlap(all: RuntimeEvent[], janky: RuntimeEvent[], frames: RuntimeEvent[]): GcOverlap | null {
   const gc = all.filter((e) => e.category === "timeline" && e.data.cat === "GC");
   if (!gc.length || !janky.length) return null;
-
   const clean = frames.filter((f) => f.data.janky !== true);
   if (clean.length < MIN_CLEAN_FRAMES_FOR_BASE_RATE) return null;
 
@@ -462,12 +480,16 @@ function gcFinding(all: RuntimeEvent[], janky: RuntimeEvent[], frames: RuntimeEv
   const cleanHit = clean.filter((f) => overlapsAnyGc(f, gc)).length;
   const jankyRate = jankyHit / janky.length;
   const cleanRate = cleanHit / clean.length;
-
-  // No GC in any late frame: nothing to claim, and the caller says so.
-  if (jankyHit === 0) return null;
   // The comparison that turns co-occurrence into evidence. A zero base rate is
   // the strongest case, not a division by zero.
-  if (cleanRate > 0 && jankyRate < cleanRate * GC_ASSOCIATION_RATIO) return null;
+  const associated = jankyHit > 0 && (cleanRate === 0 || jankyRate >= cleanRate * GC_ASSOCIATION_RATIO);
+  return { gc, clean, jankyHit, cleanHit, jankyRate, cleanRate, associated };
+}
+
+function gcFinding(all: RuntimeEvent[], janky: RuntimeEvent[], frames: RuntimeEvent[]): PerformanceFinding | null {
+  const o = gcOverlap(all, janky, frames);
+  if (!o || !o.associated) return null;
+  const { gc, clean, jankyHit, cleanHit, jankyRate, cleanRate } = o;
 
   const pausedMs =
     Math.round(
@@ -548,8 +570,23 @@ function gcLimitation(all: RuntimeEvent[], janky: RuntimeEvent[], frames: Runtim
       "establish how often GC overlaps a frame that was fine. Without that base rate, an overlap with a late " +
       "frame is a coincidence rather than evidence."
     );
-  const jankyHit = janky.filter((f) => overlapsAnyGc(f, gc)).length;
-  const cleanHit = clean.filter((f) => overlapsAnyGc(f, gc)).length;
+  const { jankyHit, cleanHit, associated } = gcOverlap(all, janky, frames)!;
+  if (associated) {
+    // The finding fired. What limits it is not the size of the difference but
+    // what a difference can mean: an allocation burst produces both the
+    // collection and the slow frame, and this cannot tell that apart from the
+    // collection having caused it.
+    // Stated on its own terms, not as a pointer to the finding: below the jank
+    // threshold the diagnosis returns "healthy" with no findings at all, and a
+    // limitation that said "reported as a finding above" was then describing
+    // something the reader could not see.
+    return (
+      `${gc.length} garbage collections were captured. They overlapped ${jankyHit}/${janky.length} late frames ` +
+      `against ${cleanHit}/${clean.length} on-time ones — enough of a difference to associate them, but that is ` +
+      "a rate difference over one session, not a demonstrated cause: the same allocation burst can produce both " +
+      "the collection and the slow frame."
+    );
+  }
   if (jankyHit === 0) {
     // "Ruled out" is only as strong as the chance GC had to coincide at all.
     // Flutter renders on change, so frame spans can occupy a tiny fraction of

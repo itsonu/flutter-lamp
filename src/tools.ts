@@ -363,7 +363,7 @@ export function registerTools(server: McpServer): void {
       annotations: ann("diagnose_performance"),
       title: "Diagnose performance",
       description:
-        "Why the app is janky, not just how much. Returns frame percentiles, the build-vs-raster split, and findings correlating jank against in-flight requests, route transitions and heap growth — each with its own evidence ids, strength and fix. Reports 'healthy' when jank is within normal range and 'unknown' when there are too few frames to tell a pattern from noise. States what it cannot see: no CPU sampling, no GC events, no widget rebuild counts.",
+        "Why the app is janky, not just how much. Returns frame percentiles, the build-vs-raster split, and findings correlating jank against in-flight requests, route transitions and heap growth — each with its own evidence ids, strength and fix. Reports 'healthy' when jank is within normal range and 'unknown' when there are too few frames to tell a pattern from noise. States what it cannot see: no CPU sampling, no widget rebuild counts. GC pauses are captured and correlated, but the strength of that correlation is reported against how much of the window frames actually covered.",
       inputSchema: {},
     },
     async () => {

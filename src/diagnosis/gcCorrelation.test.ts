@@ -185,3 +185,58 @@ test("a clean negative from a continuously-rendering app IS an exoneration", () 
   const lim = limitationsOf(store);
   assert.match(lim, /GC is ruled out for this jank/);
 });
+
+test("when the finding fires, the limitations must not deny it", () => {
+  // Measured, not imagined: 33 collections forced through the VM Service while
+  // a desktop app rendered continuously produced 17/83 late frames against
+  // 53/917 on-time ones — 3.5x — and the payload reported the finding AND
+  // "not a large enough difference to associate GC with this jank" side by
+  // side. The finding and the limitation each applied the base-rate rule
+  // themselves, and only one of them had the gate.
+  const store = new RuntimeStore();
+  for (let i = 0; i < 90; i++) {
+    const end = T0 + i * 20;
+    frame(store, end, 10, i);
+    if (i % 16 === 0) gc(store, end - 8, 3); // ~6% of on-time frames
+  }
+  for (let i = 0; i < 10; i++) {
+    const end = T0 + 10_000 + i * 100;
+    frame(store, end, 60, 100 + i);
+    if (i < 2) gc(store, end - 40, 20); // 20% of late frames
+  }
+
+  const claim = gcClaim(store);
+  assert.ok(claim, "3x over the base rate should produce a finding");
+  const lim = limitationsOf(store);
+  assert.doesNotMatch(lim, /not a large enough difference/);
+  assert.doesNotMatch(lim, /co-occurrence only/);
+  assert.doesNotMatch(lim, /ruled out/);
+  // It still has to say what the finding cannot prove.
+  assert.match(lim, /not a demonstrated cause/);
+});
+
+test("an association below the jank threshold does not point at a finding that was suppressed", () => {
+  // Also measured: 26/1000 late frames is 3%, so the diagnosis returns
+  // "healthy" with findings: [] — while the GC limitation said the overlap was
+  // "reported as a finding above". Nothing was above. The limitation has to
+  // stand on its own.
+  const store = new RuntimeStore();
+  for (let i = 0; i < 300; i++) {
+    const end = T0 + i * 20;
+    frame(store, end, 10, i);
+    if (i % 20 === 0) gc(store, end - 8, 3); // 5% of on-time frames
+  }
+  for (let i = 0; i < 6; i++) {
+    const end = T0 + 20_000 + i * 100; // 6/306 late → under the 5% threshold
+    frame(store, end, 60, 100 + i);
+    if (i < 3) gc(store, end - 40, 20); // 50% of late frames
+  }
+
+  const d = diagnosePerformance(store);
+  assert.equal(d.status, "healthy");
+  assert.deepEqual(d.findings, []);
+  const lim = d.limitations.join(" | ");
+  assert.doesNotMatch(lim, /finding above/, "nothing is above when findings are suppressed");
+  assert.match(lim, /enough of a difference to associate them/);
+  assert.match(lim, /not a demonstrated cause/);
+});
