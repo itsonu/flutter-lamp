@@ -44,6 +44,25 @@ recorded incidents, every one of the 235 `janky` flags still matches the
 (`8.33`) would take those 235 to 436 — the knob moves the threshold, and
 nothing declares it today.
 
+### Added - publishable as a Claude plugin and to the MCP Registry
+
+- `plugin/` is a Claude plugin: the MCP server pinned to an exact published
+  version, plus the `flutter-runtime-diagnosis` skill. `.claude-plugin/
+  marketplace.json` makes the repo installable with
+  `/plugin marketplace add itsonu/flutter-lamp`, and the folder is ready to
+  submit to Anthropic's plugin directory.
+- `server.json` and `mcpName` in `package.json` describe the server to the
+  [MCP Registry](https://registry.modelcontextprotocol.io) as
+  `io.github.itsonu/flutter-lamp`. The release workflow publishes it after
+  npm, over GitHub OIDC, so no token is created. The registry refuses a
+  version whose npm tarball lacks `mcpName`, so the first listing is the next
+  release, not 0.20.0.
+- `scripts/check-plugin.sh`, run in CI, fails when the plugin's skill copy
+  drifts from `.claude/skills/`, or when the plugin pins a version that is not
+  on npm. `main` runs ahead of npm because of the release queue, so pinning
+  `package.json`'s version would point plugin users at a package that does not
+  exist yet.
+
 ## [0.20.0] - 2026-08-28
 
 The dashboard becomes a runtime observability surface rather than a telemetry

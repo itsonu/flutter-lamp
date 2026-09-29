@@ -1,0 +1,15 @@
+{
+  "name": "flutter-lamp",
+  "description": "Flutter Lamp: live runtime diagnosis for Flutter apps in Claude Code.",
+  "owner": {
+    "name": "Chandrabhushan Prakash",
+    "url": "https://github.com/itsonu"
+  },
+  "plugins": [
+    {
+      "name": "flutter-lamp",
+      "source": "./plugin",
+      "category": "development"
+    }
+  ]
+}

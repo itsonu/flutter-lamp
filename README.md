@@ -118,7 +118,19 @@ node dist/index.js
 
 ## Connect your AI client
 
-Add the server to your MCP client config, then restart the client.
+**Claude Code plugin** (recommended) — installs the MCP server *and* the
+`flutter-runtime-diagnosis` skill in one step:
+
+```
+/plugin marketplace add itsonu/flutter-lamp
+/plugin install flutter-lamp@flutter-lamp
+```
+
+The plugin pins an exact, published server version. Flutter Lamp is also
+listed in the [MCP Registry](https://registry.modelcontextprotocol.io) as
+`io.github.itsonu/flutter-lamp`.
+
+Or add the server to your MCP client config yourself, then restart the client.
 
 **Claude Code** — `.mcp.json` in your project:
 
@@ -136,8 +148,11 @@ Add the server to your MCP client config, then restart the client.
 Or from the CLI:
 
 ```bash
-claude mcp add flutter-lamp -- npx -y flutter-lamp
+claude mcp add --scope user flutter-lamp -- npx -y flutter-lamp
 ```
+
+`--scope user` makes it available in every project; drop it to register
+for the current project only.
 
 **Cursor** (`~/.cursor/mcp.json`) and **Claude Desktop**
 (`claude_desktop_config.json`) use the same `mcpServers` shape.
