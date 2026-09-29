@@ -1,0 +1,41 @@
+name: MCP Registry
+
+# Publishes an already-released version to the MCP Registry on its own.
+#
+# The release job does this after npm, but it cannot be re-run for that one
+# step: verify-release refuses a version npm already has, by design. This is
+# the retry, and the way to list a version whose release skipped the step.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Released version to list, e.g. 0.21.0"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write # the registry's github-oidc login
+
+jobs:
+  publish:
+    if: github.repository == 'itsonu/flutter-lamp'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: v${{ inputs.version }} # the released tree, not whatever main is now
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # The released tree may predate the shared script, so run the one from
+      # this workflow's own commit against the released server.json.
+      - name: Fetch the publish script
+        run: |
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git show "$GITHUB_SHA:scripts/publish-mcp-registry.sh" > "$RUNNER_TEMP/publish-mcp-registry.sh"
+
+      - name: Publish
+        run: bash "$RUNNER_TEMP/publish-mcp-registry.sh" "${{ inputs.version }}"

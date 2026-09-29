@@ -2,7 +2,7 @@
   "mcpServers": {
     "flutter-lamp": {
       "command": "npx",
-      "args": ["-y", "flutter-lamp@0.20.0"]
+      "args": ["-y", "flutter-lamp@0.21.0"]
     }
   }
 }
