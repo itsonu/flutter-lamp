@@ -1,7 +1,7 @@
 {
   "name": "flutter-lamp",
   "displayName": "Flutter Lamp",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "Live eyes on a running Flutter app: exceptions, logs, network, frames and memory from the Dart VM Service, plus evidence-first root-cause diagnosis.",
   "author": {
     "name": "Chandrabhushan Prakash",

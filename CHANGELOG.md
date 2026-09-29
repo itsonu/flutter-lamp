@@ -6,6 +6,20 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed - the MCP Registry step skipped 0.21.0
+
+The release job's registry step ran about 50 seconds after `npm publish`, before
+npm served the new version, so it skipped 0.21.0 as "not on npm". Re-running
+the release could not retry it, because `verify-release.sh` rightly refuses a
+version npm already has.
+
+- `scripts/publish-mcp-registry.sh` waits up to about five minutes for npm to
+  serve the version, and checks that the published tarball carries `mcpName`,
+  before it logs in and publishes.
+- A new **MCP Registry** workflow runs that script alone against a release tag.
+  It's the retry, and how 0.21.0 gets listed.
+- The Claude plugin now pins `flutter-lamp@0.21.0`.
+
 ## [0.21.0] - 2026-09-29
 
 GC pauses become stored evidence, so `diagnose_performance` can finally say

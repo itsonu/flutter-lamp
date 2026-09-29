@@ -148,8 +148,15 @@ into `server.json` and publishes with `mcp-publisher login github-oidc`. That
 is the same no-secret trust as npm: the registry grants the
 `io.github.itsonu/*` namespace to this repository's workflow token. It skips a
 commit that has no `server.json` or `mcpName`, and a registry failure is a
-warning rather than a red run, because npm already has the version. Re-running
-the workflow retries it.
+warning rather than a red run, because npm already has the version. The step
+waits up to about five minutes for npm to serve the new version first, because
+the registry checks the package against npm. 0.21.0 took longer than the
+release job's own 50s check.
+
+Re-running **Release** cannot retry the registry step, because
+`verify-release.sh` refuses a version npm already has. To retry, run
+**Actions → MCP Registry → Run workflow** with the version. It checks out
+`vX.Y.Z` and runs `scripts/publish-mcp-registry.sh` alone.
 
 **Claude plugin.** `plugin/.mcp.json` pins `flutter-lamp@X.Y.Z`, and the plugin
 directory refuses an unpinned `npx`. The pin must name a version that is
