@@ -6,6 +6,45 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-09-29
+
+GC pauses become stored evidence, so `diagnose_performance` can finally say
+whether garbage collection is behind the jank, and when the data is too thin
+to say either way. The frame budget stops pretending to be a fact. And the
+package becomes publishable as a Claude plugin and to the MCP Registry.
+Additive throughout: no tool signature changed.
+
+### Added - GC pauses are evidence, not a blind spot
+
+`diagnose_performance` used to report GC as "cannot be ruled in or out",
+because the VM timeline was fetched by `get_timeline` and then thrown away. A
+timeline collector now stores the outermost stop-the-world collections
+(`CollectNewGeneration`, `CollectOldGeneration`) and correlates them with late
+frames.
+
+- **Timestamps are never guessed.** Timeline `ts` is monotonic time since the
+  VM started. Events are mapped onto the VM's own epoch clock using the
+  measured VM-to-host offset, which was 839ms on one real device. When that
+  anchor isn't available, nothing is stored.
+- **Overlap is not treated as cause.** A finding needs GC overlap among late
+  frames to be at least **2x** the rate among on-time frames, with at least ten
+  on-time frames to compute that rate from. Strength is capped at 0.7, and the
+  fix text calls it a rate difference, not a demonstrated cause.
+- **Only real pauses count.** On a real Android device the VM emits
+  Begin/End pairs, not complete events. Durations come from matching each End
+  to its Begin, and unmatched halves are dropped rather than guessed. Nested
+  child phases, concurrent marking (up to 63ms that never stopped the app) and
+  `NotifyIdle` are excluded.
+- **A negative is only as strong as the frame coverage behind it.** When frames
+  cover less than 5% of the observed window, "no overlap" is reported as weak
+  evidence, with the coverage figure. Dense captures still get a flat "ruled
+  out".
+- **The limitation no longer contradicts the finding.** Both now read one
+  verdict (`gcOverlap()`). `probe/jank_probe` reproduces the positive path by
+  forcing collections while the app renders.
+- `connect_vm` now also adds the GC stream to the recorder. Existing recorded
+  streams are unioned, never replaced.
+
 ### Changed - the frame budget is one assumption, and says so
 
 The 16.67ms jank threshold was a literal in four places and was presented as a
@@ -55,8 +94,8 @@ nothing declares it today.
   [MCP Registry](https://registry.modelcontextprotocol.io) as
   `io.github.itsonu/flutter-lamp`. The release workflow publishes it after
   npm, over GitHub OIDC, so no token is created. The registry refuses a
-  version whose npm tarball lacks `mcpName`, so the first listing is the next
-  release, not 0.20.0.
+  version whose npm tarball lacks `mcpName`, so 0.21.0 is the first version
+  listed.
 - `scripts/check-plugin.sh`, run in CI, fails when the plugin's skill copy
   drifts from `.claude/skills/`, or when the plugin pins a version that is not
   on npm. `main` runs ahead of npm because of the release queue, so pinning
@@ -1409,6 +1448,7 @@ First public release.
 - **`flutter-runtime-diagnosis` Claude Code skill** — runs the whole
   connect → gather → diagnose flow without asking the user to paste logs.
 
+[0.21.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.21.0
 [0.20.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.20.0
 [0.19.1]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.19.1
 [0.19.0]: https://github.com/itsonu/flutter-lamp/releases/tag/v0.19.0
