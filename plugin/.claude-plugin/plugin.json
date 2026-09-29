@@ -1,0 +1,14 @@
+{
+  "name": "flutter-lamp",
+  "displayName": "Flutter Lamp",
+  "version": "0.20.0",
+  "description": "Live eyes on a running Flutter app: exceptions, logs, network, frames and memory from the Dart VM Service, plus evidence-first root-cause diagnosis.",
+  "author": {
+    "name": "Chandrabhushan Prakash",
+    "url": "https://github.com/itsonu"
+  },
+  "homepage": "https://github.com/itsonu/flutter-lamp#readme",
+  "repository": "https://github.com/itsonu/flutter-lamp",
+  "license": "MIT",
+  "keywords": ["flutter", "dart", "debugging", "vm-service", "observability", "diagnosis"]
+}

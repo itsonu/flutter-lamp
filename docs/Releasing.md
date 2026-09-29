@@ -141,6 +141,29 @@ release, and leaves the setup instructions in the run summary. It never fails
 the run over the missing configuration, and never re-publishes a version
 already on npm.
 
+## MCP Registry and the Claude plugin
+
+**MCP Registry.** After npm confirms the version, the release job stamps it
+into `server.json` and publishes with `mcp-publisher login github-oidc`. That
+is the same no-secret trust as npm: the registry grants the
+`io.github.itsonu/*` namespace to this repository's workflow token. It skips a
+commit that has no `server.json` or `mcpName`, and a registry failure is a
+warning rather than a red run, because npm already has the version. Re-running
+the workflow retries it.
+
+**Claude plugin.** `plugin/.mcp.json` pins `flutter-lamp@X.Y.Z`, and the plugin
+directory refuses an unpinned `npx`. The pin must name a version that is
+**already on npm**, so it is bumped *after* a release lands, not in the release
+commit:
+
+1. Set `flutter-lamp@X.Y.Z` in `plugin/.mcp.json` and `version` in
+   `plugin/.claude-plugin/plugin.json`.
+2. If the skill changed, copy `.claude/skills/flutter-runtime-diagnosis/` to
+   `plugin/skills/`.
+3. Run `bash scripts/check-plugin.sh`. CI runs it too.
+
+The directory follows the tracked branch and picks up the new commit by itself.
+
 ## Manual control
 
 Run **Actions → Release → Run workflow**:

@@ -255,6 +255,48 @@ jobs:
           fi
           echo "Verified flutter-lamp@$version on npm${gitHead:+ (gitHead $gitHead)}." >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Publish to the MCP Registry
+        if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          version="${{ steps.pick.outputs.version }}"
+
+          # Older queued commits predate the registry metadata. The registry
+          # also refuses a version whose npm tarball lacks mcpName, so both
+          # have to be in the released tree.
+          if [ ! -f server.json ] || [ "$(node -p "require('./package.json').mcpName ?? ''")" = "" ]; then
+            echo "::notice::v$version has no server.json or mcpName — skipping the MCP Registry."
+            exit 0
+          fi
+          if ! npm view "flutter-lamp@$version" version >/dev/null 2>&1; then
+            echo "::warning::flutter-lamp@$version is not on npm, so the MCP Registry would reject it — skipped."
+            exit 0
+          fi
+
+          # server.json names the version it describes; stamp the released one
+          # so the entry always matches the npm package it points at.
+          node -e '
+            const fs = require("fs");
+            const s = JSON.parse(fs.readFileSync("server.json", "utf8"));
+            s.version = process.argv[1];
+            for (const p of s.packages) p.version = process.argv[1];
+            fs.writeFileSync("server.json", JSON.stringify(s, null, 2) + "\n");
+          ' "$version"
+
+          # Same OIDC trust as npm: the registry exchanges this workflow's
+          # GitHub token for the io.github.itsonu/* namespace. No secret.
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+
+          # npm already has this version, so a registry failure is reported
+          # rather than turning the release red. Re-running retries it.
+          if ./mcp-publisher publish; then
+            echo "Published io.github.itsonu/flutter-lamp@$version to the MCP Registry." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::npm has flutter-lamp@$version but the MCP Registry publish failed. Re-run this workflow to retry."
+          fi
+
       - name: Create the GitHub release
         if: steps.pick.outputs.skip == 'false' && steps.gap.outputs.skip == 'false'
         env:
