@@ -6,6 +6,15 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added - next goal logged: production debugging pipeline (proposed)
+
+`docs/Production-Debugging-Goal.md` records the next goal: an open-source,
+self-hosted take on the in-app reporting, automatic crash capture, auto-triage
+and agentic RCA-to-PR pipeline Uber described for its internal tools, shipped
+as a Flutter SDK, an API with webhooks, and an agent pipeline. It is proposed,
+not accepted: it maps what already exists, lists the standing rules it would
+reverse, and gates the work on deciding those first. No code changed.
+
 ### Fixed - the MCP Registry step skipped 0.21.0
 
 The release job's registry step ran about 50 seconds after `npm publish`, before

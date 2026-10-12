@@ -20,6 +20,7 @@ Status of each phase. Detail on what is planned next, and why, lives in
 | — | Session recording — versioned export for bug reports and offline analysis | Shipped |
 | 9 | Knowledge graph over runtime evidence | Exploratory |
 | 10 | Proposed fixes with human approval | Exploratory |
+| 13 | **Next goal:** production debugging pipeline — Flutter SDK (in-app reports + crash/hang capture), API + webhooks, auto-triage, agentic RCA → validated draft PR. See [`Production-Debugging-Goal.md`](Production-Debugging-Goal.md) | Proposed — blocked on decision gate G0 |
 
 ## Sequencing
 

@@ -282,3 +282,9 @@ disjoint jobs is the ceiling until one demonstrably earns its place),
 vendor-coupled AI. External providers (OTel, Sentry, Crashlytics) wait for a
 `RuntimeEvidenceProvider` abstraction and a demonstrated need — terminology
 stays OTel-compatible so adapters remain possible.
+
+**Under review.** The proposed next goal in
+[Production-Debugging-Goal.md](Production-Debugging-Goal.md) would reverse
+parts of these rejections (self-hosted infrastructure, release-build capture,
+proposal-only remediation). Each reversal is listed there as decision gate G0;
+until it is decided, the rejections above stand.
